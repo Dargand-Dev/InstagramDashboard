@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Zap, Smartphone, UserPlus, Play, Rocket, Unlock, Loader2, CheckCircle, XCircle, AlertTriangle, Shield, Settings, Key, Video, Image, Clipboard, Container, RefreshCw, Trash2 } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Zap, Smartphone, UserPlus, Play, Rocket, Unlock, Loader2, CheckCircle, XCircle, AlertTriangle, Shield, Settings, Key, Video, Image, Clipboard, Container, RefreshCw, Trash2, X } from 'lucide-react'
 import Card from '../components/Card'
 import { useApi, apiPost } from '../hooks/useApi'
 
@@ -24,6 +24,132 @@ const ACTION_META = {
 }
 
 const DEFAULT_META = { icon: Play, color: 'bg-white/5 text-text-muted border-white/10', desc: '' }
+
+// Actions that require parameters before execution
+const ACTION_PARAMS = {
+  PostReel: [
+    { name: 'captionText', label: 'Caption', type: 'textarea', required: true, placeholder: 'Write your reel caption...' },
+    { name: 'expectedUsername', label: 'Expected Username', type: 'text', required: false, placeholder: 'Optional — verify account' },
+  ],
+  PostStory: [
+    { name: 'storyLinkUrl', label: 'Story Link URL', type: 'text', required: true, placeholder: 'https://...' },
+  ],
+  SwitchCraneContainer: [
+    { name: 'containerName', label: 'Container Name', type: 'text', required: true, placeholder: 'e.g. container-1' },
+  ],
+  TestClipboardPaste: [
+    { name: 'text', label: 'Text to Paste', type: 'text', required: true, placeholder: 'Text content' },
+  ],
+  VerifyAccount: [
+    { name: 'expectedUsername', label: 'Expected Username', type: 'text', required: true, placeholder: 'Username to verify' },
+  ],
+  TransferVideoToDevice: [
+    { name: 'videoPath', label: 'Video Path', type: 'text', required: true, placeholder: '/path/to/video.mp4' },
+  ],
+  Cleanup: [
+    { name: 'videoPath', label: 'Video Path', type: 'text', required: true, placeholder: '/path/to/video.mp4' },
+    { name: 'identityId', label: 'Identity ID', type: 'text', required: true, placeholder: 'e.g. sofia' },
+    { name: 'reelContent', label: 'Reel Content (JSON)', type: 'textarea', required: false, placeholder: '{"key": "value"} (optional)' },
+  ],
+}
+
+function ParamsModal({ actionName, meta, onSubmit, onClose }) {
+  const fields = ACTION_PARAMS[actionName] || []
+  const [values, setValues] = useState(() => Object.fromEntries(fields.map(f => [f.name, ''])))
+  const Icon = meta.icon
+
+  const isValid = fields.filter(f => f.required).every(f => values[f.name]?.trim())
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    if (!isValid) return
+    const params = {}
+    for (const field of fields) {
+      const v = values[field.name]?.trim()
+      if (!v) continue
+      if (field.name === 'reelContent') {
+        try { params[field.name] = JSON.parse(v) } catch { params[field.name] = v }
+      } else {
+        params[field.name] = v
+      }
+    }
+    onSubmit(params)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div
+        className="relative w-full max-w-md bg-[#1a1a2e] border border-white/10 rounded-2xl shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg border ${meta.color}`}>
+              <Icon size={18} />
+            </div>
+            <div>
+              <h3 className="text-white font-semibold text-base">{actionName}</h3>
+              {meta.desc && <p className="text-xs text-text-muted mt-0.5">{meta.desc}</p>}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-text-muted hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {fields.map(field => (
+            <div key={field.name}>
+              <label className="block text-sm text-text-muted mb-1.5">
+                {field.label}
+                {field.required && <span className="text-red-400 ml-1">*</span>}
+              </label>
+              {field.type === 'textarea' ? (
+                <textarea
+                  value={values[field.name]}
+                  onChange={e => setValues(prev => ({ ...prev, [field.name]: e.target.value }))}
+                  placeholder={field.placeholder}
+                  rows={4}
+                  className="w-full bg-white/5 border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary resize-y font-mono"
+                />
+              ) : (
+                <input
+                  type="text"
+                  value={values[field.name]}
+                  onChange={e => setValues(prev => ({ ...prev, [field.name]: e.target.value }))}
+                  placeholder={field.placeholder}
+                  className="w-full bg-white/5 border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                />
+              )}
+            </div>
+          ))}
+
+          {/* Actions */}
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              type="submit"
+              disabled={!isValid}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary/80 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Play size={16} />
+              Run {actionName}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2.5 text-text-muted hover:text-white border border-white/10 hover:border-white/20 rounded-lg text-sm transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
 
 function ResultBanner({ result }) {
   if (!result) return null
@@ -76,6 +202,9 @@ export default function Actions() {
   const [exLoading, setExLoading] = useState(false)
   const [exRunningAction, setExRunningAction] = useState(null)
   const [exResult, setExResult] = useState(null)
+
+  // Params modal state
+  const [modalAction, setModalAction] = useState(null)
 
   // Advanced mode toggle
   const [advancedMode, setAdvancedMode] = useState(false)
@@ -141,16 +270,18 @@ export default function Actions() {
     }
   }
 
-  async function handleQuickAction(actionName) {
+  async function handleQuickAction(actionName, modalParams) {
     setExLoading(true)
     setExRunningAction(actionName)
     setExResult(null)
     try {
-      let parameters
+      let parameters = { ...modalParams }
+      // Merge with advanced JSON params if set
       if (exParams.trim()) {
-        try { parameters = JSON.parse(exParams) } catch { /* ignore */ }
+        try { Object.assign(parameters, JSON.parse(exParams)) } catch { /* ignore */ }
       }
-      const res = await apiPost('/api/automation/execute', {
+      if (Object.keys(parameters).length === 0) parameters = undefined
+      await apiPost('/api/automation/execute', {
         actionName,
         deviceUdid: exDevice,
         appiumPort: exPort || undefined,
@@ -165,6 +296,15 @@ export default function Actions() {
       setExRunningAction(null)
     }
   }
+
+  // Route click: open modal if action has required params, otherwise run directly
+  const handleActionClick = useCallback((actionName) => {
+    if (ACTION_PARAMS[actionName]) {
+      setModalAction(actionName)
+    } else {
+      handleQuickAction(actionName)
+    }
+  }, [exDevice, exPort, selectedAccount, exParams])
 
   async function handleTrigger() {
     await checkLockStatus()
@@ -256,7 +396,7 @@ export default function Actions() {
                       key={name}
                       actionName={name}
                       meta={meta}
-                      onRun={handleQuickAction}
+                      onRun={handleActionClick}
                       running={exLoading}
                       runningAction={exRunningAction}
                     />
@@ -351,6 +491,19 @@ export default function Actions() {
           <ResultBanner result={triggerResult} />
         </Card>
       </div>
+
+      {/* Params Modal */}
+      {modalAction && (
+        <ParamsModal
+          actionName={modalAction}
+          meta={ACTION_META[modalAction] || DEFAULT_META}
+          onClose={() => setModalAction(null)}
+          onSubmit={(params) => {
+            setModalAction(null)
+            handleQuickAction(modalAction, params)
+          }}
+        />
+      )}
     </div>
   )
 }

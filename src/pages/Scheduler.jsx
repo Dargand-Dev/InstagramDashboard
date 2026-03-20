@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Clock, Play } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Clock, Play, Unlock, AlertTriangle, Loader2 } from 'lucide-react'
 import Card from '../components/Card'
 import StatusBadge from '../components/StatusBadge'
 import { useApi, apiPost } from '../hooks/useApi'
@@ -7,6 +7,35 @@ import { useApi, apiPost } from '../hooks/useApi'
 export default function Scheduler() {
   const { data: schedule, loading, refetch } = useApi('/api/automation/schedule')
   const [triggering, setTriggering] = useState(false)
+  const [lockStatus, setLockStatus] = useState(null)
+  const [lockLoading, setLockLoading] = useState(false)
+  const [unlockLoading, setUnlockLoading] = useState(false)
+
+  const checkLockStatus = useCallback(async () => {
+    setLockLoading(true)
+    try {
+      const res = await fetch('/api/automation/lock-status')
+      if (res.status === 423) {
+        const body = await res.json().catch(() => ({}))
+        setLockStatus({ locked: true, ...body })
+      } else {
+        const body = await res.json().catch(() => ({}))
+        setLockStatus({ locked: false, ...body })
+      }
+    } catch {
+      setLockStatus({ locked: false })
+    } finally {
+      setLockLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { checkLockStatus() }, [checkLockStatus])
+
+  // Refresh lock status every 15s
+  useEffect(() => {
+    const interval = setInterval(checkLockStatus, 15000)
+    return () => clearInterval(interval)
+  }, [checkLockStatus])
 
   async function handleTrigger() {
     if (!confirm('Trigger a manual run now?')) return
@@ -14,10 +43,24 @@ export default function Scheduler() {
     try {
       await apiPost('/api/automation/trigger', {})
       refetch()
+      checkLockStatus()
     } catch (err) {
       alert('Trigger failed: ' + err.message)
     } finally {
       setTriggering(false)
+    }
+  }
+
+  async function handleForceUnlock() {
+    if (!confirm('Force unlock the automation?')) return
+    setUnlockLoading(true)
+    try {
+      await apiPost('/api/automation/force-unlock', {})
+      await checkLockStatus()
+    } catch (err) {
+      alert('Unlock failed: ' + err.message)
+    } finally {
+      setUnlockLoading(false)
     }
   }
 
@@ -30,15 +73,31 @@ export default function Scheduler() {
           <Clock size={24} />
           Scheduler
         </h2>
-        <button
-          onClick={handleTrigger}
-          disabled={triggering}
-          className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-        >
-          <Play size={16} />
-          {triggering ? 'Triggering...' : 'Trigger Manual Run'}
-        </button>
+        <div className="flex items-center gap-3">
+          {lockStatus?.locked && (
+            <button onClick={handleForceUnlock} disabled={unlockLoading}
+              className="flex items-center gap-2 px-3 py-2 bg-error hover:bg-error/80 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+              {unlockLoading ? <Loader2 size={16} className="animate-spin" /> : <Unlock size={16} />}
+              Force Unlock
+            </button>
+          )}
+          <button
+            onClick={handleTrigger}
+            disabled={triggering}
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            <Play size={16} />
+            {triggering ? 'Triggering...' : 'Trigger Manual Run'}
+          </button>
+        </div>
       </div>
+
+      {lockStatus?.locked && (
+        <div className="flex items-center gap-2 bg-warning/10 border border-warning/20 rounded-lg p-3 mb-4 text-warning text-sm">
+          <AlertTriangle size={16} />
+          Automation is currently locked — a run may be in progress
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card title="Status">
@@ -47,6 +106,21 @@ export default function Scheduler() {
             <span className="text-lg font-semibold text-white">
               {schedule?.enabled ? 'Enabled' : 'Disabled'}
             </span>
+          </div>
+        </Card>
+
+        <Card title="Lock Status">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-3 h-3 rounded-full ${lockStatus?.locked ? 'bg-warning' : 'bg-success'}`} />
+              <span className="text-lg font-semibold text-white">
+                {lockLoading ? 'Checking...' : lockStatus?.locked ? 'Locked' : 'Unlocked'}
+              </span>
+            </div>
+            <button onClick={checkLockStatus} disabled={lockLoading}
+              className="text-xs text-text-muted hover:text-white transition-colors">
+              Refresh
+            </button>
           </div>
         </Card>
 

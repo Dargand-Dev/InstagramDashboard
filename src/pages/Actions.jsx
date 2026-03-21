@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Zap, Smartphone, UserPlus, Play, Rocket, Unlock, Loader2, CheckCircle, XCircle, AlertTriangle, Shield, Settings, Key, Video, Image, Clipboard, Container, RefreshCw, Trash2, X } from 'lucide-react'
+import { Smartphone, UserPlus, Play, Rocket, Unlock, Loader2, CheckCircle, XCircle, AlertTriangle, Shield, Settings, Key, Video, Image, Clipboard, Container, RefreshCw, Trash2, X } from 'lucide-react'
 import Card from '../components/Card'
 import { useApi, apiPost } from '../hooks/useApi'
 
@@ -10,22 +10,21 @@ const DEVICES = [
 ]
 
 const ACTION_META = {
-  'SetupProfessionalAccount': { icon: Settings, color: 'bg-blue-500/10 text-blue-400 border-blue-500/20', desc: 'Convert to professional/business account' },
-  'Enable2FA':               { icon: Key, color: 'bg-amber-500/10 text-amber-400 border-amber-500/20', desc: 'Enable two-factor authentication' },
-  'PostReel':                { icon: Video, color: 'bg-purple-500/10 text-purple-400 border-purple-500/20', desc: 'Post a reel from Drive content' },
-  'PostStory':               { icon: Image, color: 'bg-pink-500/10 text-pink-400 border-pink-500/20', desc: 'Post a story' },
-  'RegisterInstagramAccount':{ icon: UserPlus, color: 'bg-green-500/10 text-green-400 border-green-500/20', desc: 'Register a new Instagram account' },
-  'VerifyAccount':           { icon: Shield, color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20', desc: 'Verify account (phone/email)' },
-  'TransferVideoToDevice':   { icon: Smartphone, color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20', desc: 'Push video to device via AFC' },
-  'CreateCraneContainer':    { icon: Container, color: 'bg-teal-500/10 text-teal-400 border-teal-500/20', desc: 'Create a new Crane container' },
-  'SwitchCraneContainer':    { icon: RefreshCw, color: 'bg-orange-500/10 text-orange-400 border-orange-500/20', desc: 'Switch to another Crane container' },
-  'Cleanup':                 { icon: Trash2, color: 'bg-red-500/10 text-red-400 border-red-500/20', desc: 'Clean up device state' },
-  'TestClipboardPaste':      { icon: Clipboard, color: 'bg-gray-500/10 text-gray-400 border-gray-500/20', desc: 'Test clipboard paste functionality' },
+  'SetupProfessionalAccount': { icon: Settings, color: 'bg-blue-500/8 text-blue-400 border-blue-500/15', desc: 'Convert to professional/business account' },
+  'Enable2FA':               { icon: Key, color: 'bg-amber-500/8 text-amber-400 border-amber-500/15', desc: 'Enable two-factor authentication' },
+  'PostReel':                { icon: Video, color: 'bg-purple-500/8 text-purple-400 border-purple-500/15', desc: 'Post a reel from Drive content' },
+  'PostStory':               { icon: Image, color: 'bg-pink-500/8 text-pink-400 border-pink-500/15', desc: 'Post a story' },
+  'RegisterInstagramAccount':{ icon: UserPlus, color: 'bg-green-500/8 text-green-400 border-green-500/15', desc: 'Register a new Instagram account' },
+  'VerifyAccount':           { icon: Shield, color: 'bg-cyan-500/8 text-cyan-400 border-cyan-500/15', desc: 'Verify account (phone/email)' },
+  'TransferVideoToDevice':   { icon: Smartphone, color: 'bg-indigo-500/8 text-indigo-400 border-indigo-500/15', desc: 'Push video to device via AFC' },
+  'CreateCraneContainer':    { icon: Container, color: 'bg-teal-500/8 text-teal-400 border-teal-500/15', desc: 'Create a new Crane container' },
+  'SwitchCraneContainer':    { icon: RefreshCw, color: 'bg-orange-500/8 text-orange-400 border-orange-500/15', desc: 'Switch to another Crane container' },
+  'Cleanup':                 { icon: Trash2, color: 'bg-red-500/8 text-red-400 border-red-500/15', desc: 'Clean up device state' },
+  'TestClipboardPaste':      { icon: Clipboard, color: 'bg-gray-500/8 text-gray-400 border-gray-500/15', desc: 'Test clipboard paste functionality' },
 }
 
-const DEFAULT_META = { icon: Play, color: 'bg-white/5 text-text-muted border-white/10', desc: '' }
+const DEFAULT_META = { icon: Play, color: 'bg-white/5 text-[#555] border-[#1a1a1a]', desc: '' }
 
-// Actions that require parameters before execution
 const ACTION_PARAMS = {
   PostReel: [
     { name: 'captionText', label: 'Caption', type: 'textarea', required: true, placeholder: 'Write your reel caption...' },
@@ -53,11 +52,13 @@ const ACTION_PARAMS = {
   ],
 }
 
+const inputClass = 'w-full bg-[#0a0a0a] border border-[#1a1a1a] text-white rounded-md px-3 py-2 text-xs focus:outline-none focus:border-[#333]'
+const labelClass = 'block text-[11px] text-[#555] font-semibold uppercase tracking-wider mb-1.5'
+
 function ParamsModal({ actionName, meta, onSubmit, onClose }) {
   const fields = ACTION_PARAMS[actionName] || []
   const [values, setValues] = useState(() => Object.fromEntries(fields.map(f => [f.name, ''])))
   const Icon = meta.icon
-
   const isValid = fields.filter(f => f.required).every(f => values[f.name]?.trim())
 
   function handleSubmit(e) {
@@ -78,32 +79,26 @@ function ParamsModal({ actionName, meta, onSubmit, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div
-        className="relative w-full max-w-md bg-[#1a1a2e] border border-white/10 rounded-2xl shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-white/10">
+      <div className="absolute inset-0 bg-black/70" />
+      <div className="relative w-full max-w-md bg-[#0a0a0a] border border-[#1a1a1a] rounded-[10px] shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 border-b border-[#1a1a1a]">
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg border ${meta.color}`}>
-              <Icon size={18} />
+            <div className={`p-2 rounded-md border ${meta.color}`}>
+              <Icon size={16} />
             </div>
             <div>
-              <h3 className="text-white font-semibold text-base">{actionName}</h3>
-              {meta.desc && <p className="text-xs text-text-muted mt-0.5">{meta.desc}</p>}
+              <h3 className="text-white font-bold text-sm">{actionName}</h3>
+              {meta.desc && <p className="text-[10px] text-[#555] mt-0.5">{meta.desc}</p>}
             </div>
           </div>
-          <button onClick={onClose} className="text-text-muted hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5">
-            <X size={18} />
+          <button onClick={onClose} className="text-[#333] hover:text-white transition-colors p-1 rounded-md hover:bg-white/5">
+            <X size={16} />
           </button>
         </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 space-y-3">
           {fields.map(field => (
             <div key={field.name}>
-              <label className="block text-sm text-text-muted mb-1.5">
+              <label className={labelClass}>
                 {field.label}
                 {field.required && <span className="text-red-400 ml-1">*</span>}
               </label>
@@ -113,7 +108,7 @@ function ParamsModal({ actionName, meta, onSubmit, onClose }) {
                   onChange={e => setValues(prev => ({ ...prev, [field.name]: e.target.value }))}
                   placeholder={field.placeholder}
                   rows={4}
-                  className="w-full bg-white/5 border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary resize-y font-mono"
+                  className={`${inputClass} resize-y font-mono`}
                 />
               ) : (
                 <input
@@ -121,26 +116,24 @@ function ParamsModal({ actionName, meta, onSubmit, onClose }) {
                   value={values[field.name]}
                   onChange={e => setValues(prev => ({ ...prev, [field.name]: e.target.value }))}
                   placeholder={field.placeholder}
-                  className="w-full bg-white/5 border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                  className={inputClass}
                 />
               )}
             </div>
           ))}
-
-          {/* Actions */}
-          <div className="flex items-center gap-3 pt-2">
+          <div className="flex items-center gap-2 pt-2">
             <button
               type="submit"
               disabled={!isValid}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary/80 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-md text-xs font-semibold transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              <Play size={16} />
+              <Play size={14} />
               Run {actionName}
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 text-text-muted hover:text-white border border-white/10 hover:border-white/20 rounded-lg text-sm transition-colors"
+              className="px-4 py-2 text-[#555] hover:text-white border border-[#1a1a1a] hover:border-[#333] rounded-md text-xs font-medium transition-colors"
             >
               Cancel
             </button>
@@ -155,10 +148,10 @@ function ResultBanner({ result }) {
   if (!result) return null
   const isError = result.type === 'error'
   return (
-    <div className={`flex items-center gap-2 mt-3 p-3 rounded-lg text-sm ${
-      isError ? 'bg-error/10 text-error' : 'bg-success/10 text-success'
+    <div className={`flex items-center gap-2 mt-3 p-3 rounded-md border text-xs font-medium ${
+      isError ? 'bg-red-500/5 text-red-400 border-red-500/15' : 'bg-emerald-500/5 text-emerald-400 border-emerald-500/15'
     }`}>
-      {isError ? <XCircle size={16} /> : <CheckCircle size={16} />}
+      {isError ? <XCircle size={14} /> : <CheckCircle size={14} />}
       {result.message}
     </div>
   )
@@ -171,30 +164,25 @@ function QuickActionCard({ actionName, meta, onRun, running, runningAction }) {
     <button
       onClick={() => onRun(actionName)}
       disabled={running}
-      className={`flex flex-col items-start gap-2 p-4 rounded-xl border transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 ${meta.color}`}
+      className={`flex flex-col items-start gap-2 p-3.5 rounded-[10px] border transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40 disabled:hover:scale-100 text-left ${meta.color}`}
     >
       <div className="flex items-center justify-between w-full">
-        <Icon size={20} />
-        {isThis && <Loader2 size={14} className="animate-spin" />}
+        <Icon size={18} />
+        {isThis && <Loader2 size={12} className="animate-spin" />}
       </div>
-      <span className="text-sm font-semibold">{actionName}</span>
-      {meta.desc && <span className="text-xs opacity-70">{meta.desc}</span>}
+      <span className="text-xs font-bold">{actionName}</span>
+      {meta.desc && <span className="text-[10px] opacity-50 leading-tight">{meta.desc}</span>}
     </button>
   )
 }
 
 export default function Actions() {
-  // Account selection for actions
   const { data: accounts } = useApi('/api/accounts')
   const [selectedAccount, setSelectedAccount] = useState('')
-
-  // Create Account state
   const [caDevice, setCaDevice] = useState(DEVICES[0].udid)
   const [caIdentity, setCaIdentity] = useState('sofia')
   const [caLoading, setCaLoading] = useState(false)
   const [caResult, setCaResult] = useState(null)
-
-  // Execute Action state
   const { data: actionsData, loading: actionsLoading } = useApi('/api/automation/actions')
   const [exDevice, setExDevice] = useState(DEVICES[0].udid)
   const [exPort, setExPort] = useState('4723')
@@ -202,15 +190,9 @@ export default function Actions() {
   const [exLoading, setExLoading] = useState(false)
   const [exRunningAction, setExRunningAction] = useState(null)
   const [exResult, setExResult] = useState(null)
-
-  // Params modal state
   const [modalAction, setModalAction] = useState(null)
-
-  // Advanced mode toggle
   const [advancedMode, setAdvancedMode] = useState(false)
   const [advAction, setAdvAction] = useState('')
-
-  // Manual Run state
   const [lockStatus, setLockStatus] = useState(null)
   const [lockLoading, setLockLoading] = useState(false)
   const [triggerLoading, setTriggerLoading] = useState(false)
@@ -220,13 +202,10 @@ export default function Actions() {
   const actionsList = actionsData?.actions || []
   const accountList = accounts || []
 
-  // Auto-select device when account is chosen
   useEffect(() => {
     if (selectedAccount) {
       const acc = accountList.find(a => a.username === selectedAccount)
-      if (acc?.deviceUdid) {
-        setExDevice(acc.deviceUdid)
-      }
+      if (acc?.deviceUdid) setExDevice(acc.deviceUdid)
     }
   }, [selectedAccount, accountList])
 
@@ -245,11 +224,8 @@ export default function Actions() {
         const body = await res.json().catch(() => ({}))
         setLockStatus({ locked: false, ...body })
       }
-    } catch {
-      setLockStatus({ locked: false })
-    } finally {
-      setLockLoading(false)
-    }
+    } catch { setLockStatus({ locked: false }) }
+    finally { setLockLoading(false) }
   }
 
   useEffect(() => { checkLockStatus() }, [])
@@ -262,12 +238,10 @@ export default function Actions() {
         deviceUdid: caDevice,
         identityId: caIdentity || undefined,
       })
-      setCaResult({ type: 'success', message: 'Account creation workflow accepted ✓' })
+      setCaResult({ type: 'success', message: 'Account creation workflow accepted' })
     } catch (err) {
       setCaResult({ type: 'error', message: err.message })
-    } finally {
-      setCaLoading(false)
-    }
+    } finally { setCaLoading(false) }
   }
 
   async function handleQuickAction(actionName, modalParams) {
@@ -276,7 +250,6 @@ export default function Actions() {
     setExResult(null)
     try {
       let parameters = { ...modalParams }
-      // Merge with advanced JSON params if set
       if (exParams.trim()) {
         try { Object.assign(parameters, JSON.parse(exParams)) } catch { /* ignore */ }
       }
@@ -288,7 +261,7 @@ export default function Actions() {
         username: selectedAccount || undefined,
         parameters,
       })
-      setExResult({ type: 'success', message: `"${actionName}" executed ✓` })
+      setExResult({ type: 'success', message: `"${actionName}" executed` })
     } catch (err) {
       setExResult({ type: 'error', message: `"${actionName}" failed: ${err.message}` })
     } finally {
@@ -297,7 +270,6 @@ export default function Actions() {
     }
   }
 
-  // Route click: open modal if action has required params, otherwise run directly
   const handleActionClick = useCallback((actionName) => {
     if (ACTION_PARAMS[actionName]) {
       setModalAction(actionName)
@@ -313,12 +285,10 @@ export default function Actions() {
     setTriggerResult(null)
     try {
       await apiPost('/api/automation/trigger', {})
-      setTriggerResult({ type: 'success', message: 'Manual run triggered ✓' })
+      setTriggerResult({ type: 'success', message: 'Manual run triggered' })
     } catch (err) {
       setTriggerResult({ type: 'error', message: err.message })
-    } finally {
-      setTriggerLoading(false)
-    }
+    } finally { setTriggerLoading(false) }
   }
 
   async function handleForceUnlock() {
@@ -326,28 +296,23 @@ export default function Actions() {
     try {
       await apiPost('/api/automation/force-unlock', {})
       await checkLockStatus()
-      setTriggerResult({ type: 'success', message: 'Lock released ✓' })
+      setTriggerResult({ type: 'success', message: 'Lock released' })
     } catch (err) {
       setTriggerResult({ type: 'error', message: err.message })
-    } finally {
-      setUnlockLoading(false)
-    }
+    } finally { setUnlockLoading(false) }
   }
-
-  const inputClass = 'w-full bg-white/5 border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary'
-  const labelClass = 'block text-sm text-text-muted mb-1'
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-white flex items-center gap-2 mb-6">
-        <Zap size={24} />
-        Actions
-      </h2>
+      <div className="mb-5">
+        <h1 className="text-2xl font-extrabold text-white tracking-tight">Actions</h1>
+        <p className="text-xs text-[#333] mt-0.5">Execute automation actions and workflows</p>
+      </div>
 
-      <div className="space-y-6">
-        {/* Target Selection */}
-        <Card title="Target" icon={Smartphone}>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="space-y-4">
+        {/* Target */}
+        <Card title="Target" icon={Smartphone} iconColor="bg-indigo-500/10 text-indigo-400">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className={labelClass}>Account (optional)</label>
               <select value={selectedAccount} onChange={e => setSelectedAccount(e.target.value)} className={inputClass}>
@@ -365,7 +330,6 @@ export default function Actions() {
                 {DEVICES.map(d => (
                   <option key={d.udid} value={d.udid}>{d.label} — {d.udid.slice(-8)}</option>
                 ))}
-                {/* Show account's device if not in DEVICES list */}
                 {selectedAccount && (() => {
                   const acc = accountList.find(a => a.username === selectedAccount)
                   if (acc?.deviceUdid && !DEVICES.find(d => d.udid === acc.deviceUdid)) {
@@ -382,47 +346,39 @@ export default function Actions() {
           </div>
         </Card>
 
-        {/* Quick Actions Grid */}
-        <Card title="Run Action" icon={Play}>
+        {/* Quick Actions */}
+        <Card title="Run Action" icon={Play} iconColor="bg-blue-500/10 text-blue-400">
           {actionsLoading ? (
-            <p className="text-text-muted text-sm">Loading actions...</p>
+            <p className="text-xs text-[#333]">Loading actions...</p>
           ) : (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {actionsList.map(name => {
-                  const meta = ACTION_META[name] || DEFAULT_META
-                  return (
-                    <QuickActionCard
-                      key={name}
-                      actionName={name}
-                      meta={meta}
-                      onRun={handleActionClick}
-                      running={exLoading}
-                      runningAction={exRunningAction}
-                    />
-                  )
-                })}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                {actionsList.map(name => (
+                  <QuickActionCard
+                    key={name}
+                    actionName={name}
+                    meta={ACTION_META[name] || DEFAULT_META}
+                    onRun={handleActionClick}
+                    running={exLoading}
+                    runningAction={exRunningAction}
+                  />
+                ))}
               </div>
-
               <ResultBanner result={exResult} />
-
-              {/* Advanced: custom params */}
-              <div className="mt-4 pt-4 border-t border-white/5">
+              <div className="mt-3 pt-3 border-t border-[#141414]">
                 <button
                   onClick={() => setAdvancedMode(!advancedMode)}
-                  className="text-xs text-text-muted hover:text-white transition-colors"
+                  className="text-[10px] text-[#333] hover:text-[#555] transition-colors font-medium uppercase tracking-wider"
                 >
-                  {advancedMode ? '▼' : '▶'} Advanced (custom parameters)
+                  {advancedMode ? '- Hide' : '+ Advanced'} parameters
                 </button>
                 {advancedMode && (
-                  <div className="mt-3 space-y-3">
-                    <div>
-                      <label className={labelClass}>Parameters JSON</label>
-                      <textarea value={exParams} onChange={e => setExParams(e.target.value)}
-                        placeholder='{"key": "value"}' rows={3}
-                        className={`${inputClass} font-mono`} />
-                    </div>
-                    <p className="text-xs text-text-muted">These parameters will be passed to whichever action you click above.</p>
+                  <div className="mt-3">
+                    <label className={labelClass}>Parameters JSON</label>
+                    <textarea value={exParams} onChange={e => setExParams(e.target.value)}
+                      placeholder='{"key": "value"}' rows={3}
+                      className={`${inputClass} font-mono`} />
+                    <p className="text-[10px] text-[#333] mt-1">Merged with modal params when clicking an action.</p>
                   </div>
                 )}
               </div>
@@ -430,10 +386,10 @@ export default function Actions() {
           )}
         </Card>
 
-        {/* Create Account Workflow */}
-        <Card title="Create Account (Full Workflow)" icon={UserPlus}>
-          <p className="text-xs text-text-muted mb-4">Runs the full workflow: Crane → Register → Professional Setup → 2FA</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Create Account */}
+        <Card title="Create Account (Full Workflow)" icon={UserPlus} iconColor="bg-emerald-500/10 text-emerald-400">
+          <p className="text-[10px] text-[#333] mb-3">{'Runs: Crane > Register > Professional Setup > 2FA'}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Device</label>
               <select value={caDevice} onChange={e => setCaDevice(e.target.value)} className={inputClass}>
@@ -447,10 +403,10 @@ export default function Actions() {
               <input value={caIdentity} onChange={e => setCaIdentity(e.target.value)} placeholder="sofia" className={inputClass} />
             </div>
           </div>
-          <div className="mt-4">
+          <div className="mt-3">
             <button onClick={handleCreateAccount} disabled={caLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
-              {caLoading ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
+              className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-md text-xs font-semibold transition-colors disabled:opacity-40">
+              {caLoading ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
               {caLoading ? 'Creating...' : 'Create Account'}
             </button>
           </div>
@@ -458,41 +414,40 @@ export default function Actions() {
         </Card>
 
         {/* Manual Posting Run */}
-        <Card title="Manual Posting Run" icon={Rocket}>
+        <Card title="Manual Posting Run" icon={Rocket} iconColor="bg-emerald-500/10 text-emerald-400">
           {lockStatus?.locked && (
-            <div className="flex items-center justify-between bg-warning/10 border border-warning/20 rounded-lg p-3 mb-4">
-              <div className="flex items-center gap-2 text-warning text-sm">
-                <AlertTriangle size={16} />
-                Automation is currently locked
+            <div className="flex items-center justify-between bg-amber-500/5 border border-amber-500/15 rounded-md p-3 mb-3">
+              <div className="flex items-center gap-2 text-amber-400 text-xs font-medium">
+                <AlertTriangle size={14} />
+                Automation locked
                 {lockStatus.currentExecution && (
-                  <span className="text-xs opacity-70">
+                  <span className="text-[10px] opacity-60">
                     — {lockStatus.currentExecution.action} on {lockStatus.currentExecution.deviceId} ({lockStatus.currentExecution.elapsedSeconds}s)
                   </span>
                 )}
               </div>
               <button onClick={handleForceUnlock} disabled={unlockLoading}
-                className="flex items-center gap-2 px-3 py-1.5 bg-error hover:bg-error/80 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50">
-                {unlockLoading ? <Loader2 size={14} className="animate-spin" /> : <Unlock size={14} />}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/15 rounded-md text-[10px] font-semibold transition-colors disabled:opacity-40">
+                {unlockLoading ? <Loader2 size={12} className="animate-spin" /> : <Unlock size={12} />}
                 Force Unlock
               </button>
             </div>
           )}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <button onClick={handleTrigger} disabled={triggerLoading || lockStatus?.locked}
-              className="flex items-center gap-2 px-6 py-3 bg-success hover:bg-success/80 text-white rounded-lg text-base font-semibold transition-colors disabled:opacity-50">
-              {triggerLoading ? <Loader2 size={20} className="animate-spin" /> : <Rocket size={20} />}
+              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-500/80 text-white rounded-md text-sm font-bold transition-colors disabled:opacity-40">
+              {triggerLoading ? <Loader2 size={18} className="animate-spin" /> : <Rocket size={18} />}
               {triggerLoading ? 'Triggering...' : 'Trigger Manual Run'}
             </button>
             <button onClick={checkLockStatus} disabled={lockLoading}
-              className="text-text-muted hover:text-white text-sm transition-colors">
-              {lockLoading ? 'Checking...' : 'Refresh lock status'}
+              className="text-[#333] hover:text-[#555] text-xs font-medium transition-colors">
+              {lockLoading ? 'Checking...' : 'Refresh lock'}
             </button>
           </div>
           <ResultBanner result={triggerResult} />
         </Card>
       </div>
 
-      {/* Params Modal */}
       {modalAction && (
         <ParamsModal
           actionName={modalAction}

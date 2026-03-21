@@ -1,10 +1,14 @@
-export default function Card({ title, children, className = '', icon: Icon }) {
+export default function Card({ title, children, className = '', icon: Icon, iconColor = 'bg-white/5 text-[#555]' }) {
   return (
-    <div className={`bg-surface-card backdrop-blur-sm border border-border rounded-2xl p-6 transition-colors hover:bg-surface-hover ${className}`}>
+    <div className={`bg-[#0a0a0a] border border-[#1a1a1a] rounded-[10px] p-5 ${className}`}>
       {title && (
-        <div className="flex items-center gap-2 mb-4">
-          {Icon && <Icon size={18} className="text-text-muted" />}
-          <h3 className="text-sm font-medium text-text-muted uppercase tracking-wider">{title}</h3>
+        <div className="flex items-center gap-2.5 mb-4">
+          {Icon && (
+            <div className={`w-7 h-7 rounded-md flex items-center justify-center ${iconColor}`}>
+              <Icon size={14} />
+            </div>
+          )}
+          <h3 className="label-upper">{title}</h3>
         </div>
       )}
       {children}

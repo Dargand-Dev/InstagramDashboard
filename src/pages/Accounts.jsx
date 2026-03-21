@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Users, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { useState, Fragment } from 'react'
+import { Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import StatusBadge from '../components/StatusBadge'
 import { useApi, apiPut, apiDelete } from '../hooks/useApi'
 
@@ -8,8 +8,8 @@ const STATUSES = ['ALL', 'ACTIVE', 'SUSPENDED', 'BANNED', 'ERROR']
 function DetailRow({ label, value, mono = false }) {
   if (!value && value !== 0) return null
   return (
-    <div className="flex justify-between py-1.5 border-b border-white/5 last:border-0">
-      <span className="text-text-muted text-xs">{label}</span>
+    <div className="flex justify-between py-1.5 border-b border-[#141414] last:border-0">
+      <span className="text-[#555] text-xs">{label}</span>
       <span className={`text-xs text-white ${mono ? 'font-mono' : ''}`}>{value}</span>
     </div>
   )
@@ -45,26 +45,25 @@ export default function Accounts() {
     }
   }
 
-  function toggleExpand(id) {
-    setExpandedId(prev => prev === id ? null : id)
-  }
-
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Users size={24} />
-          Accounts
-        </h2>
-        <div className="flex gap-2">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-2xl font-extrabold text-white tracking-tight">Accounts</h1>
+          <p className="text-xs text-[#333] mt-0.5">
+            {accounts ? `${accounts.length} total` : 'Loading...'}
+          </p>
+        </div>
+        <div className="flex gap-1.5">
           {STATUSES.map(s => (
             <button
               key={s}
               onClick={() => setFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-md text-[11px] font-semibold tracking-wide transition-colors border ${
                 filter === s
-                  ? 'bg-primary text-white'
-                  : 'bg-surface-card text-text-muted hover:text-text'
+                  ? 'bg-white/10 text-white border-[#333]'
+                  : 'bg-transparent text-[#555] border-[#1a1a1a] hover:text-white hover:border-[#333]'
               }`}
             >
               {s}
@@ -73,52 +72,56 @@ export default function Accounts() {
         </div>
       </div>
 
-      <div className="bg-surface-card border border-border rounded-2xl overflow-hidden">
-        <table className="w-full text-sm">
+      {/* Table */}
+      <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-[10px] overflow-hidden">
+        <table className="w-full text-xs">
           <thead>
-            <tr className="border-b border-border text-left">
-              <th className="px-4 py-3 text-text-muted font-medium w-8"></th>
-              <th className="px-4 py-3 text-text-muted font-medium">Username</th>
-              <th className="px-4 py-3 text-text-muted font-medium">Status</th>
-              <th className="px-4 py-3 text-text-muted font-medium">Container</th>
-              <th className="px-4 py-3 text-text-muted font-medium">Device</th>
-              <th className="px-4 py-3 text-text-muted font-medium">Created</th>
-              <th className="px-4 py-3 text-text-muted font-medium">Following</th>
-              <th className="px-4 py-3 text-text-muted font-medium">Followers</th>
-              <th className="px-4 py-3 text-text-muted font-medium">Posts</th>
-              <th className="px-4 py-3 text-text-muted font-medium">Actions</th>
+            <tr className="border-b border-[#1a1a1a]">
+              <th className="px-3 py-3 w-8" />
+              <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Username</th>
+              <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Status</th>
+              <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Container</th>
+              <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Device</th>
+              <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Created</th>
+              <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Following</th>
+              <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Followers</th>
+              <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Posts</th>
+              <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={10} className="px-4 py-8 text-center text-text-muted">Loading...</td></tr>
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-[#333]">Loading...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={10} className="px-4 py-8 text-center text-text-muted">No accounts found</td></tr>
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-[#333]">No accounts found</td></tr>
             ) : (
               filtered.map(account => (
-                <>
-                  <tr key={account.id} className="border-b border-border hover:bg-surface-hover transition-colors cursor-pointer" onClick={() => toggleExpand(account.id)}>
-                    <td className="px-4 py-3 text-text-muted">
-                      {expandedId === account.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                <Fragment key={account.id}>
+                  <tr
+                    className="border-b border-[#141414] hover:bg-[#111] transition-colors cursor-pointer"
+                    onClick={() => setExpandedId(prev => prev === account.id ? null : account.id)}
+                  >
+                    <td className="px-3 py-2.5 text-[#333]">
+                      {expandedId === account.id ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                     </td>
-                    <td className="px-4 py-3 font-medium text-white">{account.username}</td>
-                    <td className="px-4 py-3"><StatusBadge status={account.status} /></td>
-                    <td className="px-4 py-3 text-text-muted font-mono text-xs">{account.craneContainer || '—'}</td>
-                    <td className="px-4 py-3 text-text-muted font-mono text-xs">
+                    <td className="px-3 py-2.5 font-semibold text-white">{account.username}</td>
+                    <td className="px-3 py-2.5"><StatusBadge status={account.status} /></td>
+                    <td className="px-3 py-2.5 text-[#555] font-mono">{account.craneContainer || '—'}</td>
+                    <td className="px-3 py-2.5 text-[#555] font-mono">
                       {account.deviceUdid ? account.deviceUdid.slice(-8) : '—'}
                     </td>
-                    <td className="px-4 py-3 text-text-muted">
+                    <td className="px-3 py-2.5 text-[#555]">
                       {account.createdAt ? new Date(account.createdAt).toLocaleDateString() : '—'}
                     </td>
-                    <td className="px-4 py-3">{account.followCount ?? '—'}</td>
-                    <td className="px-4 py-3">{account.followerCount ?? '—'}</td>
-                    <td className="px-4 py-3">{account.postCount ?? '—'}</td>
-                    <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                    <td className="px-3 py-2.5 text-[#555]">{account.followCount ?? '—'}</td>
+                    <td className="px-3 py-2.5 text-[#555]">{account.followerCount ?? '—'}</td>
+                    <td className="px-3 py-2.5 text-[#555]">{account.postCount ?? '—'}</td>
+                    <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-2">
                         <select
                           value={account.status}
                           onChange={e => handleStatusChange(account.id, e.target.value)}
-                          className="bg-surface-alt border border-border rounded px-2 py-1 text-xs text-text"
+                          className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-md px-2 py-1 text-[10px] text-white focus:outline-none focus:border-[#333]"
                         >
                           {STATUSES.filter(s => s !== 'ALL').map(s => (
                             <option key={s} value={s}>{s}</option>
@@ -126,31 +129,31 @@ export default function Accounts() {
                         </select>
                         <button
                           onClick={() => handleDelete(account.id, account.username)}
-                          className="p-1.5 rounded hover:bg-error-dim text-text-muted hover:text-error transition-colors"
+                          className="p-1.5 rounded-md hover:bg-red-500/10 text-[#333] hover:text-red-400 transition-colors"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={13} />
                         </button>
                       </div>
                     </td>
                   </tr>
                   {expandedId === account.id && (
-                    <tr key={`${account.id}-detail`} className="border-b border-border bg-white/[0.02]">
+                    <tr key={`${account.id}-detail`} className="border-b border-[#141414] bg-[#050505]">
                       <td colSpan={10} className="px-6 py-4">
                         <div className="grid grid-cols-3 gap-6 max-w-3xl">
                           <div>
-                            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Identity</h4>
+                            <h4 className="label-upper mb-2">Identity</h4>
                             <DetailRow label="Phone" value={account.phone} mono />
                             <DetailRow label="Email" value={account.email} />
                             <DetailRow label="2FA Secret" value={account.totpSecret ? '••••••' + account.totpSecret.slice(-4) : null} mono />
                           </div>
                           <div>
-                            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Infrastructure</h4>
+                            <h4 className="label-upper mb-2">Infrastructure</h4>
                             <DetailRow label="Container" value={account.craneContainer} mono />
                             <DetailRow label="Device UDID" value={account.deviceUdid} mono />
                             <DetailRow label="Proxy Session" value={account.proxySession} mono />
                           </div>
                           <div>
-                            <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Activity</h4>
+                            <h4 className="label-upper mb-2">Activity</h4>
                             <DetailRow label="Last Login" value={account.lastLoginAt ? new Date(account.lastLoginAt).toLocaleString() : null} />
                             <DetailRow label="Following" value={account.followCount} />
                             <DetailRow label="Followers" value={account.followerCount} />
@@ -160,7 +163,7 @@ export default function Accounts() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))
             )}
           </tbody>

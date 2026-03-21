@@ -2,11 +2,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import Accounts from './pages/Accounts'
-import Runs from './pages/Runs'
-import Scheduler from './pages/Scheduler'
-import Content from './pages/Content'
-import DriveTrash from './pages/DriveTrash'
 import Actions from './pages/Actions'
+import Activity from './pages/Activity'
 
 export default function App() {
   return (
@@ -15,11 +12,8 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/accounts" element={<Accounts />} />
-          <Route path="/runs" element={<Runs />} />
-          <Route path="/scheduler" element={<Scheduler />} />
           <Route path="/actions" element={<Actions />} />
-          <Route path="/content" element={<Content />} />
-          <Route path="/drive-trash" element={<DriveTrash />} />
+          <Route path="/activity" element={<Activity />} />
         </Route>
       </Routes>
     </BrowserRouter>

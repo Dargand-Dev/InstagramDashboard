@@ -164,7 +164,7 @@ export default function Accounts() {
                     <span className="text-sm font-semibold text-white truncate">{account.username}</span>
                   </div>
                   <p className="text-xs text-[#444] mt-0.5 ml-[18px] truncate">
-                    {postCounts[account.username] || account.postCount || 0} posts · {account.followerCount ?? 0} followers
+                    {postCounts[account.username] || account.postCount || 0} posts · {account.followerCount ?? 0} followers · {(account.viewsLast30Days ?? 0).toLocaleString()} views
                   </p>
                 </button>
               ))
@@ -218,10 +218,10 @@ export default function Accounts() {
                 {[
                   { label: 'Posts', value: postCounts[selectedAccount.username] || selectedAccount.postCount },
                   { label: 'Followers', value: selectedAccount.followerCount },
-                  { label: 'Following', value: selectedAccount.followCount },
+                  { label: 'Views (30d)', value: selectedAccount.viewsLast30Days },
                 ].map(stat => (
                   <div key={stat.label} className="px-6 py-5 text-center">
-                    <p className="text-3xl font-bold text-white">{stat.value ?? 0}</p>
+                    <p className="text-3xl font-bold text-white">{(stat.value ?? 0).toLocaleString()}</p>
                     <p className="text-xs text-[#555] uppercase tracking-wide mt-1">{stat.label}</p>
                   </div>
                 ))}

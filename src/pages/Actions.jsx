@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Smartphone, UserPlus, Play, Rocket, Unlock, Loader2, CheckCircle, XCircle, AlertTriangle, Shield, Settings, Key, Video, Image, Clipboard, Container, RefreshCw, Trash2, X } from 'lucide-react'
+import { Smartphone, UserPlus, Play, Rocket, Unlock, Loader2, CheckCircle, XCircle, AlertTriangle, Shield, Settings, Key, Video, Image, Clipboard, Container, RefreshCw, Trash2, X, Layers } from 'lucide-react'
 import Card from '../components/Card'
 import { useApi, apiPost } from '../hooks/useApi'
 
@@ -193,6 +193,11 @@ export default function Actions() {
   const [modalAction, setModalAction] = useState(null)
   const [advancedMode, setAdvancedMode] = useState(false)
   const [advAction, setAdvAction] = useState('')
+  const [ecDevice, setEcDevice] = useState(DEVICES[0].udid)
+  const [ecIdentity, setEcIdentity] = useState('sofia')
+  const [ecContainers, setEcContainers] = useState('')
+  const [ecLoading, setEcLoading] = useState(false)
+  const [ecResult, setEcResult] = useState(null)
   const [lockStatus, setLockStatus] = useState(null)
   const [lockLoading, setLockLoading] = useState(false)
   const [triggerLoading, setTriggerLoading] = useState(false)
@@ -242,6 +247,26 @@ export default function Actions() {
     } catch (err) {
       setCaResult({ type: 'error', message: err.message })
     } finally { setCaLoading(false) }
+  }
+
+  async function handleCreateAccountExisting() {
+    const names = ecContainers
+      .split(/[,\n]+/)
+      .map(s => s.trim())
+      .filter(Boolean)
+    if (names.length === 0) return
+    setEcLoading(true)
+    setEcResult(null)
+    try {
+      await apiPost('/api/automation/workflow/create-account-existing', {
+        deviceUdid: ecDevice,
+        identityId: ecIdentity || undefined,
+        containerNames: names,
+      })
+      setEcResult({ type: 'success', message: `Batch workflow accepted for ${names.length} container(s)` })
+    } catch (err) {
+      setEcResult({ type: 'error', message: err.message })
+    } finally { setEcLoading(false) }
   }
 
   async function handleQuickAction(actionName, modalParams) {
@@ -411,6 +436,47 @@ export default function Actions() {
             </button>
           </div>
           <ResultBanner result={caResult} />
+        </Card>
+
+        {/* Create Account (Existing Containers) */}
+        <Card title="Create Account (Existing Containers)" icon={Layers} iconColor="bg-orange-500/10 text-orange-400">
+          <p className="text-[10px] text-[#333] mb-3">{'Runs: Switch Container > Register > Professional Setup > 2FA — for each container in the list'}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>Device</label>
+              <select value={ecDevice} onChange={e => setEcDevice(e.target.value)} className={inputClass}>
+                {DEVICES.map(d => (
+                  <option key={d.udid} value={d.udid}>{d.label} — {d.udid.slice(-8)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Identity ID</label>
+              <input value={ecIdentity} onChange={e => setEcIdentity(e.target.value)} placeholder="sofia" className={inputClass} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <label className={labelClass}>Container Names</label>
+            <textarea
+              value={ecContainers}
+              onChange={e => setEcContainers(e.target.value)}
+              placeholder={'5, 8, 12\nor one per line'}
+              rows={3}
+              className={`${inputClass} font-mono`}
+            />
+            <p className="text-[10px] text-[#333] mt-1">Comma or newline separated list of existing Crane container names.</p>
+          </div>
+          <div className="mt-3">
+            <button
+              onClick={handleCreateAccountExisting}
+              disabled={ecLoading || !ecContainers.trim()}
+              className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-md text-xs font-semibold transition-colors disabled:opacity-40"
+            >
+              {ecLoading ? <Loader2 size={14} className="animate-spin" /> : <Layers size={14} />}
+              {ecLoading ? 'Creating...' : 'Create Accounts'}
+            </button>
+          </div>
+          <ResultBanner result={ecResult} />
         </Card>
 
         {/* Manual Posting Run */}

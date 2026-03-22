@@ -33,6 +33,17 @@ export default function Accounts() {
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState(null)
   const { data: accounts, loading, refetch } = useApi('/api/accounts')
+  const { data: historyData } = useApi('/api/automation/posting-history?limit=5000')
+
+  // Build post count per username from posting history
+  const postCounts = {}
+  if (historyData?.entries) {
+    for (const entry of historyData.entries) {
+      if (entry.username) {
+        postCounts[entry.username] = (postCounts[entry.username] || 0) + 1
+      }
+    }
+  }
 
   const statusCounts = accounts
     ? STATUSES.reduce((acc, s) => {
@@ -140,7 +151,7 @@ export default function Accounts() {
                     <span className="text-sm font-semibold text-white truncate">{account.username}</span>
                   </div>
                   <p className="text-xs text-[#444] mt-0.5 ml-[18px] truncate">
-                    {account.postCount ?? 0} posts · {account.followerCount ?? 0} followers
+                    {postCounts[account.username] || account.postCount || 0} posts · {account.followerCount ?? 0} followers
                   </p>
                 </button>
               ))
@@ -192,7 +203,7 @@ export default function Accounts() {
               {/* Stats bar */}
               <div className="grid grid-cols-3 border-b border-[#1a1a1a]">
                 {[
-                  { label: 'Posts', value: selectedAccount.postCount },
+                  { label: 'Posts', value: postCounts[selectedAccount.username] || selectedAccount.postCount },
                   { label: 'Followers', value: selectedAccount.followerCount },
                   { label: 'Following', value: selectedAccount.followCount },
                 ].map(stat => (

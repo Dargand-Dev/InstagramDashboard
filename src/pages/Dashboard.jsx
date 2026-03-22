@@ -160,10 +160,10 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {!runs?.length ? (
+                  {!runsData?.runs?.length ? (
                     <tr><td colSpan={4} className="px-3 py-6 text-center text-[#333]">No runs yet</td></tr>
                   ) : (
-                    runs.slice(0, 5).map((run, i) => (
+                    runsData.runs.slice(0, 5).map((run, i) => (
                       <tr key={run.id || i} className="border-b border-[#141414] last:border-0 hover:bg-[#111] transition-colors">
                         <td className="px-3 py-2.5 text-[#555]">
                           {run.timestamp ? new Date(run.timestamp).toLocaleString() : '—'}

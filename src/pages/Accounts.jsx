@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Trash2, Search, Users } from 'lucide-react'
 import StatusBadge from '../components/StatusBadge'
 import { useApi, apiPut, apiDelete } from '../hooks/useApi'
@@ -29,10 +30,22 @@ function DetailRow({ label, value, mono = false }) {
 }
 
 export default function Accounts() {
+  const [searchParams] = useSearchParams()
   const [filter, setFilter] = useState('ALL')
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState(null)
   const { data: accounts, loading, refetch } = useApi('/api/accounts')
+
+  // Auto-select account from URL query param
+  useEffect(() => {
+    const usernameParam = searchParams.get('username')
+    if (usernameParam && accounts?.length) {
+      const match = accounts.find(a => a.username === usernameParam)
+      if (match) {
+        setSelectedId(match.id)
+      }
+    }
+  }, [searchParams, accounts])
   const { data: historyData } = useApi('/api/automation/posting-history?limit=5000')
 
   // Build post count per username from posting history

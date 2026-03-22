@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { BookOpen } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
 
 function timeAgo(date) {
@@ -21,6 +22,7 @@ function timeAgo(date) {
 }
 
 export default function PostingHistory() {
+  const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const queryParams = username
     ? `/api/automation/posting-history?limit=50&username=${encodeURIComponent(username)}`
@@ -67,7 +69,14 @@ export default function PostingHistory() {
                   <td className="px-4 py-3 text-text-muted">
                     {timeAgo(entry.postedAt)}
                   </td>
-                  <td className="px-4 py-3 text-white">{entry.username}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => navigate(`/accounts?username=${encodeURIComponent(entry.username)}`)}
+                      className="text-blue-400 hover:text-blue-300 hover:underline transition-colors font-medium"
+                    >
+                      {entry.username}
+                    </button>
+                  </td>
                   <td className="px-4 py-3">{entry.baseVideo || '—'}</td>
                   <td className="px-4 py-3">
                     <span className="text-xs font-medium px-2 py-0.5 rounded bg-surface-alt text-text-muted">

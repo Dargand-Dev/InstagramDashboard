@@ -2,6 +2,24 @@ import { useState } from 'react'
 import { BookOpen } from 'lucide-react'
 import { useApi } from '../hooks/useApi'
 
+function timeAgo(date) {
+  if (!date) return '—'
+  const now = Date.now()
+  const diff = now - new Date(date).getTime()
+  if (diff < 0) return 'just now'
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  const weeks = Math.floor(days / 7)
+  if (weeks < 5) return `${weeks}w ago`
+  const months = Math.floor(days / 30)
+  return `${months}mo ago`
+}
+
 export default function PostingHistory() {
   const [username, setUsername] = useState('')
   const queryParams = username
@@ -47,7 +65,7 @@ export default function PostingHistory() {
               entries.map((entry) => (
                 <tr key={entry.id} className="border-b border-border hover:bg-surface-hover transition-colors">
                   <td className="px-4 py-3 text-text-muted">
-                    {entry.postedAt ? new Date(entry.postedAt).toLocaleString() : '—'}
+                    {timeAgo(entry.postedAt)}
                   </td>
                   <td className="px-4 py-3 text-white">{entry.username}</td>
                   <td className="px-4 py-3">{entry.baseVideo || '—'}</td>

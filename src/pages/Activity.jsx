@@ -10,6 +10,13 @@ const TABS = [
   { id: 'trash', label: 'Drive Trash' },
 ]
 
+function deriveRunStatus(run) {
+  if (run.status) return run.status
+  if (run.failureCount > 0 && run.successCount === 0) return 'FAILED'
+  if (run.failureCount > 0 && run.successCount > 0) return 'PARTIAL'
+  return 'SUCCESS'
+}
+
 function formatDuration(ms) {
   if (!ms) return '—'
   if (typeof ms === 'string') return ms
@@ -68,7 +75,7 @@ function RunsTab() {
                       </span>
                     </td>
                     <td className="px-3 py-2.5 font-mono text-[#555]">{formatDuration(run.duration || run.durationMs)}</td>
-                    <td className="px-3 py-2.5"><StatusBadge status={run.status || 'SUCCESS'} /></td>
+                    <td className="px-3 py-2.5"><StatusBadge status={deriveRunStatus(run)} /></td>
                     <td className="px-3 py-2.5 text-right">
                       <span className="text-emerald-400">{run.successCount || 0}</span>
                       <span className="text-[#333]"> / </span>

@@ -4,6 +4,13 @@ import Card from '../components/Card'
 import StatusBadge from '../components/StatusBadge'
 import { useApi } from '../hooks/useApi'
 
+function deriveRunStatus(run) {
+  if (run.status) return run.status
+  if (run.failureCount > 0 && run.successCount === 0) return 'FAILED'
+  if (run.failureCount > 0 && run.successCount > 0) return 'PARTIAL'
+  return 'SUCCESS'
+}
+
 function formatDuration(ms) {
   if (!ms) return '—'
   if (typeof ms === 'string') return ms
@@ -83,7 +90,7 @@ export default function Dashboard() {
           {lastRun ? (
             <>
               <div className="flex items-center gap-2 mb-1">
-                <StatusBadge status={lastRun.status || 'SUCCESS'} />
+                <StatusBadge status={deriveRunStatus(lastRun)} />
                 <span className="text-[10px] text-[#555]">{formatDuration(lastRun.duration || lastRun.durationMs)}</span>
               </div>
               <p className="text-xs text-[#333]">
@@ -169,7 +176,7 @@ export default function Dashboard() {
                           {run.timestamp ? new Date(run.timestamp).toLocaleString() : '—'}
                         </td>
                         <td className="px-3 py-2.5">
-                          <StatusBadge status={run.status || 'SUCCESS'} />
+                          <StatusBadge status={deriveRunStatus(run)} />
                         </td>
                         <td className="px-3 py-2.5 font-mono text-[#555]">{formatDuration(run.duration || run.durationMs)}</td>
                         <td className="px-3 py-2.5 text-right">

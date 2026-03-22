@@ -5,6 +5,8 @@ const statusStyles = {
   ERROR: 'bg-red-500/10 text-red-400 border-red-500/20',
   SUCCESS: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   FAILED: 'bg-red-500/10 text-red-400 border-red-500/20',
+  PARTIAL: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  ABORTED: 'bg-red-500/10 text-red-400 border-red-500/20',
   RUNNING: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
   ENABLED: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   DISABLED: 'bg-[#141414] text-[#555] border-[#1a1a1a]',

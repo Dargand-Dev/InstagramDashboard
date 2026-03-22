@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Trash2, Search, Users, Link, Pencil, X, ExternalLink } from 'lucide-react'
 import StatusBadge from '../components/StatusBadge'
 import { useApi, apiPut, apiDelete } from '../hooks/useApi'
+import AccountGrowthChart from '../components/AccountGrowthChart'
 
 const STATUSES = ['ALL', 'ACTIVE', 'SUSPENDED', 'BANNED', 'ERROR']
 
@@ -47,6 +48,7 @@ export default function Accounts() {
     }
   }, [searchParams, accounts])
   const { data: historyData } = useApi('/api/automation/posting-history?limit=5000')
+  const { data: snapData } = useApi('/api/stats/snapshots?days=365')
 
   // Build post count per username from posting history
   const postCounts = {}
@@ -263,6 +265,16 @@ export default function Accounts() {
                     <p className="text-xs text-[#555] uppercase tracking-wide mt-1">{stat.label}</p>
                   </div>
                 ))}
+              </div>
+
+              {/* Growth Chart */}
+              <div className="px-8 py-5 border-b border-[#1a1a1a]">
+                <span className="label-upper block mb-3">Follower Growth</span>
+                <AccountGrowthChart
+                  account={selectedAccount}
+                  accounts={accounts || []}
+                  snapshots={snapData?.snapshots || []}
+                />
               </div>
 
               {/* Story Link */}

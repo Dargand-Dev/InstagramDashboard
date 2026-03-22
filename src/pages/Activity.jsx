@@ -20,7 +20,8 @@ function formatDuration(ms) {
 }
 
 function RunsTab() {
-  const { data: runs, loading } = useApi('/api/automation/runs?limit=20')
+  const { data: runsData, loading } = useApi('/api/automation/runs?limit=20')
+  const runs = runsData?.runs || []
   const [expandedId, setExpandedId] = useState(null)
 
   return (
@@ -39,7 +40,7 @@ function RunsTab() {
         <tbody>
           {loading ? (
             <tr><td colSpan={6} className="px-3 py-8 text-center text-[#333]">Loading...</td></tr>
-          ) : !runs?.length ? (
+          ) : !runs.length ? (
             <tr><td colSpan={6} className="px-3 py-8 text-center text-[#333]">No runs found</td></tr>
           ) : (
             runs.map((run, idx) => {

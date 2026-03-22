@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Trash2, Search, Users } from 'lucide-react'
+import { Trash2, Search, Users, Link, Pencil, X, ExternalLink } from 'lucide-react'
 import StatusBadge from '../components/StatusBadge'
 import { useApi, apiPut, apiDelete } from '../hooks/useApi'
 
@@ -72,6 +72,38 @@ export default function Accounts() {
 
   const selectedAccount = filtered.find(a => a.id === selectedId)
 
+  const [editingLink, setEditingLink] = useState(false)
+  const [linkValue, setLinkValue] = useState('')
+
+  function openLinkEditor(currentUrl) {
+    setLinkValue(currentUrl || '')
+    setEditingLink(true)
+  }
+
+  async function handleSaveLink(id) {
+    try {
+      const account = accounts.find(a => a.id === id)
+      if (!account) return
+      await apiPut(`/api/accounts/${id}`, { ...account, storyLinkUrl: linkValue || null })
+      setEditingLink(false)
+      refetch()
+    } catch (err) {
+      alert('Failed to update link: ' + err.message)
+    }
+  }
+
+  async function handleDeleteLink(id) {
+    try {
+      const account = accounts.find(a => a.id === id)
+      if (!account) return
+      await apiPut(`/api/accounts/${id}`, { ...account, storyLinkUrl: null })
+      setEditingLink(false)
+      refetch()
+    } catch (err) {
+      alert('Failed to remove link: ' + err.message)
+    }
+  }
+
   async function handleStatusChange(id, newStatus) {
     try {
       await apiPut(`/api/accounts/${id}/status`, { status: newStatus })
@@ -95,6 +127,12 @@ export default function Accounts() {
   function handleFilterChange(s) {
     setFilter(s)
     setSelectedId(null)
+    setEditingLink(false)
+  }
+
+  function handleSelectAccount(id) {
+    setSelectedId(id)
+    setEditingLink(false)
   }
 
   return (
@@ -152,7 +190,7 @@ export default function Accounts() {
               filtered.map(account => (
                 <button
                   key={account.id}
-                  onClick={() => setSelectedId(account.id)}
+                  onClick={() => handleSelectAccount(account.id)}
                   className={`w-full text-left px-4 py-3 transition-colors border-l-2 ${
                     selectedId === account.id
                       ? 'bg-blue-500/5 border-l-blue-500'
@@ -225,6 +263,72 @@ export default function Accounts() {
                     <p className="text-xs text-[#555] uppercase tracking-wide mt-1">{stat.label}</p>
                   </div>
                 ))}
+              </div>
+
+              {/* Story Link */}
+              <div className="px-8 py-5 border-b border-[#1a1a1a]">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="label-upper !mb-0">Story Link</span>
+                </div>
+                {editingLink ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="url"
+                      placeholder="https://..."
+                      value={linkValue}
+                      onChange={e => setLinkValue(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSaveLink(selectedAccount.id)}
+                      autoFocus
+                      className="flex-1 bg-[#111] border border-[#1a1a1a] rounded-lg px-3 py-2 text-sm text-white placeholder-[#333] focus:outline-none focus:border-[#333] font-mono"
+                    />
+                    <button
+                      onClick={() => handleSaveLink(selectedAccount.id)}
+                      className="px-3 py-2 rounded-md bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-semibold transition-colors"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setEditingLink(false)}
+                      className="p-2 rounded-md hover:bg-[#1a1a1a] text-[#555] hover:text-white transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : selectedAccount.storyLinkUrl ? (
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={selectedAccount.storyLinkUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 font-mono truncate max-w-[300px] transition-colors"
+                    >
+                      <ExternalLink size={12} className="flex-shrink-0" />
+                      {selectedAccount.storyLinkUrl}
+                    </a>
+                    <button
+                      onClick={() => openLinkEditor(selectedAccount.storyLinkUrl)}
+                      className="p-1.5 rounded-md hover:bg-[#1a1a1a] text-[#555] hover:text-white transition-colors"
+                      title="Edit link"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteLink(selectedAccount.id)}
+                      className="p-1.5 rounded-md hover:bg-red-500/10 text-[#555] hover:text-red-400 transition-colors"
+                      title="Remove link"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => openLinkEditor('')}
+                    className="flex items-center gap-2 px-3 py-2 rounded-md border border-dashed border-[#1a1a1a] hover:border-[#333] text-[#555] hover:text-white transition-colors text-xs"
+                  >
+                    <Link size={12} />
+                    Add link
+                  </button>
+                )}
               </div>
 
               {/* Key-value details */}

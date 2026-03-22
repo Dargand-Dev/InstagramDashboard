@@ -1,10 +1,11 @@
 import { useMemo } from 'react'
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend, Cell
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Cell
 } from 'recharts'
 import { Users, Eye, UserCheck, Trophy } from 'lucide-react'
 import Card from '../components/Card'
+import InteractiveLineChart from '../components/InteractiveLineChart'
 import { useApi } from '../hooks/useApi'
 
 const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#f97316']
@@ -28,42 +29,7 @@ export default function Analytics() {
 
   const loading = snapLoading || overviewLoading
 
-  // Group snapshots by date for line charts
-  const { followerSeries, viewsSeries, usernames } = useMemo(() => {
-    if (!snapData?.snapshots?.length) return { followerSeries: [], viewsSeries: [], usernames: [] }
-
-    const byDate = {}
-    const names = new Set()
-
-    for (const snap of snapData.snapshots) {
-      const date = snap.snapshotAt?.slice(0, 10)
-      if (!date) continue
-      names.add(snap.username)
-      if (!byDate[date]) byDate[date] = {}
-      byDate[date][snap.username] = snap
-    }
-
-    const sortedDates = Object.keys(byDate).sort()
-    const usernameList = [...names]
-
-    const followerSeries = sortedDates.map(date => {
-      const row = { date: date.slice(5) } // MM-DD
-      for (const u of usernameList) {
-        row[u] = byDate[date]?.[u]?.followerCount ?? null
-      }
-      return row
-    })
-
-    const viewsSeries = sortedDates.map(date => {
-      const row = { date: date.slice(5) }
-      for (const u of usernameList) {
-        row[u] = byDate[date]?.[u]?.viewsLast30Days ?? null
-      }
-      return row
-    })
-
-    return { followerSeries, viewsSeries, usernames: usernameList }
-  }, [snapData])
+  const snapshots = snapData?.snapshots || []
 
   // Efficiency data (views per post)
   const efficiencyData = useMemo(() => {
@@ -178,65 +144,22 @@ export default function Analytics() {
         </Card>
       </div>
 
-      {/* Followers Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
-        <Card>
-          <span className="label-upper block mb-4">Followers Evolution (30 days)</span>
-          {followerSeries.length === 0 ? (
-            <div className="h-64 flex items-center justify-center text-[#333] text-xs">No data</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={followerSeries}>
-                <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} />
-                <YAxis tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
-                <Tooltip {...tooltipStyle} formatter={(v) => formatNumber(v)} />
-                <Legend wrapperStyle={{ fontSize: 11, color: '#555' }} />
-                {usernames.map((name, i) => (
-                  <Line
-                    key={name}
-                    type="monotone"
-                    dataKey={name}
-                    stroke={COLORS[i % COLORS.length]}
-                    strokeWidth={2}
-                    dot={false}
-                    connectNulls
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </Card>
+      {/* Interactive Charts */}
+      <Card className="mb-3">
+        <InteractiveLineChart
+          title="Views Evolution (30 days)"
+          snapshots={snapshots}
+          dataKey="viewsLast30Days"
+        />
+      </Card>
 
-        {/* Views Chart */}
-        <Card>
-          <span className="label-upper block mb-4">Views Evolution (30 days)</span>
-          {viewsSeries.length === 0 ? (
-            <div className="h-64 flex items-center justify-center text-[#333] text-xs">No data</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={viewsSeries}>
-                <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" />
-                <XAxis dataKey="date" tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} />
-                <YAxis tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
-                <Tooltip {...tooltipStyle} formatter={(v) => formatNumber(v)} />
-                <Legend wrapperStyle={{ fontSize: 11, color: '#555' }} />
-                {usernames.map((name, i) => (
-                  <Line
-                    key={name}
-                    type="monotone"
-                    dataKey={name}
-                    stroke={COLORS[i % COLORS.length]}
-                    strokeWidth={2}
-                    dot={false}
-                    connectNulls
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </Card>
-      </div>
+      <Card className="mb-3">
+        <InteractiveLineChart
+          title="Followers Evolution (30 days)"
+          snapshots={snapshots}
+          dataKey="followerCount"
+        />
+      </Card>
 
       {/* Efficiency Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">

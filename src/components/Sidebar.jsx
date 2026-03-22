@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Users, Zap, Activity, BookOpen, Menu } from 'lucide-react'
+import { LayoutDashboard, BarChart3, Users, Zap, Activity, BookOpen, Menu } from 'lucide-react'
 
 const links = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/accounts', icon: Users, label: 'Accounts' },
   { to: '/actions', icon: Zap, label: 'Actions' },
   { to: '/activity', icon: Activity, label: 'Activity' },

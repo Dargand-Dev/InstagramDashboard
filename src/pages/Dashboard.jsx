@@ -11,6 +11,24 @@ function deriveRunStatus(run) {
   return 'SUCCESS'
 }
 
+function timeAgo(date) {
+  if (!date) return '—'
+  const now = Date.now()
+  const diff = now - new Date(date).getTime()
+  if (diff < 0) return 'just now'
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d ago`
+  const weeks = Math.floor(days / 7)
+  if (weeks < 5) return `${weeks}w ago`
+  const months = Math.floor(days / 30)
+  return `${months}mo ago`
+}
+
 function formatDuration(ms) {
   if (!ms) return '—'
   if (typeof ms === 'string') return ms
@@ -94,7 +112,7 @@ export default function Dashboard() {
                 <span className="text-[10px] text-[#555]">{formatDuration(lastRun.duration || lastRun.durationMs)}</span>
               </div>
               <p className="text-xs text-[#333]">
-                {lastRun.timestamp ? new Date(lastRun.timestamp).toLocaleString() : '—'}
+                {timeAgo(lastRun.startTime || lastRun.timestamp)}
               </p>
               {lastRun.successCount !== undefined && (
                 <p className="text-xs mt-1">
@@ -173,7 +191,7 @@ export default function Dashboard() {
                     runsData.runs.slice(0, 5).map((run, i) => (
                       <tr key={run.id || i} className="border-b border-[#141414] last:border-0 hover:bg-[#111] transition-colors">
                         <td className="px-3 py-2.5 text-[#555]">
-                          {run.timestamp ? new Date(run.timestamp).toLocaleString() : '—'}
+                          {timeAgo(run.startTime || run.timestamp)}
                         </td>
                         <td className="px-3 py-2.5">
                           <StatusBadge status={deriveRunStatus(run)} />

@@ -100,14 +100,17 @@ function RunsTab() {
                       <span className="text-red-400">{run.failureCount || 0}</span>
                     </td>
                   </tr>
-                  {isExpanded && run.details && (
+                  {isExpanded && (run.accountResults || run.details) && (
                     <tr className="border-b border-[#141414]">
                       <td colSpan={6} className="px-6 py-3 bg-[#050505]">
                         <div className="space-y-1.5">
-                          {(Array.isArray(run.details) ? run.details : []).map((detail, di) => (
+                          {(Array.isArray(run.accountResults || run.details) ? (run.accountResults || run.details) : []).map((detail, di) => (
                             <div key={di} className="flex items-center justify-between text-xs">
-                              <span className="text-white font-medium">{detail.account || detail.username || `Account ${di + 1}`}</span>
+                              <span className="text-white font-medium">{detail.username || detail.account || `Account ${di + 1}`}</span>
                               <div className="flex items-center gap-3">
+                                {detail.failureReason && (
+                                  <span className="text-red-400/70 truncate max-w-[300px]" title={detail.failureReason}>{detail.failureReason}</span>
+                                )}
                                 <span className="text-[#555]">{detail.action || '—'}</span>
                                 <StatusBadge status={detail.status || 'SUCCESS'} />
                               </div>

@@ -7,6 +7,7 @@ import Scheduler from './pages/Scheduler'
 import Content from './pages/Content'
 import DriveTrash from './pages/DriveTrash'
 import Actions from './pages/Actions'
+import PostingHistory from './pages/PostingHistory'
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/scheduler" element={<Scheduler />} />
           <Route path="/actions" element={<Actions />} />
           <Route path="/content" element={<Content />} />
+          <Route path="/posting-history" element={<PostingHistory />} />
           <Route path="/drive-trash" element={<DriveTrash />} />
         </Route>
       </Routes>

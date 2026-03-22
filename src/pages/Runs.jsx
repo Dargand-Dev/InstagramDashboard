@@ -4,7 +4,8 @@ import StatusBadge from '../components/StatusBadge'
 import { useApi } from '../hooks/useApi'
 
 export default function Runs() {
-  const { data: runs, loading } = useApi('/api/automation/runs?limit=20')
+  const { data, loading } = useApi('/api/automation/runs?limit=20')
+  const runs = data?.runs || []
   const [expandedId, setExpandedId] = useState(null)
 
   function formatDuration(ms) {
@@ -71,16 +72,25 @@ export default function Runs() {
                         <span className="text-error">{run.failureCount || 0}</span>
                       </td>
                     </tr>
-                    {isExpanded && run.details && (
+                    {isExpanded && run.accountResults && (
                       <tr className="border-b border-border">
                         <td colSpan={6} className="px-8 py-4 bg-surface-alt/50">
                           <div className="space-y-2">
-                            {(Array.isArray(run.details) ? run.details : []).map((detail, di) => (
+                            {run.accountResults.map((result, di) => (
                               <div key={di} className="flex items-center justify-between text-sm">
-                                <span className="text-white">{detail.account || detail.username || `Account ${di + 1}`}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-white">{result.username || `Account ${di + 1}`}</span>
+                                  <span className="text-xs text-text-muted font-mono">{result.identityId || ''}</span>
+                                </div>
                                 <div className="flex items-center gap-3">
-                                  <span className="text-text-muted">{detail.action || '—'}</span>
-                                  <StatusBadge status={detail.status || 'SUCCESS'} />
+                                  <span className="text-text-muted text-xs">
+                                    {result.completedSteps}/{result.totalSteps} steps
+                                  </span>
+                                  <span className="text-text-muted font-mono text-xs">{formatDuration(result.durationMs)}</span>
+                                  <StatusBadge status={result.status || 'UNKNOWN'} />
+                                  {result.failureReason && (
+                                    <span className="text-error text-xs truncate max-w-[200px]">{result.failureReason}</span>
+                                  )}
                                 </div>
                               </div>
                             ))}

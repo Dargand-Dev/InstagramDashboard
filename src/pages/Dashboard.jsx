@@ -4,13 +4,13 @@ import StatusBadge from '../components/StatusBadge'
 import { useApi } from '../hooks/useApi'
 
 export default function Dashboard() {
-  const { data: runs } = useApi('/api/automation/runs?limit=1')
+  const { data: runsData } = useApi('/api/automation/runs?limit=1')
   const { data: accounts } = useApi('/api/accounts')
   const { data: content } = useApi('/api/automation/content-status')
   const { data: schedule } = useApi('/api/automation/schedule')
   const { data: lockStatus, error: lockError } = useApi('/api/automation/lock-status')
 
-  const lastRun = runs?.[0]
+  const lastRun = runsData?.runs?.[0]
   const activeAccounts = accounts?.filter(a => a.status === 'ACTIVE')?.length || 0
   const totalAccounts = accounts?.length || 0
 

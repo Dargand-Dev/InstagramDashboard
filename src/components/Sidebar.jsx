@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Users, History, Clock, Zap, Film, Trash2 } from 'lucide-react'
+import { LayoutDashboard, Users, History, Clock, Zap, Film, BookOpen, Trash2 } from 'lucide-react'
 
 const links = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -8,6 +8,7 @@ const links = [
   { to: '/scheduler', icon: Clock, label: 'Scheduler' },
   { to: '/actions', icon: Zap, label: 'Actions' },
   { to: '/content', icon: Film, label: 'Content' },
+  { to: '/posting-history', icon: BookOpen, label: 'Posting History' },
   { to: '/drive-trash', icon: Trash2, label: 'Drive Trash' },
 ]
 

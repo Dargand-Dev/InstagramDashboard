@@ -1,24 +1,24 @@
 const statusStyles = {
-  ACTIVE: 'bg-success-dim text-success',
-  SUSPENDED: 'bg-warning-dim text-warning',
-  BANNED: 'bg-error-dim text-error',
-  ERROR: 'bg-surface-alt text-text-muted',
-  SUCCESS: 'bg-success-dim text-success',
-  FAILED: 'bg-error-dim text-error',
-  RUNNING: 'bg-primary-dim text-primary',
-  ENABLED: 'bg-success-dim text-success',
-  DISABLED: 'bg-surface-alt text-text-muted',
-  CLEAN: 'bg-success-dim text-success',
-  PENDING: 'bg-warning-dim text-warning',
-  LOW_STOCK: 'bg-warning-dim text-warning',
-  EMPTY: 'bg-error-dim text-error',
-  OK: 'bg-success-dim text-success',
+  ACTIVE: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  SUSPENDED: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  BANNED: 'bg-red-500/10 text-red-400 border-red-500/20',
+  ERROR: 'bg-red-500/10 text-red-400 border-red-500/20',
+  SUCCESS: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  FAILED: 'bg-red-500/10 text-red-400 border-red-500/20',
+  RUNNING: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  ENABLED: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  DISABLED: 'bg-[#141414] text-[#555] border-[#1a1a1a]',
+  CLEAN: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  PENDING: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  LOW_STOCK: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  EMPTY: 'bg-red-500/10 text-red-400 border-red-500/20',
+  OK: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
 }
 
 export default function StatusBadge({ status }) {
-  const style = statusStyles[status] || 'bg-surface-alt text-text-muted'
+  const style = statusStyles[status] || 'bg-[#141414] text-[#555] border-[#1a1a1a]'
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${style}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase ${style}`}>
       {status}
     </span>
   )

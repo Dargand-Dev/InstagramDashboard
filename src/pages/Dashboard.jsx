@@ -14,14 +14,14 @@ function formatDuration(ms) {
 }
 
 export default function Dashboard() {
-  const { data: runs } = useApi('/api/automation/runs?limit=5')
+  const { data: runsData } = useApi('/api/automation/runs?limit=5')
   const { data: accounts } = useApi('/api/accounts')
   const { data: content } = useApi('/api/automation/content-status')
   const { data: schedule } = useApi('/api/automation/schedule')
   const { data: lockStatus, error: lockError } = useApi('/api/automation/lock-status')
   const navigate = useNavigate()
 
-  const lastRun = runs?.[0]
+  const lastRun = runsData?.runs?.[0]
   const activeAccounts = accounts?.filter(a => a.status === 'ACTIVE')?.length || 0
   const totalAccounts = accounts?.length || 0
   const suspendedAccounts = accounts?.filter(a => a.status === 'SUSPENDED')?.length || 0

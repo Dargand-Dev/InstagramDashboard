@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Users, Zap, Activity, Menu } from 'lucide-react'
+import { LayoutDashboard, Users, Zap, Activity, BookOpen, Menu } from 'lucide-react'
 
 const links = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/accounts', icon: Users, label: 'Accounts' },
   { to: '/actions', icon: Zap, label: 'Actions' },
   { to: '/activity', icon: Activity, label: 'Activity' },
+  { to: '/posting-history', icon: BookOpen, label: 'Posting History' },
 ]
 
 export default function Sidebar() {

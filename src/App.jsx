@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard'
 import Accounts from './pages/Accounts'
 import Actions from './pages/Actions'
 import Activity from './pages/Activity'
+import PostingHistory from './pages/PostingHistory'
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/actions" element={<Actions />} />
           <Route path="/activity" element={<Activity />} />
+          <Route path="/posting-history" element={<PostingHistory />} />
         </Route>
       </Routes>
     </BrowserRouter>

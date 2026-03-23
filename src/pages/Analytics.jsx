@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell
@@ -27,6 +28,7 @@ export default function Analytics() {
   const { data: snapData, loading: snapLoading } = useApi('/api/stats/snapshots?days=30')
   const { data: overview, loading: overviewLoading } = useApi('/api/stats/overview')
 
+  const navigate = useNavigate()
   const loading = snapLoading || overviewLoading
 
   const snapshots = snapData?.snapshots || []
@@ -203,7 +205,7 @@ export default function Analytics() {
                   <tr><td colSpan={5} className="px-3 py-6 text-center text-[#333]">No data</td></tr>
                 ) : (
                   tableData.map((row, i) => (
-                    <tr key={row.username || i} className="border-b border-[#141414] last:border-0 hover:bg-[#111] transition-colors">
+                    <tr key={row.username || i} className="border-b border-[#141414] last:border-0 hover:bg-[#111] transition-colors cursor-pointer" onClick={() => navigate(`/accounts?username=${encodeURIComponent(row.username)}`)}>
                       <td className="px-3 py-2.5 text-white font-medium">{row.username}</td>
                       <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(row.followerCount)}</td>
                       <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(row.viewsLast30Days)}</td>

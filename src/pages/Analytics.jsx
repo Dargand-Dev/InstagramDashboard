@@ -13,7 +13,7 @@ const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4'
 const tooltipStyle = {
   contentStyle: { backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: 8, fontSize: 12 },
   labelStyle: { color: '#999', marginBottom: 4 },
-  itemStyle: { padding: '2px 0' },
+  itemStyle: { padding: '2px 0', color: '#ccc' },
 }
 
 function formatNumber(n) {

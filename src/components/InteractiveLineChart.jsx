@@ -40,6 +40,7 @@ export default function InteractiveLineChart({ title, snapshots, dataKey }) {
   }, [snapshots, dataKey])
 
   const [selected, setSelected] = useState(null)
+  const [showTotal, setShowTotal] = useState(false)
 
   // Initialize selected to first 5 on first render / when top15 changes
   const activeSet = useMemo(() => {
@@ -47,21 +48,33 @@ export default function InteractiveLineChart({ title, snapshots, dataKey }) {
     return new Set(top15.slice(0, 5))
   }, [selected, top15])
 
-  // Build series data grouped by date, only for top15 accounts
+  // Build series data grouped by date, only for top15 accounts + total
   const series = useMemo(() => {
     if (!snapshots?.length || !top15.length) return []
     const top15Set = new Set(top15)
     const byDate = {}
+    // Aggregate all accounts (not just top15) for total
+    const totalByDate = {}
     for (const snap of snapshots) {
-      if (!top15Set.has(snap.username)) continue
       const date = snap.snapshotAt?.slice(0, 10)
       if (!date) continue
-      if (!byDate[date]) byDate[date] = {}
-      byDate[date][snap.username] = snap[dataKey] ?? null
+      const val = snap[dataKey] ?? 0
+      // Per-account (top15 only)
+      if (top15Set.has(snap.username)) {
+        if (!byDate[date]) byDate[date] = {}
+        byDate[date][snap.username] = snap[dataKey] ?? null
+      }
+      // Total: keep latest snapshot per username per date
+      if (!totalByDate[date]) totalByDate[date] = {}
+      const existing = totalByDate[date][snap.username]
+      if (existing == null || val > existing) {
+        totalByDate[date][snap.username] = val
+      }
     }
     return Object.keys(byDate).sort().map(date => ({
       date: `${date.slice(8)}/${date.slice(5, 7)}`,
-      ...byDate[date]
+      ...byDate[date],
+      __total: Object.values(totalByDate[date] || {}).reduce((sum, v) => sum + (v || 0), 0),
     }))
   }, [snapshots, top15, dataKey])
 
@@ -105,6 +118,17 @@ export default function InteractiveLineChart({ title, snapshots, dataKey }) {
           None
         </button>
         <span className="w-px h-4 bg-[#1a1a1a] mx-1" />
+        <button
+          onClick={() => setShowTotal(t => !t)}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-colors ${
+            showTotal ? '' : 'border-[#1a1a1a] text-[#555] opacity-60'
+          }`}
+          style={showTotal ? { borderColor: '#ffffff', color: 'white' } : undefined}
+        >
+          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#ffffff' }} />
+          Total Fleet
+        </button>
+        <span className="w-px h-4 bg-[#1a1a1a] mx-1" />
         {top15.map((username, i) => {
           const color = COLORS[i % COLORS.length]
           const active = activeSet.has(username)
@@ -131,6 +155,19 @@ export default function InteractiveLineChart({ title, snapshots, dataKey }) {
           <XAxis dataKey="date" tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} />
           <YAxis tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
           <Tooltip {...tooltipStyle} formatter={(v) => formatNumber(v)} />
+          <Line
+            key="__total"
+            type="monotone"
+            dataKey="__total"
+            name="Total Fleet"
+            stroke="#ffffff"
+            strokeWidth={2.5}
+            strokeDasharray="6 3"
+            dot={false}
+            connectNulls
+            hide={!showTotal}
+            isAnimationActive={false}
+          />
           {top15.map((username, i) => (
             <Line
               key={username}

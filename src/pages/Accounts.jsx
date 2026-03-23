@@ -235,6 +235,15 @@ export default function Accounts() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
+                  <a
+                    href={`https://instagram.com/${selectedAccount.username}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 rounded-md hover:bg-blue-500/10 text-[#333] hover:text-blue-400 transition-colors"
+                    title="Open on Instagram"
+                  >
+                    <ExternalLink size={16} />
+                  </a>
                   <select
                     value={selectedAccount.status}
                     onChange={e => handleStatusChange(selectedAccount.id, e.target.value)}

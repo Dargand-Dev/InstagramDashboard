@@ -173,7 +173,7 @@ export default function Analytics() {
                 <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" horizontal={false} />
                 <XAxis type="number" tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
                 <YAxis type="category" dataKey="username" tick={{ fill: '#999', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} width={100} />
-                <Tooltip {...tooltipStyle} formatter={(v) => formatNumber(v)} />
+                <Tooltip {...tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.05)' }} formatter={(v) => formatNumber(v)} />
                 <Bar dataKey="ratio" radius={[0, 4, 4, 0]} barSize={20}>
                   {efficiencyData.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />

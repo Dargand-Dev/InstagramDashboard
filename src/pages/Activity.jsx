@@ -1,5 +1,5 @@
 import { useState, Fragment } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
 import Card from '../components/Card'
 import StatusBadge from '../components/StatusBadge'
 import { useApi } from '../hooks/useApi'
@@ -100,23 +100,42 @@ function RunsTab() {
                       <span className="text-red-400">{run.failureCount || 0}</span>
                     </td>
                   </tr>
-                  {isExpanded && (run.accountResults || run.details) && (
+                  {isExpanded && (
                     <tr className="border-b border-[#141414]">
                       <td colSpan={6} className="px-6 py-3 bg-[#050505]">
-                        <div className="space-y-1.5">
-                          {(Array.isArray(run.accountResults || run.details) ? (run.accountResults || run.details) : []).map((detail, di) => (
-                            <div key={di} className="flex items-center justify-between text-xs">
-                              <span className="text-white font-medium">{detail.username || detail.account || `Account ${di + 1}`}</span>
-                              <div className="flex items-center gap-3">
-                                {detail.failureReason && (
-                                  <span className="text-red-400/70 truncate max-w-[300px]" title={detail.failureReason}>{detail.failureReason}</span>
-                                )}
-                                <span className="text-[#555]">{detail.action || '—'}</span>
-                                <StatusBadge status={detail.status || 'SUCCESS'} />
-                              </div>
+                        {(() => {
+                          const results = Array.isArray(run.accountResults) ? run.accountResults
+                            : Array.isArray(run.details) ? run.details : []
+                          if (!results.length) {
+                            return <p className="text-[#333] text-xs">No account details available</p>
+                          }
+                          return (
+                            <div className="space-y-1.5">
+                              {results.map((detail, di) => (
+                                <div key={di} className="flex items-center justify-between text-xs">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-white font-medium">{detail.username || detail.account || `Account ${di + 1}`}</span>
+                                    {detail.identityId && (
+                                      <span className="text-[#333] text-[10px]">{detail.identityId}</span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    {detail.failureReason && (
+                                      <span className="text-red-400/70 truncate max-w-[300px]" title={detail.failureReason}>{detail.failureReason}</span>
+                                    )}
+                                    {detail.completedSteps != null && detail.totalSteps != null && (
+                                      <span className="text-[#555] font-mono">{detail.completedSteps}/{detail.totalSteps} steps</span>
+                                    )}
+                                    {detail.durationMs > 0 && (
+                                      <span className="text-[#555] font-mono">{formatDuration(detail.durationMs)}</span>
+                                    )}
+                                    <StatusBadge status={detail.status || 'SUCCESS'} />
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
+                          )
+                        })()}
                       </td>
                     </tr>
                   )}
@@ -171,6 +190,44 @@ function ContentTab() {
                   <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
                 </div>
               </div>
+              {/* Story media pool alerts */}
+              {identity.storyMediaPool && identity.storyMediaPool.length > 0 && (
+                <div className="border-t border-[#141414] pt-3 mt-3">
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-[10px] text-[#555] font-medium uppercase tracking-wider">Story Media Pool</p>
+                    {identity.totalStoryMedia != null && (
+                      <span className="text-[10px] font-mono text-[#555]">{identity.totalStoryMedia} total</span>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    {identity.storyMediaPool.map((pool, j) => {
+                      const isExhausted = pool.status === 'EXHAUSTED'
+                      const isLow = pool.status === 'LOW'
+                      return (
+                        <div key={j} className={`flex items-center justify-between text-xs px-2 py-1.5 rounded-md border ${
+                          isExhausted
+                            ? 'bg-red-500/5 border-red-500/15'
+                            : isLow
+                              ? 'bg-amber-500/5 border-amber-500/15'
+                              : 'bg-[#0a0a0a] border-[#1a1a1a]'
+                        }`}>
+                          <div className="flex items-center gap-1.5">
+                            {isExhausted && <AlertTriangle size={10} className="text-red-400" />}
+                            <span className={isExhausted ? 'text-red-400 font-medium' : 'text-[#555]'}>
+                              {pool.username}
+                            </span>
+                          </div>
+                          <span className={`font-mono text-[10px] ${
+                            isExhausted ? 'text-red-400' : isLow ? 'text-amber-400' : 'text-[#555]'
+                          }`}>
+                            {pool.remaining}/{pool.totalMedia} left
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
               {identity.accounts && identity.accounts.length > 0 && (
                 <div className="border-t border-[#141414] pt-3 mt-3">
                   <p className="text-[10px] text-[#555] font-medium uppercase tracking-wider mb-2">Accounts</p>

@@ -1,4 +1,4 @@
-import { Users, Activity, Film, Clock, ArrowRight } from 'lucide-react'
+import { Users, Activity, Film, Clock, ArrowRight, AlertTriangle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Card from '../components/Card'
 import StatusBadge from '../components/StatusBadge'
@@ -59,8 +59,25 @@ export default function Dashboard() {
 
   const totalReels = identities.reduce((sum, i) => sum + (i.availableReels ?? i.reelCount ?? i.count ?? 0), 0)
 
+  // Collect exhausted story media pool alerts across all identities
+  const exhaustedStoryPools = identities.flatMap(identity =>
+    (identity.storyMediaPool || [])
+      .filter(p => p.status === 'EXHAUSTED')
+      .map(p => ({ ...p, identityId: identity.identityId }))
+  )
+
   return (
     <div>
+      {/* Story media pool exhaustion alert */}
+      {exhaustedStoryPools.length > 0 && (
+        <div className="flex items-center gap-2 bg-red-500/5 border border-red-500/15 rounded-md p-3 mb-4">
+          <AlertTriangle size={14} className="text-red-400 shrink-0" />
+          <span className="text-red-400 text-xs font-medium">
+            Story media pool exhausted for: {exhaustedStoryPools.map(p => p.username).join(', ')} — add new media to Drive to resume story posting
+          </span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

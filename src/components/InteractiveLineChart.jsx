@@ -48,33 +48,51 @@ export default function InteractiveLineChart({ title, snapshots, dataKey }) {
     return new Set(top15.slice(0, 5))
   }, [selected, top15])
 
-  // Build series data grouped by date, only for top15 accounts + total
+  // Build series data with one point per snapshot timeslot (keeps multiple per day)
   const series = useMemo(() => {
     if (!snapshots?.length || !top15.length) return []
     const top15Set = new Set(top15)
-    const byDate = {}
-    // Aggregate all accounts (not just top15) for total
-    const totalByDate = {}
+
+    // Collect all unique timeslots from snapshots
+    // Use date + half-day bucket (AM/PM) so 2 snapshots per day get 2 points
+    const getSlot = (snapshotAt) => {
+      if (!snapshotAt) return null
+      const date = snapshotAt.slice(0, 10)
+      const hour = parseInt(snapshotAt.slice(11, 13) || '0', 10)
+      return `${date}T${hour < 12 ? '0' : '1'}` // 0 = AM, 1 = PM
+    }
+
+    const formatSlot = (slot) => {
+      const date = slot.slice(0, 10)
+      const half = slot.slice(11) === '1' ? 'PM' : 'AM'
+      return `${date.slice(8)}/${date.slice(5, 7)} ${half}`
+    }
+
+    const bySlot = {}
+    const totalBySlot = {}
     for (const snap of snapshots) {
-      const date = snap.snapshotAt?.slice(0, 10)
-      if (!date) continue
+      const slot = getSlot(snap.snapshotAt)
+      if (!slot) continue
       const val = snap[dataKey] ?? 0
-      // Per-account (top15 only)
+      // Per-account (top15 only) — keep latest snapshot within the slot
       if (top15Set.has(snap.username)) {
-        if (!byDate[date]) byDate[date] = {}
-        byDate[date][snap.username] = snap[dataKey] ?? null
+        if (!bySlot[slot]) bySlot[slot] = {}
+        const existing = bySlot[slot][snap.username]
+        if (existing == null || val > existing) {
+          bySlot[slot][snap.username] = val
+        }
       }
-      // Total: keep latest snapshot per username per date
-      if (!totalByDate[date]) totalByDate[date] = {}
-      const existing = totalByDate[date][snap.username]
-      if (existing == null || val > existing) {
-        totalByDate[date][snap.username] = val
+      // Total: keep latest snapshot per username per slot
+      if (!totalBySlot[slot]) totalBySlot[slot] = {}
+      const existingTotal = totalBySlot[slot][snap.username]
+      if (existingTotal == null || val > existingTotal) {
+        totalBySlot[slot][snap.username] = val
       }
     }
-    return Object.keys(byDate).sort().map(date => ({
-      date: `${date.slice(8)}/${date.slice(5, 7)}`,
-      ...byDate[date],
-      __total: Object.values(totalByDate[date] || {}).reduce((sum, v) => sum + (v || 0), 0),
+    return Object.keys(bySlot).sort().map(slot => ({
+      date: formatSlot(slot),
+      ...bySlot[slot],
+      __total: Object.values(totalBySlot[slot] || {}).reduce((sum, v) => sum + (v || 0), 0),
     }))
   }, [snapshots, top15, dataKey])
 
@@ -152,7 +170,7 @@ export default function InteractiveLineChart({ title, snapshots, dataKey }) {
       <ResponsiveContainer width="100%" height={280}>
         <LineChart data={series}>
           <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" />
-          <XAxis dataKey="date" tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} />
+          <XAxis dataKey="date" tick={{ fill: '#555', fontSize: 10 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} interval="preserveStartEnd" angle={-30} textAnchor="end" height={45} />
           <YAxis tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
           <Tooltip {...tooltipStyle} formatter={(v) => formatNumber(v)} />
           <Line

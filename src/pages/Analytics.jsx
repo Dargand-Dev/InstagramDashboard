@@ -68,6 +68,23 @@ export default function Analytics() {
     return Object.values(latest).sort((a, b) => (b.followerCount || 0) - (a.followerCount || 0))
   }, [snapData])
 
+  // Identity performance data (views/followers per account)
+  const identityData = useMemo(() => {
+    const breakdown = overview?.identityBreakdown
+    if (!breakdown?.length) return []
+    return breakdown
+      .filter(id => id.accountCount > 0)
+      .map(id => ({
+        name: id.identityId || id.identityName || id.identity || `Identity ${breakdown.indexOf(id) + 1}`,
+        accounts: id.accountCount,
+        totalFollowers: id.totalFollowers || 0,
+        totalViews: id.totalViews || 0,
+        viewsPerAccount: Math.round((id.totalViews || 0) / id.accountCount),
+        followersPerAccount: Math.round((id.totalFollowers || 0) / id.accountCount),
+      }))
+      .sort((a, b) => b.viewsPerAccount - a.viewsPerAccount)
+  }, [overview])
+
   if (loading) {
     return (
       <div>
@@ -162,6 +179,55 @@ export default function Analytics() {
           dataKey="followerCount"
         />
       </Card>
+
+      {/* Identity Performance */}
+      {identityData.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+          <Card>
+            <span className="label-upper block mb-4">Identity Performance (per Account)</span>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={identityData} margin={{ left: 10 }}>
+                <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" />
+                <XAxis dataKey="name" tick={{ fill: '#999', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} />
+                <YAxis tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
+                <Tooltip {...tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.05)' }} formatter={(v, name) => [formatNumber(v), name]} />
+                <Bar dataKey="viewsPerAccount" name="Views / Account" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="followersPerAccount" name="Followers / Account" fill="#10b981" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+
+          <Card>
+            <span className="label-upper block mb-4">Identity Breakdown</span>
+            <div className="overflow-hidden rounded-md border border-[#1a1a1a]">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[#1a1a1a]">
+                    <th className="px-3 py-2 text-left label-upper !text-[10px] !mb-0">Identity</th>
+                    <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Accounts</th>
+                    <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Followers</th>
+                    <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Views</th>
+                    <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Fol/Acc</th>
+                    <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Views/Acc</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {identityData.map((row, i) => (
+                    <tr key={row.name || i} className="border-b border-[#141414] last:border-0 hover:bg-[#111] transition-colors">
+                      <td className="px-3 py-2.5 text-white font-medium">{row.name}</td>
+                      <td className="px-3 py-2.5 text-right font-mono text-[#555]">{row.accounts}</td>
+                      <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(row.totalFollowers)}</td>
+                      <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(row.totalViews)}</td>
+                      <td className="px-3 py-2.5 text-right font-mono text-emerald-400">{formatNumber(row.followersPerAccount)}</td>
+                      <td className="px-3 py-2.5 text-right font-mono text-blue-400">{formatNumber(row.viewsPerAccount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Efficiency Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">

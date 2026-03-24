@@ -108,23 +108,18 @@ export default function DailyViewsBarChart({ title, snapshots }) {
         const day = days[i]
         const rToday = dayMap[day].val
         if (i === 0) {
-          // No previous day to diff against — skip (don't inflate with cumulative)
+          // No previous day to diff against — skip
           computed[day] = 0
         } else {
-          const prevDay = dateDaysAgo(day, 1)
-          const rYesterday = dayMap[prevDay]?.val
-          if (rYesterday == null) {
-            // Gap in data — can't compute delta, skip
-            computed[day] = 0
-          } else {
-            let views = rToday - rYesterday
-            // Add back views from 30 days ago (they dropped out of the rolling window)
-            const day30Ago = dateDaysAgo(day, 30)
-            if (computed[day30Ago] !== undefined) {
-              views += computed[day30Ago]
-            }
-            computed[day] = Math.max(0, views)
+          // Use previous available snapshot (not necessarily yesterday)
+          const rPrev = dayMap[days[i - 1]].val
+          let views = rToday - rPrev
+          // Add back views from 30 calendar days ago (dropped out of rolling window)
+          const day30Ago = dateDaysAgo(day, 30)
+          if (computed[day30Ago] !== undefined) {
+            views += computed[day30Ago]
           }
+          computed[day] = Math.max(0, views)
         }
       }
       dailyViews[username] = computed

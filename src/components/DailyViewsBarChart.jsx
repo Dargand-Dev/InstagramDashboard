@@ -108,8 +108,8 @@ export default function DailyViewsBarChart({ title, snapshots }) {
         const day = days[i]
         const rToday = dayMap[day].val
         if (i === 0) {
-          // No previous day to diff against — skip
-          computed[day] = 0
+          // No previous day to diff — use cumulative as seed (bootstrap period, not displayed)
+          computed[day] = rToday
         } else {
           // Use previous available snapshot (not necessarily yesterday)
           const rPrev = dayMap[days[i - 1]].val

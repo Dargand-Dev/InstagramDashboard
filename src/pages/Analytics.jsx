@@ -7,6 +7,7 @@ import {
 import { Users, Eye, UserCheck, Trophy } from 'lucide-react'
 import Card from '../components/Card'
 import InteractiveLineChart from '../components/InteractiveLineChart'
+import DailyViewsBarChart from '../components/DailyViewsBarChart'
 import { useApi } from '../hooks/useApi'
 
 const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#f97316']
@@ -25,13 +26,20 @@ function formatNumber(n) {
 }
 
 export default function Analytics() {
-  const { data: snapData, loading: snapLoading } = useApi('/api/stats/snapshots?days=30')
+  const { data: snapData, loading: snapLoading } = useApi('/api/stats/snapshots?days=60')
   const { data: overview, loading: overviewLoading } = useApi('/api/stats/overview')
 
   const navigate = useNavigate()
   const loading = snapLoading || overviewLoading
 
   const snapshots = snapData?.snapshots || []
+
+  // Last 30 days of snapshots for line charts (full 60 days go to DailyViewsBarChart)
+  const snapshots30 = useMemo(() => {
+    if (!snapshots.length) return []
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    return snapshots.filter(s => s.snapshotAt >= cutoff)
+  }, [snapshots])
 
   // Efficiency data (views per post)
   const efficiencyData = useMemo(() => {
@@ -167,7 +175,7 @@ export default function Analytics() {
       <Card className="mb-3">
         <InteractiveLineChart
           title="Views Evolution (30 days)"
-          snapshots={snapshots}
+          snapshots={snapshots30}
           dataKey="viewsLast30Days"
         />
       </Card>
@@ -175,8 +183,15 @@ export default function Analytics() {
       <Card className="mb-3">
         <InteractiveLineChart
           title="Followers Evolution (30 days)"
-          snapshots={snapshots}
+          snapshots={snapshots30}
           dataKey="followerCount"
+        />
+      </Card>
+
+      <Card className="mb-3">
+        <DailyViewsBarChart
+          title="Daily Views"
+          snapshots={snapshots}
         />
       </Card>
 

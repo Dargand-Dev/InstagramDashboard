@@ -2,7 +2,9 @@ import { Users, Activity, Film, Clock, ArrowRight, AlertTriangle } from 'lucide-
 import { useNavigate } from 'react-router-dom'
 import Card from '../components/Card'
 import StatusBadge from '../components/StatusBadge'
+import LiveExecutionPanel from '../components/LiveExecutionPanel'
 import { useApi } from '../hooks/useApi'
+import { useActiveRuns } from '../hooks/useActiveRuns'
 
 function deriveRunStatus(run) {
   if (run.status) return run.status
@@ -44,6 +46,7 @@ export default function Dashboard() {
   const { data: content } = useApi('/api/automation/content-status')
   const { data: schedule } = useApi('/api/automation/schedule')
   const { data: lockStatus, error: lockError } = useApi('/api/automation/lock-status')
+  const { hasActiveRuns } = useActiveRuns(4000)
   const navigate = useNavigate()
 
   const lastRun = runsData?.runs?.[0]
@@ -85,12 +88,15 @@ export default function Dashboard() {
           <p className="text-xs text-[#333] mt-0.5">Instagram automation overview</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${isLocked ? 'bg-warning animate-pulse' : 'bg-success'}`} />
+          <div className={`w-2 h-2 rounded-full ${hasActiveRuns ? 'bg-blue-400 animate-pulse' : isLocked ? 'bg-warning animate-pulse' : 'bg-success'}`} />
           <span className="text-xs text-[#555] font-medium">
-            {isLocked ? 'System locked' : 'System idle'}
+            {hasActiveRuns ? 'Workflow running' : isLocked ? 'System locked' : 'System idle'}
           </span>
         </div>
       </div>
+
+      {/* Live execution panel — auto-hides when no workflows are active */}
+      <LiveExecutionPanel />
 
       {/* Metric cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">

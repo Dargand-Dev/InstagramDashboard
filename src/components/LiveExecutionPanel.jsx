@@ -1,10 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import { Radio } from 'lucide-react'
 import Card from './Card'
 import StatusBadge from './StatusBadge'
-import { useActiveRuns } from '../hooks/useActiveRuns'
 import { useWorkflowLogs } from '../hooks/useWorkflowLogs'
-import { STEP_ICON, formatDuration } from './LogStreamCard'
+import { WorkflowEventRow, deriveOverallStatus } from './LogStreamCard'
 
 function LiveRunStream({ runId, workflowName }) {
   const { events, connected, completed } = useWorkflowLogs(runId)
@@ -16,24 +15,21 @@ function LiveRunStream({ runId, workflowName }) {
     }
   }, [events])
 
-  const visibleEvents = events.slice(-20)
+  const { visibleEvents, progress, successSteps, failedSteps, overallStatus } = useMemo(() => {
+    const visible = events.slice(-20)
+    const batchEvents = events.filter(e => e.status === 'BATCH_PROGRESS')
+    const lastBatch = batchEvents[batchEvents.length - 1]
 
-  // Derive batch progress
-  const batchEvents = events.filter(e => e.status === 'BATCH_PROGRESS')
-  const lastBatch = batchEvents[batchEvents.length - 1]
-  const progress = lastBatch
-    ? { current: lastBatch.containerIndex + 1, total: lastBatch.totalContainers, name: lastBatch.containerName }
-    : null
-
-  // Count successes / failures from step events
-  const successSteps = events.filter(e => e.status === 'SUCCESS').length
-  const failedSteps = events.filter(e => e.status === 'FAILED').length
-
-  const overallStatus = completed
-    ? (events.find(e => e.status === 'COMPLETE')?.message?.includes('SUCCESS') ? 'SUCCESS'
-      : events.find(e => e.status === 'COMPLETE')?.message?.includes('FAILED') ? 'FAILED'
-      : 'PARTIAL')
-    : connected ? 'RUNNING' : 'PENDING'
+    return {
+      visibleEvents: visible,
+      progress: lastBatch
+        ? { current: lastBatch.containerIndex + 1, total: lastBatch.totalContainers, name: lastBatch.containerName }
+        : null,
+      successSteps: events.filter(e => e.status === 'SUCCESS').length,
+      failedSteps: events.filter(e => e.status === 'FAILED').length,
+      overallStatus: deriveOverallStatus(events, completed, connected),
+    }
+  }, [events, completed, connected])
 
   return (
     <Card>
@@ -55,13 +51,10 @@ function LiveRunStream({ runId, workflowName }) {
         </div>
       </div>
 
-      {/* Batch progress bar */}
       {progress && (
         <div className="mb-3">
           <div className="flex justify-between text-[10px] mb-1">
-            <span className="text-[#555]">
-              <span className="text-white font-medium">{progress.name}</span>
-            </span>
+            <span className="text-white font-medium">{progress.name}</span>
             <span className="text-[#555] font-mono">{progress.current}/{progress.total} accounts</span>
           </div>
           <div className="w-full h-1 bg-[#1a1a1a] rounded-full overflow-hidden">
@@ -73,49 +66,19 @@ function LiveRunStream({ runId, workflowName }) {
         </div>
       )}
 
-      {/* Event stream */}
       <div ref={scrollRef} className="max-h-[200px] overflow-y-auto space-y-1">
         {visibleEvents.length === 0 ? (
           <p className="text-xs text-[#333] py-2">Waiting for events...</p>
         ) : (
-          visibleEvents.map((evt, i) => (
-            <div key={i} className={`flex items-start gap-2 text-xs px-2 py-1.5 rounded-md ${
-              evt.status === 'FAILED' ? 'bg-red-500/5 border border-red-500/10' :
-              evt.status === 'BATCH_PROGRESS' ? 'bg-orange-500/5 border border-orange-500/10' :
-              evt.status === 'COMPLETE' ? 'bg-emerald-500/5 border border-emerald-500/10' :
-              'bg-[#060606]'
-            }`}>
-              <div className="mt-0.5 shrink-0">{STEP_ICON[evt.status] || STEP_ICON.RUNNING}</div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  {evt.stepName && <span className="text-white font-medium">{evt.stepName}</span>}
-                  {evt.totalSteps > 0 && evt.status !== 'BATCH_PROGRESS' && evt.status !== 'COMPLETE' && (
-                    <span className="text-[#333] font-mono text-[10px]">[{evt.stepIndex + 1}/{evt.totalSteps}]</span>
-                  )}
-                  {evt.containerName && (
-                    <span className="text-orange-400 font-mono text-[10px]">
-                      {evt.containerName}{evt.totalContainers > 0 ? ` (${evt.containerIndex + 1}/${evt.totalContainers})` : ''}
-                    </span>
-                  )}
-                  {evt.durationMs > 0 && (
-                    <span className="text-[#333] font-mono text-[10px]">{formatDuration(evt.durationMs)}</span>
-                  )}
-                </div>
-                {evt.message && <p className="text-[#555] text-[10px] mt-0.5 truncate">{evt.message}</p>}
-                {evt.errorMessage && <p className="text-red-400/70 text-[10px] mt-0.5 truncate">{evt.errorMessage}</p>}
-              </div>
-            </div>
-          ))
+          visibleEvents.map((evt, i) => <WorkflowEventRow key={i} evt={evt} />)
         )}
       </div>
     </Card>
   )
 }
 
-export default function LiveExecutionPanel() {
-  const { activeRuns, hasActiveRuns } = useActiveRuns(4000)
-
-  if (!hasActiveRuns) return null
+export default function LiveExecutionPanel({ activeRuns }) {
+  if (!activeRuns || activeRuns.length === 0) return null
 
   return (
     <div className="mb-6">

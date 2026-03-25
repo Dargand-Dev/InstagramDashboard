@@ -1,33 +1,41 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 export function useActiveRuns(pollInterval = 4000) {
   const [activeRuns, setActiveRuns] = useState([])
   const [loading, setLoading] = useState(true)
-
-  const fetchActiveRuns = useCallback(async () => {
-    try {
-      const baseUrl = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '')
-      const res = await fetch(`${baseUrl}/api/automation/workflow/logs/active-runs`)
-      if (res.ok) {
-        const data = await res.json()
-        setActiveRuns(data)
-      }
-    } catch { /* ignore network errors */ }
-    finally { setLoading(false) }
-  }, [])
+  const prevJsonRef = useRef('[]')
 
   useEffect(() => {
-    let mounted = true
+    const controller = new AbortController()
 
-    const poll = async () => {
-      if (!mounted) return
-      await fetchActiveRuns()
+    async function poll() {
+      try {
+        const baseUrl = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '')
+        const res = await fetch(`${baseUrl}/api/automation/workflow/logs/active-runs`, {
+          signal: controller.signal,
+        })
+        if (res.ok) {
+          const data = await res.json()
+          const json = JSON.stringify(data)
+          if (json !== prevJsonRef.current) {
+            prevJsonRef.current = json
+            setActiveRuns(data)
+          }
+        }
+      } catch (e) {
+        if (e.name === 'AbortError') return
+      } finally {
+        setLoading(false)
+      }
     }
 
     poll()
     const interval = setInterval(poll, pollInterval)
-    return () => { mounted = false; clearInterval(interval) }
-  }, [pollInterval, fetchActiveRuns])
+    return () => {
+      controller.abort()
+      clearInterval(interval)
+    }
+  }, [pollInterval])
 
   return { activeRuns, hasActiveRuns: activeRuns.length > 0, loading }
 }

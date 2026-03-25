@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Card from '../components/Card'
 import StatusBadge from '../components/StatusBadge'
 import LiveExecutionPanel from '../components/LiveExecutionPanel'
+import { formatDuration } from '../components/LogStreamCard'
 import { useApi } from '../hooks/useApi'
 import { useActiveRuns } from '../hooks/useActiveRuns'
 
@@ -31,22 +32,13 @@ function timeAgo(date) {
   return `${months}mo ago`
 }
 
-function formatDuration(ms) {
-  if (!ms) return '—'
-  if (typeof ms === 'string') return ms
-  const seconds = Math.floor(ms / 1000)
-  const minutes = Math.floor(seconds / 60)
-  if (minutes > 0) return `${minutes}m ${seconds % 60}s`
-  return `${seconds}s`
-}
-
 export default function Dashboard() {
   const { data: runsData } = useApi('/api/automation/runs?limit=5')
   const { data: accounts } = useApi('/api/accounts')
   const { data: content } = useApi('/api/automation/content-status')
   const { data: schedule } = useApi('/api/automation/schedule')
   const { data: lockStatus, error: lockError } = useApi('/api/automation/lock-status')
-  const { hasActiveRuns } = useActiveRuns(4000)
+  const { activeRuns, hasActiveRuns } = useActiveRuns(4000)
   const navigate = useNavigate()
 
   const lastRun = runsData?.runs?.[0]
@@ -62,7 +54,6 @@ export default function Dashboard() {
 
   const totalReels = identities.reduce((sum, i) => sum + (i.availableReels ?? i.reelCount ?? i.count ?? 0), 0)
 
-  // Collect exhausted story media pool alerts across all identities
   const exhaustedStoryPools = identities.flatMap(identity =>
     (identity.storyMediaPool || [])
       .filter(p => p.status === 'EXHAUSTED')
@@ -71,7 +62,6 @@ export default function Dashboard() {
 
   return (
     <div>
-      {/* Story media pool exhaustion alert */}
       {exhaustedStoryPools.length > 0 && (
         <div className="flex items-center gap-2 bg-red-500/5 border border-red-500/15 rounded-md p-3 mb-4">
           <AlertTriangle size={14} className="text-red-400 shrink-0" />
@@ -81,7 +71,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-extrabold text-white tracking-tight">Dashboard</h1>
@@ -95,12 +84,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Live execution panel — auto-hides when no workflows are active */}
-      <LiveExecutionPanel />
+      <LiveExecutionPanel activeRuns={activeRuns} />
 
-      {/* Metric cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        {/* Active accounts */}
         <Card>
           <div className="flex items-start justify-between mb-3">
             <span className="label-upper">Active Accounts</span>
@@ -120,7 +106,6 @@ export default function Dashboard() {
           </div>
         </Card>
 
-        {/* Last run */}
         <Card>
           <div className="flex items-start justify-between mb-3">
             <span className="label-upper">Last Run</span>
@@ -150,7 +135,6 @@ export default function Dashboard() {
           )}
         </Card>
 
-        {/* Content stock */}
         <Card>
           <div className="flex items-start justify-between mb-3">
             <span className="label-upper">Content Stock</span>
@@ -162,7 +146,6 @@ export default function Dashboard() {
           <p className="text-xs text-[#333] mt-1">reels across {identities.length} identities</p>
         </Card>
 
-        {/* Next run */}
         <Card>
           <div className="flex items-start justify-between mb-3">
             <span className="label-upper">Next Run</span>
@@ -183,9 +166,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Bottom section: 2 columns */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
-        {/* Recent runs table */}
         <div className="lg:col-span-3">
           <Card>
             <div className="flex items-center justify-between mb-4">
@@ -234,9 +215,7 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Right column */}
         <div className="lg:col-span-2 space-y-3">
-          {/* Content by identity */}
           <Card>
             <span className="label-upper block mb-3">Content by Identity</span>
             {identities.length === 0 ? (
@@ -270,7 +249,6 @@ export default function Dashboard() {
             )}
           </Card>
 
-          {/* Account health */}
           <Card>
             <span className="label-upper block mb-3">Account Health</span>
             <div className="grid grid-cols-3 gap-3">

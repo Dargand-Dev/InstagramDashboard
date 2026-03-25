@@ -22,6 +22,47 @@ export function formatDuration(ms) {
   return `${seconds}s`
 }
 
+export function deriveOverallStatus(events, completed, connected) {
+  if (!completed) return connected ? 'RUNNING' : 'PENDING'
+  const completeMsg = events.find(e => e.status === 'COMPLETE')?.message || ''
+  if (completeMsg.includes('SUCCESS')) return 'SUCCESS'
+  if (completeMsg.includes('ABORTED') || completeMsg.includes('FAILED') || completeMsg.includes('ERROR')) return 'FAILED'
+  return 'PARTIAL'
+}
+
+export function WorkflowEventRow({ evt }) {
+  return (
+    <div className={`flex items-start gap-2 text-xs px-2 py-1.5 rounded-md ${
+      evt.status === 'FAILED' ? 'bg-red-500/5 border border-red-500/10' :
+      evt.status === 'BATCH_PROGRESS' ? 'bg-orange-500/5 border border-orange-500/10' :
+      evt.status === 'COMPLETE' ? 'bg-emerald-500/5 border border-emerald-500/10' :
+      'bg-[#060606]'
+    }`}>
+      <div className="mt-0.5 shrink-0">{STEP_ICON[evt.status] || STEP_ICON.RUNNING}</div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          {evt.stepName && (
+            <span className="text-white font-medium">{evt.stepName}</span>
+          )}
+          {evt.totalSteps > 0 && evt.status !== 'BATCH_PROGRESS' && evt.status !== 'COMPLETE' && (
+            <span className="text-[#333] font-mono text-[10px]">[{evt.stepIndex + 1}/{evt.totalSteps}]</span>
+          )}
+          {evt.containerName && (
+            <span className="text-orange-400 font-mono text-[10px]">
+              {evt.containerName}{evt.totalContainers > 0 ? ` (${evt.containerIndex + 1}/${evt.totalContainers})` : ''}
+            </span>
+          )}
+          {evt.durationMs > 0 && (
+            <span className="text-[#333] font-mono text-[10px]">{formatDuration(evt.durationMs)}</span>
+          )}
+        </div>
+        {evt.message && <p className="text-[#555] text-[10px] mt-0.5 truncate">{evt.message}</p>}
+        {evt.errorMessage && <p className="text-red-400/70 text-[10px] mt-0.5 truncate">{evt.errorMessage}</p>}
+      </div>
+    </div>
+  )
+}
+
 export default function LogStreamCard({ run, onRemove }) {
   const { events, connected, completed } = useWorkflowLogs(run.runId)
   const scrollRef = useRef(null)
@@ -32,11 +73,7 @@ export default function LogStreamCard({ run, onRemove }) {
     }
   }, [events])
 
-  const overallStatus = completed
-    ? (events.find(e => e.status === 'COMPLETE')?.message?.includes('SUCCESS') ? 'SUCCESS'
-      : events.find(e => e.status === 'COMPLETE')?.message?.includes('ABORTED') ? 'FAILED'
-      : 'PARTIAL')
-    : connected ? 'RUNNING' : 'PENDING'
+  const overallStatus = deriveOverallStatus(events, completed, connected)
 
   return (
     <Card>
@@ -60,36 +97,7 @@ export default function LogStreamCard({ run, onRemove }) {
         {events.length === 0 ? (
           <p className="text-xs text-[#333] py-2">Waiting for events...</p>
         ) : (
-          events.map((evt, i) => (
-            <div key={i} className={`flex items-start gap-2 text-xs px-2 py-1.5 rounded-md ${
-              evt.status === 'FAILED' ? 'bg-red-500/5 border border-red-500/10' :
-              evt.status === 'BATCH_PROGRESS' ? 'bg-orange-500/5 border border-orange-500/10' :
-              evt.status === 'COMPLETE' ? 'bg-emerald-500/5 border border-emerald-500/10' :
-              'bg-[#060606]'
-            }`}>
-              <div className="mt-0.5 shrink-0">{STEP_ICON[evt.status] || STEP_ICON.RUNNING}</div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  {evt.stepName && (
-                    <span className="text-white font-medium">{evt.stepName}</span>
-                  )}
-                  {evt.totalSteps > 0 && evt.status !== 'BATCH_PROGRESS' && evt.status !== 'COMPLETE' && (
-                    <span className="text-[#333] font-mono text-[10px]">[{evt.stepIndex + 1}/{evt.totalSteps}]</span>
-                  )}
-                  {evt.containerName && (
-                    <span className="text-orange-400 font-mono text-[10px]">
-                      {evt.containerName}{evt.totalContainers > 0 ? ` (${evt.containerIndex + 1}/${evt.totalContainers})` : ''}
-                    </span>
-                  )}
-                  {evt.durationMs > 0 && (
-                    <span className="text-[#333] font-mono text-[10px]">{formatDuration(evt.durationMs)}</span>
-                  )}
-                </div>
-                {evt.message && <p className="text-[#555] text-[10px] mt-0.5">{evt.message}</p>}
-                {evt.errorMessage && <p className="text-red-400/70 text-[10px] mt-0.5 truncate">{evt.errorMessage}</p>}
-              </div>
-            </div>
-          ))
+          events.map((evt, i) => <WorkflowEventRow key={i} evt={evt} />)
         )}
       </div>
     </Card>

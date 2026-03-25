@@ -339,8 +339,9 @@ export default function Actions() {
     setTriggerLoading(true)
     setTriggerResult(null)
     try {
-      await apiPost('/api/automation/trigger', {})
-      setTriggerResult({ type: 'success', message: 'Manual run triggered' })
+      const data = await apiPost('/api/automation/trigger', {})
+      if (data.runId) saveWorkflowRun(data.runId, 'PostReel')
+      setTriggerResult({ type: 'success', message: 'Manual run triggered', runId: data.runId })
     } catch (err) {
       setTriggerResult({ type: 'error', message: err.message })
     } finally { setTriggerLoading(false) }

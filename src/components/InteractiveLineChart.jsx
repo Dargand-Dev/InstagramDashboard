@@ -4,11 +4,7 @@ import {
   Tooltip, ResponsiveContainer
 } from 'recharts'
 
-const COLORS = [
-  '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444',
-  '#06b6d4', '#f97316', '#ec4899', '#14b8a6', '#a855f7',
-  '#84cc16', '#e11d48', '#0ea5e9', '#d946ef', '#fbbf24'
-]
+import { CHART_COLORS } from '../utils/chartColors'
 
 const tooltipStyle = {
   contentStyle: { backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: 8, fontSize: 12 },
@@ -23,7 +19,7 @@ function formatNumber(n) {
   return n.toLocaleString()
 }
 
-export default function InteractiveLineChart({ title, snapshots, dataKey }) {
+export default function InteractiveLineChart({ title, snapshots, dataKey, colorMap }) {
   // Get top 15 accounts by latest value of dataKey
   const top15 = useMemo(() => {
     if (!snapshots?.length) return []
@@ -148,7 +144,7 @@ export default function InteractiveLineChart({ title, snapshots, dataKey }) {
         </button>
         <span className="w-px h-4 bg-[#1a1a1a] mx-1" />
         {top15.map((username, i) => {
-          const color = COLORS[i % COLORS.length]
+          const color = colorMap?.[username] || CHART_COLORS[i % CHART_COLORS.length]
           const active = activeSet.has(username)
           return (
             <button
@@ -191,7 +187,7 @@ export default function InteractiveLineChart({ title, snapshots, dataKey }) {
               key={username}
               type="monotone"
               dataKey={username}
-              stroke={COLORS[i % COLORS.length]}
+              stroke={colorMap?.[username] || CHART_COLORS[i % CHART_COLORS.length]}
               strokeWidth={2}
               dot={false}
               connectNulls

@@ -1,13 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Smartphone, UserPlus, Play, Rocket, Unlock, Loader2, CheckCircle, XCircle, AlertTriangle, Shield, Settings, Key, Video, Image, Clipboard, Container, RefreshCw, Trash2, X, Layers } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Smartphone, UserPlus, Play, Rocket, Unlock, Loader2, CheckCircle, XCircle, AlertTriangle, Shield, Settings, Key, Video, Image, Clipboard, Container, RefreshCw, Trash2, X, Layers, ExternalLink } from 'lucide-react'
 import Card from '../components/Card'
 import { useApi, apiPost } from '../hooks/useApi'
 
-const DEVICES = [
-  { label: 'iPhone 1', udid: '00008120-001A256C3C8B801E' },
-  { label: 'iPhone 2', udid: '00008130-0019196E0207C01E' },
-  { label: 'iPhone 3', udid: '00008120-001234567890ABCD' },
-]
+const DEVICES_FALLBACK = []
 
 const ACTION_META = {
   'SetupProfessionalAccount': { icon: Settings, color: 'bg-blue-500/8 text-blue-400 border-blue-500/15', desc: 'Convert to professional/business account' },
@@ -144,15 +141,25 @@ function ParamsModal({ actionName, meta, onSubmit, onClose }) {
   )
 }
 
-function ResultBanner({ result }) {
+function ResultBanner({ result, navigate }) {
   if (!result) return null
   const isError = result.type === 'error'
   return (
-    <div className={`flex items-center gap-2 mt-3 p-3 rounded-md border text-xs font-medium ${
+    <div className={`flex items-center justify-between mt-3 p-3 rounded-md border text-xs font-medium ${
       isError ? 'bg-red-500/5 text-red-400 border-red-500/15' : 'bg-emerald-500/5 text-emerald-400 border-emerald-500/15'
     }`}>
-      {isError ? <XCircle size={14} /> : <CheckCircle size={14} />}
-      {result.message}
+      <div className="flex items-center gap-2">
+        {isError ? <XCircle size={14} /> : <CheckCircle size={14} />}
+        {result.message}
+      </div>
+      {result.runId && navigate && (
+        <button
+          onClick={() => navigate('/activity?tab=logs')}
+          className="flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 transition-colors font-semibold"
+        >
+          View logs <ExternalLink size={10} />
+        </button>
+      )}
     </div>
   )
 }
@@ -176,15 +183,26 @@ function QuickActionCard({ actionName, meta, onRun, running, runningAction }) {
   )
 }
 
+function saveWorkflowRun(runId, workflowName) {
+  try {
+    const runs = JSON.parse(localStorage.getItem('activeWorkflowRuns') || '[]')
+    runs.unshift({ runId, workflowName, timestamp: Date.now() })
+    localStorage.setItem('activeWorkflowRuns', JSON.stringify(runs))
+  } catch { /* ignore */ }
+}
+
 export default function Actions() {
+  const navigate = useNavigate()
   const { data: accounts } = useApi('/api/accounts')
+  const { data: devicesData } = useApi('/api/devices')
+  const devices = Array.isArray(devicesData) ? devicesData : DEVICES_FALLBACK
   const [selectedAccount, setSelectedAccount] = useState('')
-  const [caDevice, setCaDevice] = useState(DEVICES[0].udid)
+  const [caDevice, setCaDevice] = useState('')
   const [caIdentity, setCaIdentity] = useState('sofia')
   const [caLoading, setCaLoading] = useState(false)
   const [caResult, setCaResult] = useState(null)
   const { data: actionsData, loading: actionsLoading } = useApi('/api/automation/actions')
-  const [exDevice, setExDevice] = useState(DEVICES[0].udid)
+  const [exDevice, setExDevice] = useState('')
   const [exPort, setExPort] = useState('4723')
   const [exParams, setExParams] = useState('')
   const [exLoading, setExLoading] = useState(false)
@@ -193,7 +211,7 @@ export default function Actions() {
   const [modalAction, setModalAction] = useState(null)
   const [advancedMode, setAdvancedMode] = useState(false)
   const [advAction, setAdvAction] = useState('')
-  const [ecDevice, setEcDevice] = useState(DEVICES[0].udid)
+  const [ecDevice, setEcDevice] = useState('')
   const [ecIdentity, setEcIdentity] = useState('sofia')
   const [ecContainers, setEcContainers] = useState('')
   const [ecLoading, setEcLoading] = useState(false)
@@ -203,6 +221,16 @@ export default function Actions() {
   const [triggerLoading, setTriggerLoading] = useState(false)
   const [triggerResult, setTriggerResult] = useState(null)
   const [unlockLoading, setUnlockLoading] = useState(false)
+
+  // Set default device when devices load (intentionally run-once)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (devices.length > 0 && !caDevice) {
+      setCaDevice(devices[0].udid)
+      setExDevice(devices[0].udid)
+      setEcDevice(devices[0].udid)
+    }
+  }, [devices])
 
   const actionsList = actionsData?.actions || []
   const accountList = accounts || []
@@ -239,11 +267,12 @@ export default function Actions() {
     setCaLoading(true)
     setCaResult(null)
     try {
-      await apiPost('/api/automation/workflow/create-account', {
+      const data = await apiPost('/api/automation/workflow/create-account', {
         deviceUdid: caDevice,
         identityId: caIdentity || undefined,
       })
-      setCaResult({ type: 'success', message: 'Account creation workflow accepted' })
+      if (data.runId) saveWorkflowRun(data.runId, 'CreateAccount')
+      setCaResult({ type: 'success', message: 'Account creation workflow accepted', runId: data.runId })
     } catch (err) {
       setCaResult({ type: 'error', message: err.message })
     } finally { setCaLoading(false) }
@@ -258,12 +287,13 @@ export default function Actions() {
     setEcLoading(true)
     setEcResult(null)
     try {
-      await apiPost('/api/automation/workflow/create-account-existing', {
+      const data = await apiPost('/api/automation/workflow/create-account-existing', {
         deviceUdid: ecDevice,
         identityId: ecIdentity || undefined,
         containerNames: names,
       })
-      setEcResult({ type: 'success', message: `Batch workflow accepted for ${names.length} container(s)` })
+      if (data.runId) saveWorkflowRun(data.runId, 'CreateAccountFromExistingContainer')
+      setEcResult({ type: 'success', message: `Batch workflow accepted for ${names.length} container(s)`, runId: data.runId })
     } catch (err) {
       setEcResult({ type: 'error', message: err.message })
     } finally { setEcLoading(false) }
@@ -352,12 +382,12 @@ export default function Actions() {
             <div>
               <label className={labelClass}>Device</label>
               <select value={exDevice} onChange={e => setExDevice(e.target.value)} className={inputClass}>
-                {DEVICES.map(d => (
-                  <option key={d.udid} value={d.udid}>{d.label} — {d.udid.slice(-8)}</option>
+                {devices.map(d => (
+                  <option key={d.udid} value={d.udid}>{d.name} — {d.udid.slice(-8)}</option>
                 ))}
                 {selectedAccount && (() => {
                   const acc = accountList.find(a => a.username === selectedAccount)
-                  if (acc?.deviceUdid && !DEVICES.find(d => d.udid === acc.deviceUdid)) {
+                  if (acc?.deviceUdid && !devices.find(d => d.udid === acc.deviceUdid)) {
                     return <option value={acc.deviceUdid}>Account device — {acc.deviceUdid.slice(-8)}</option>
                   }
                   return null
@@ -418,8 +448,8 @@ export default function Actions() {
             <div>
               <label className={labelClass}>Device</label>
               <select value={caDevice} onChange={e => setCaDevice(e.target.value)} className={inputClass}>
-                {DEVICES.map(d => (
-                  <option key={d.udid} value={d.udid}>{d.label} — {d.udid.slice(-8)}</option>
+                {devices.map(d => (
+                  <option key={d.udid} value={d.udid}>{d.name} — {d.udid.slice(-8)}</option>
                 ))}
               </select>
             </div>
@@ -435,7 +465,7 @@ export default function Actions() {
               {caLoading ? 'Creating...' : 'Create Account'}
             </button>
           </div>
-          <ResultBanner result={caResult} />
+          <ResultBanner result={caResult} navigate={navigate} />
         </Card>
 
         {/* Create Account (Existing Containers) */}
@@ -445,8 +475,8 @@ export default function Actions() {
             <div>
               <label className={labelClass}>Device</label>
               <select value={ecDevice} onChange={e => setEcDevice(e.target.value)} className={inputClass}>
-                {DEVICES.map(d => (
-                  <option key={d.udid} value={d.udid}>{d.label} — {d.udid.slice(-8)}</option>
+                {devices.map(d => (
+                  <option key={d.udid} value={d.udid}>{d.name} — {d.udid.slice(-8)}</option>
                 ))}
               </select>
             </div>
@@ -476,7 +506,7 @@ export default function Actions() {
               {ecLoading ? 'Creating...' : 'Create Accounts'}
             </button>
           </div>
-          <ResultBanner result={ecResult} />
+          <ResultBanner result={ecResult} navigate={navigate} />
         </Card>
 
         {/* Manual Posting Run */}

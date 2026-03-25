@@ -9,8 +9,7 @@ import Card from '../components/Card'
 import InteractiveLineChart from '../components/InteractiveLineChart'
 import DailyViewsBarChart from '../components/DailyViewsBarChart'
 import { useApi } from '../hooks/useApi'
-
-const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#f97316']
+import { CHART_COLORS, buildColorMap } from '../utils/chartColors'
 
 const tooltipStyle = {
   contentStyle: { backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: 8, fontSize: 12 },
@@ -75,6 +74,13 @@ export default function Analytics() {
     }
     return Object.values(latest).sort((a, b) => (b.followerCount || 0) - (a.followerCount || 0))
   }, [snapData])
+
+  // Stable color map: one color per username across all charts
+  const colorMap = useMemo(() => {
+    if (!snapshots.length) return {}
+    const usernames = new Set(snapshots.map(s => s.username))
+    return buildColorMap([...usernames])
+  }, [snapshots])
 
   // Identity performance data (views/followers per account)
   const identityData = useMemo(() => {
@@ -177,6 +183,7 @@ export default function Analytics() {
           title="Views Evolution (30 days)"
           snapshots={snapshots30}
           dataKey="viewsLast30Days"
+          colorMap={colorMap}
         />
       </Card>
 
@@ -185,6 +192,7 @@ export default function Analytics() {
           title="Followers Evolution (30 days)"
           snapshots={snapshots30}
           dataKey="followerCount"
+          colorMap={colorMap}
         />
       </Card>
 
@@ -192,6 +200,7 @@ export default function Analytics() {
         <DailyViewsBarChart
           title="Daily Views"
           snapshots={snapshots}
+          colorMap={colorMap}
         />
       </Card>
 
@@ -258,8 +267,8 @@ export default function Analytics() {
                 <YAxis type="category" dataKey="username" tick={{ fill: '#999', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} width={100} />
                 <Tooltip {...tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.05)' }} formatter={(v) => formatNumber(v)} labelFormatter={() => ''} />
                 <Bar dataKey="ratio" radius={[0, 4, 4, 0]} barSize={20}>
-                  {efficiencyData.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  {efficiencyData.map((entry, i) => (
+                    <Cell key={i} fill={colorMap[entry.username] || CHART_COLORS[i % CHART_COLORS.length]} />
                   ))}
                 </Bar>
               </BarChart>

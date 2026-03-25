@@ -4,11 +4,7 @@ import {
   Tooltip, ResponsiveContainer
 } from 'recharts'
 
-const COLORS = [
-  '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444',
-  '#06b6d4', '#f97316', '#ec4899', '#14b8a6', '#a855f7',
-  '#84cc16', '#e11d48', '#0ea5e9', '#d946ef', '#fbbf24'
-]
+import { CHART_COLORS } from '../utils/chartColors'
 
 function formatNumber(n) {
   if (n == null) return '—'
@@ -17,7 +13,7 @@ function formatNumber(n) {
   return n.toLocaleString()
 }
 
-function CustomTooltip({ active, payload, label, activeSet, showTotal, top15 }) {
+function CustomTooltip({ active, payload, label, activeSet, showTotal, top15, colorMap }) {
   if (!active || !payload?.length) return null
   const items = payload
     .filter(p => {
@@ -35,7 +31,7 @@ function CustomTooltip({ active, payload, label, activeSet, showTotal, top15 }) 
         <div key={item.dataKey} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
           <span style={{
             width: 8, height: 8, borderRadius: '50%',
-            backgroundColor: item.dataKey === '__total' ? '#ffffff' : COLORS[top15.indexOf(item.dataKey) % COLORS.length],
+            backgroundColor: item.dataKey === '__total' ? '#ffffff' : (colorMap?.[item.dataKey] || CHART_COLORS[top15.indexOf(item.dataKey) % CHART_COLORS.length]),
             flexShrink: 0
           }} />
           <span style={{ color: '#ccc' }}>{item.dataKey === '__total' ? 'Total Fleet' : item.dataKey}</span>
@@ -46,7 +42,7 @@ function CustomTooltip({ active, payload, label, activeSet, showTotal, top15 }) 
   )
 }
 
-export default function DailyViewsBarChart({ title, snapshots }) {
+export default function DailyViewsBarChart({ title, snapshots, colorMap }) {
   // Top 15 accounts by latest viewsLast30Days
   const top15 = useMemo(() => {
     if (!snapshots?.length) return []
@@ -206,7 +202,7 @@ export default function DailyViewsBarChart({ title, snapshots }) {
         </button>
         <span className="w-px h-4 bg-[#1a1a1a] mx-1" />
         {top15.map((username, i) => {
-          const color = COLORS[i % COLORS.length]
+          const color = colorMap?.[username] || CHART_COLORS[i % CHART_COLORS.length]
           const active = activeSet.has(username)
           return (
             <button
@@ -230,13 +226,13 @@ export default function DailyViewsBarChart({ title, snapshots }) {
           <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" />
           <XAxis dataKey="date" tick={{ fill: '#555', fontSize: 10 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} interval="preserveStartEnd" angle={-30} textAnchor="end" height={45} />
           <YAxis tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
-          <Tooltip content={<CustomTooltip activeSet={activeSet} showTotal={showTotal} top15={top15} />} />
+          <Tooltip content={<CustomTooltip activeSet={activeSet} showTotal={showTotal} top15={top15} colorMap={colorMap} />} />
           {top15.map((username, i) => (
             <Bar
               key={username}
               dataKey={username}
               stackId="accounts"
-              fill={COLORS[i % COLORS.length]}
+              fill={colorMap?.[username] || CHART_COLORS[i % CHART_COLORS.length]}
               hide={!activeSet.has(username)}
               isAnimationActive={false}
             />

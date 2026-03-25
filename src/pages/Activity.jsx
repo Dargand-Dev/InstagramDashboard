@@ -1,13 +1,16 @@
-import { useState, Fragment } from 'react'
-import { ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
+import { useState, useEffect, useRef, Fragment } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { ChevronDown, ChevronRight, AlertTriangle, Loader2, CheckCircle, XCircle, SkipForward, Trash2, Radio, Container } from 'lucide-react'
 import Card from '../components/Card'
 import StatusBadge from '../components/StatusBadge'
 import { useApi } from '../hooks/useApi'
+import { useWorkflowLogs } from '../hooks/useWorkflowLogs'
 
 const TABS = [
   { id: 'runs', label: 'Runs' },
   { id: 'content', label: 'Content' },
   { id: 'trash', label: 'Drive Trash' },
+  { id: 'logs', label: 'Logs' },
 ]
 
 function deriveRunStatus(run) {
@@ -289,8 +292,144 @@ function TrashTab() {
   )
 }
 
+const STEP_ICON = {
+  RUNNING: <Loader2 size={12} className="animate-spin text-blue-400" />,
+  SUCCESS: <CheckCircle size={12} className="text-emerald-400" />,
+  FAILED: <XCircle size={12} className="text-red-400" />,
+  SKIPPED: <SkipForward size={12} className="text-[#555]" />,
+  BATCH_PROGRESS: <Container size={12} className="text-orange-400" />,
+  COMPLETE: <CheckCircle size={12} className="text-emerald-400" />,
+}
+
+function LogStreamCard({ run, onRemove }) {
+  const { events, connected, completed } = useWorkflowLogs(run.runId)
+  const scrollRef = useRef(null)
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [events])
+
+  const overallStatus = completed
+    ? (events.find(e => e.status === 'COMPLETE')?.message?.includes('SUCCESS') ? 'SUCCESS'
+      : events.find(e => e.status === 'COMPLETE')?.message?.includes('ABORTED') ? 'FAILED'
+      : 'PARTIAL')
+    : connected ? 'RUNNING' : 'PENDING'
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          {connected && !completed && <Radio size={10} className="text-blue-400 animate-pulse" />}
+          <h3 className="text-white font-bold text-sm">{run.workflowName}</h3>
+          <span className="text-[10px] text-[#333] font-mono">{run.runId}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <StatusBadge status={overallStatus} />
+          {completed && (
+            <button onClick={() => onRemove(run.runId)}
+              className="text-[#333] hover:text-red-400 transition-colors p-1">
+              <Trash2 size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+      <div ref={scrollRef} className="max-h-[300px] overflow-y-auto space-y-1">
+        {events.length === 0 ? (
+          <p className="text-xs text-[#333] py-2">Waiting for events...</p>
+        ) : (
+          events.map((evt, i) => (
+            <div key={i} className={`flex items-start gap-2 text-xs px-2 py-1.5 rounded-md ${
+              evt.status === 'FAILED' ? 'bg-red-500/5 border border-red-500/10' :
+              evt.status === 'BATCH_PROGRESS' ? 'bg-orange-500/5 border border-orange-500/10' :
+              evt.status === 'COMPLETE' ? 'bg-emerald-500/5 border border-emerald-500/10' :
+              'bg-[#060606]'
+            }`}>
+              <div className="mt-0.5 shrink-0">{STEP_ICON[evt.status] || STEP_ICON.RUNNING}</div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  {evt.stepName && (
+                    <span className="text-white font-medium">{evt.stepName}</span>
+                  )}
+                  {evt.totalSteps > 0 && evt.status !== 'BATCH_PROGRESS' && evt.status !== 'COMPLETE' && (
+                    <span className="text-[#333] font-mono text-[10px]">[{evt.stepIndex + 1}/{evt.totalSteps}]</span>
+                  )}
+                  {evt.containerName && (
+                    <span className="text-orange-400 font-mono text-[10px]">
+                      {evt.containerName}{evt.totalContainers > 0 ? ` (${evt.containerIndex + 1}/${evt.totalContainers})` : ''}
+                    </span>
+                  )}
+                  {evt.durationMs > 0 && (
+                    <span className="text-[#333] font-mono text-[10px]">{formatDuration(evt.durationMs)}</span>
+                  )}
+                </div>
+                {evt.message && <p className="text-[#555] text-[10px] mt-0.5">{evt.message}</p>}
+                {evt.errorMessage && <p className="text-red-400/70 text-[10px] mt-0.5 truncate">{evt.errorMessage}</p>}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function getActiveRuns() {
+  try {
+    return JSON.parse(localStorage.getItem('activeWorkflowRuns') || '[]')
+  } catch { return [] }
+}
+
+function LogsTab() {
+  const [runs, setRuns] = useState(getActiveRuns)
+
+  // Sync with localStorage changes (cross-tab via storage event)
+  useEffect(() => {
+    const onStorage = () => setRuns(getActiveRuns())
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
+  function handleRemove(runId) {
+    const updated = runs.filter(r => r.runId !== runId)
+    localStorage.setItem('activeWorkflowRuns', JSON.stringify(updated))
+    setRuns(updated)
+  }
+
+  function handleClearAll() {
+    localStorage.setItem('activeWorkflowRuns', JSON.stringify([]))
+    setRuns([])
+  }
+
+  if (runs.length === 0) {
+    return (
+      <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-[10px] p-8 text-center">
+        <p className="text-[#333] text-xs">No active workflow runs</p>
+        <p className="text-[#222] text-[10px] mt-1">Trigger a workflow from the Actions page to see real-time logs here</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <button onClick={handleClearAll}
+          className="text-[10px] text-[#333] hover:text-red-400 font-medium transition-colors flex items-center gap-1">
+          <Trash2 size={10} /> Clear all
+        </button>
+      </div>
+      {runs.map(run => (
+        <LogStreamCard key={run.runId} run={run} onRemove={handleRemove} />
+      ))}
+    </div>
+  )
+}
+
 export default function Activity() {
-  const [tab, setTab] = useState('runs')
+  const [searchParams] = useSearchParams()
+  const initialTab = TABS.find(t => t.id === searchParams.get('tab'))?.id || 'runs'
+  const [tab, setTab] = useState(initialTab)
 
   return (
     <div>
@@ -322,6 +461,7 @@ export default function Activity() {
       {tab === 'runs' && <RunsTab />}
       {tab === 'content' && <ContentTab />}
       {tab === 'trash' && <TrashTab />}
+      {tab === 'logs' && <LogsTab />}
     </div>
   )
 }

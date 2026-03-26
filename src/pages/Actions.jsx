@@ -256,13 +256,17 @@ export default function Actions() {
     try {
       const res = await fetch('/api/automation/lock-status')
       const body = await res.json().catch(() => ({}))
-      const status = res.status === 423
-        ? { locked: true, ...body }
-        : { locked: false, ...body }
+      // Normalize: support both old (single lock) and new (per-device) format
+      const status = {
+        locked: res.status === 423 || body.locked || false,
+        devices: body.devices || (body.currentExecution ? { [body.currentExecution.deviceId]: body.currentExecution } : {}),
+        totalLocked: body.totalLocked || (res.status === 423 || body.locked ? 1 : 0),
+        ...body
+      }
       setLockStatus(status)
       return status
     } catch {
-      const status = { locked: false }
+      const status = { locked: false, devices: {}, totalLocked: 0 }
       setLockStatus(status)
       return status
     } finally { setLockLoading(false) }
@@ -653,7 +657,7 @@ export default function Actions() {
           )}
 
           <div className="flex items-center gap-3">
-            <button onClick={handleTrigger} disabled={triggerLoading || (selectiveMode && selectedUsernames.size === 0)}
+            <button onClick={handleTrigger} disabled={triggerLoading || (!selectiveMode && lockStatus?.devices && devices?.length > 0 && devices.every(d => lockStatus.devices[d.udid])) || (selectiveMode && selectedUsernames.size === 0)}
               className="flex items-center gap-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-500/80 text-white rounded-md text-sm font-bold transition-colors disabled:opacity-40">
               {triggerLoading ? <Loader2 size={18} className="animate-spin" /> : <Rocket size={18} />}
               {triggerLoading ? 'Triggering...' : selectiveMode && selectedUsernames.size > 0

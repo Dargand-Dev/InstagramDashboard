@@ -5,6 +5,8 @@ import Accounts from './pages/Accounts'
 import Actions from './pages/Actions'
 import Activity from './pages/Activity'
 import PostingHistory from './pages/PostingHistory'
+import PostingRuns from './pages/PostingRuns'
+import CreationRuns from './pages/CreationRuns'
 import Analytics from './pages/Analytics'
 
 export default function App() {
@@ -17,6 +19,8 @@ export default function App() {
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/actions" element={<Actions />} />
           <Route path="/activity" element={<Activity />} />
+          <Route path="/posting-runs" element={<PostingRuns />} />
+          <Route path="/creation-runs" element={<CreationRuns />} />
           <Route path="/posting-history" element={<PostingHistory />} />
         </Route>
       </Routes>

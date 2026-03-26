@@ -1,4 +1,4 @@
-import { Users, Activity, Film, Clock, ArrowRight, AlertTriangle } from 'lucide-react'
+import { Users, Activity, Film, Clock, ArrowRight, AlertTriangle, UserPlus, Send } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Card from '../components/Card'
 import StatusBadge from '../components/StatusBadge'
@@ -30,6 +30,19 @@ function timeAgo(date) {
   if (weeks < 5) return `${weeks}w ago`
   const months = Math.floor(days / 30)
   return `${months}mo ago`
+}
+
+const RUN_TYPE_CONFIG = {
+  PostReel: { label: 'Post', icon: Send, cls: 'bg-cyan-500/8 text-cyan-400 border-cyan-500/15' },
+  CreateAccount: { label: 'Creation', icon: UserPlus, cls: 'bg-violet-500/8 text-violet-400 border-violet-500/15' },
+  CreateAccountFromExistingContainer: { label: 'Creation', icon: UserPlus, cls: 'bg-violet-500/8 text-violet-400 border-violet-500/15' },
+}
+const DEFAULT_RUN_TYPE = { label: 'Unknown', icon: Send, cls: 'bg-[#141414] text-[#555] border-[#1a1a1a]' }
+
+function getRunType(run) {
+  const type = run.workflowType
+  if (type && RUN_TYPE_CONFIG[type]) return RUN_TYPE_CONFIG[type]
+  return DEFAULT_RUN_TYPE
 }
 
 export default function Dashboard() {
@@ -183,6 +196,7 @@ export default function Dashboard() {
                 <thead>
                   <tr className="border-b border-[#1a1a1a]">
                     <th className="px-3 py-2 text-left label-upper !text-[10px] !mb-0">Date</th>
+                    <th className="px-3 py-2 text-left label-upper !text-[10px] !mb-0">Type</th>
                     <th className="px-3 py-2 text-left label-upper !text-[10px] !mb-0">Status</th>
                     <th className="px-3 py-2 text-left label-upper !text-[10px] !mb-0">Duration</th>
                     <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Results</th>
@@ -190,12 +204,24 @@ export default function Dashboard() {
                 </thead>
                 <tbody>
                   {!runsData?.runs?.length ? (
-                    <tr><td colSpan={4} className="px-3 py-6 text-center text-[#333]">No runs yet</td></tr>
+                    <tr><td colSpan={5} className="px-3 py-6 text-center text-[#333]">No runs yet</td></tr>
                   ) : (
                     runsData.runs.slice(0, 5).map((run, i) => (
                       <tr key={run.id || i} className="border-b border-[#141414] last:border-0 hover:bg-[#111] transition-colors">
                         <td className="px-3 py-2.5 text-[#555]">
                           {timeAgo(run.startTime || run.timestamp)}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {(() => {
+                            const rt = getRunType(run)
+                            const Icon = rt.icon
+                            return (
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md border inline-flex items-center gap-1 ${rt.cls}`}>
+                                <Icon size={9} />
+                                {rt.label}
+                              </span>
+                            )
+                          })()}
                         </td>
                         <td className="px-3 py-2.5">
                           <StatusBadge status={deriveRunStatus(run)} />

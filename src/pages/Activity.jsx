@@ -1,13 +1,12 @@
 import { useState, useEffect, Fragment } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ChevronDown, ChevronRight, AlertTriangle, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, AlertTriangle, Trash2, UserPlus, Send } from 'lucide-react'
 import Card from '../components/Card'
 import StatusBadge from '../components/StatusBadge'
 import LogStreamCard, { formatDuration } from '../components/LogStreamCard'
 import { useApi } from '../hooks/useApi'
 
 const TABS = [
-  { id: 'runs', label: 'Runs' },
   { id: 'content', label: 'Content' },
   { id: 'trash', label: 'Drive Trash' },
   { id: 'logs', label: 'Logs' },
@@ -38,9 +37,31 @@ function timeAgo(date) {
   return `${months}mo ago`
 }
 
-function RunsTab() {
-  const { data: runsData, loading } = useApi('/api/automation/runs?limit=20')
-  const runs = runsData?.runs || []
+const RUN_TYPE_CONFIG = {
+  PostReel: { label: 'Post', icon: Send, cls: 'bg-cyan-500/8 text-cyan-400 border-cyan-500/15' },
+  CreateAccount: { label: 'Account Creation', icon: UserPlus, cls: 'bg-violet-500/8 text-violet-400 border-violet-500/15' },
+  CreateAccountFromExistingContainer: { label: 'Account Creation', icon: UserPlus, cls: 'bg-violet-500/8 text-violet-400 border-violet-500/15' },
+}
+
+const DEFAULT_RUN_TYPE = { label: 'Unknown', icon: Send, cls: 'bg-[#141414] text-[#555] border-[#1a1a1a]' }
+
+function getRunType(run) {
+  const type = run.workflowType
+  if (type && RUN_TYPE_CONFIG[type]) return RUN_TYPE_CONFIG[type]
+  return DEFAULT_RUN_TYPE
+}
+
+export function RunsTab({ workflowFilter } = {}) {
+  const { data: runsData, loading } = useApi('/api/automation/runs?limit=50')
+  const allRuns = runsData?.runs || []
+  const runs = workflowFilter
+    ? allRuns.filter(r => {
+        const type = r.workflowType
+        if (workflowFilter === 'creation') return type === 'CreateAccount' || type === 'CreateAccountFromExistingContainer'
+        if (workflowFilter === 'posting') return type === 'PostReel'
+        return true
+      })
+    : allRuns
   const [expandedId, setExpandedId] = useState(null)
 
   return (
@@ -50,6 +71,7 @@ function RunsTab() {
           <tr className="border-b border-[#1a1a1a]">
             <th className="px-3 py-3 w-8" />
             <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Date</th>
+            <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Type</th>
             <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Trigger</th>
             <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Duration</th>
             <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Status</th>
@@ -58,9 +80,9 @@ function RunsTab() {
         </thead>
         <tbody>
           {loading ? (
-            <tr><td colSpan={6} className="px-3 py-8 text-center text-[#333]">Loading...</td></tr>
+            <tr><td colSpan={7} className="px-3 py-8 text-center text-[#333]">Loading...</td></tr>
           ) : !runs.length ? (
-            <tr><td colSpan={6} className="px-3 py-8 text-center text-[#333]">No runs found</td></tr>
+            <tr><td colSpan={7} className="px-3 py-8 text-center text-[#333]">No runs found</td></tr>
           ) : (
             runs.map((run, idx) => {
               const id = run.id || idx
@@ -76,6 +98,18 @@ function RunsTab() {
                     </td>
                     <td className="px-3 py-2.5 text-[#555]">
                       {timeAgo(run.startTime || run.timestamp)}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      {(() => {
+                        const rt = getRunType(run)
+                        const Icon = rt.icon
+                        return (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border inline-flex items-center gap-1 ${rt.cls}`}>
+                            <Icon size={10} />
+                            {rt.label}
+                          </span>
+                        )
+                      })()}
                     </td>
                     <td className="px-3 py-2.5">
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
@@ -96,7 +130,7 @@ function RunsTab() {
                   </tr>
                   {isExpanded && (
                     <tr className="border-b border-[#141414]">
-                      <td colSpan={6} className="px-6 py-3 bg-[#050505]">
+                      <td colSpan={7} className="px-6 py-3 bg-[#050505]">
                         {(() => {
                           const results = Array.isArray(run.accountResults) ? run.accountResults
                             : Array.isArray(run.details) ? run.details : []
@@ -336,14 +370,14 @@ function LogsTab() {
 
 export default function Activity() {
   const [searchParams] = useSearchParams()
-  const initialTab = TABS.find(t => t.id === searchParams.get('tab'))?.id || 'runs'
+  const initialTab = TABS.find(t => t.id === searchParams.get('tab'))?.id || 'content'
   const [tab, setTab] = useState(initialTab)
 
   return (
     <div>
       <div className="mb-5">
         <h1 className="text-2xl font-extrabold text-white tracking-tight">Activity</h1>
-        <p className="text-xs text-[#333] mt-0.5">Run history, content stock, and drive cleanup</p>
+        <p className="text-xs text-[#333] mt-0.5">Content stock, drive cleanup, and workflow logs</p>
       </div>
 
       {/* Tabs */}
@@ -366,7 +400,6 @@ export default function Activity() {
         ))}
       </div>
 
-      {tab === 'runs' && <RunsTab />}
       {tab === 'content' && <ContentTab />}
       {tab === 'trash' && <TrashTab />}
       {tab === 'logs' && <LogsTab />}

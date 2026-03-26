@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 
 import { CHART_COLORS } from '../utils/chartColors'
+import { Blur, useIncognito } from '../contexts/IncognitoContext'
 
 function formatNumber(n) {
   if (n == null) return '—'
@@ -13,7 +14,7 @@ function formatNumber(n) {
   return n.toLocaleString()
 }
 
-function CustomTooltip({ active, payload, label, activeSet, showTotal, top15, colorMap }) {
+function CustomTooltip({ active, payload, label, activeSet, showTotal, top15, colorMap, isIncognito }) {
   if (!active || !payload?.length) return null
   const items = payload
     .filter(p => {
@@ -34,7 +35,7 @@ function CustomTooltip({ active, payload, label, activeSet, showTotal, top15, co
             backgroundColor: item.dataKey === '__total' ? '#ffffff' : (colorMap?.[item.dataKey] || CHART_COLORS[top15.indexOf(item.dataKey) % CHART_COLORS.length]),
             flexShrink: 0
           }} />
-          <span style={{ color: '#ccc' }}>{item.dataKey === '__total' ? 'Total Fleet' : item.dataKey}</span>
+          <span style={{ color: '#ccc', filter: isIncognito && item.dataKey !== '__total' ? 'blur(5px)' : 'none' }}>{item.dataKey === '__total' ? 'Total Fleet' : item.dataKey}</span>
           <span style={{ color: '#fff', marginLeft: 'auto', fontWeight: 600 }}>{formatNumber(item.value)}</span>
         </div>
       ))}
@@ -43,6 +44,7 @@ function CustomTooltip({ active, payload, label, activeSet, showTotal, top15, co
 }
 
 export default function DailyViewsBarChart({ title, snapshots, colorMap, displayDays: displayDaysProp = 30 }) {
+  const { isIncognito } = useIncognito()
   // Top 15 accounts by latest viewsLast30Days
   const top15 = useMemo(() => {
     if (!snapshots?.length) return []
@@ -214,7 +216,7 @@ export default function DailyViewsBarChart({ title, snapshots, colorMap, display
               style={active ? { borderColor: color, color: 'white' } : undefined}
             >
               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-              {username}
+              <Blur>{username}</Blur>
             </button>
           )
         })}
@@ -226,7 +228,7 @@ export default function DailyViewsBarChart({ title, snapshots, colorMap, display
           <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" />
           <XAxis dataKey="date" tick={{ fill: '#555', fontSize: 10 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} interval="preserveStartEnd" angle={-30} textAnchor="end" height={45} />
           <YAxis tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
-          <Tooltip content={<CustomTooltip activeSet={activeSet} showTotal={showTotal} top15={top15} colorMap={colorMap} />} />
+          <Tooltip content={<CustomTooltip activeSet={activeSet} showTotal={showTotal} top15={top15} colorMap={colorMap} isIncognito={isIncognito} />} />
           {top15.map((username, i) => (
             <Bar
               key={username}

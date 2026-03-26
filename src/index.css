@@ -39,6 +39,12 @@ body {
   scrollbar-color: rgba(255, 255, 255, 0.06) transparent;
 }
 
+.incognito-blur {
+  filter: blur(5px);
+  user-select: none;
+  transition: filter 0.2s;
+}
+
 .label-upper {
   font-size: 0.6875rem;
   font-weight: 600;

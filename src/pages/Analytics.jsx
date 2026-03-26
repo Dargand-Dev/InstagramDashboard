@@ -11,6 +11,7 @@ import DailyViewsBarChart from '../components/DailyViewsBarChart'
 import DateRangePicker from '../components/DateRangePicker'
 import { useApi } from '../hooks/useApi'
 import { CHART_COLORS, buildColorMap } from '../utils/chartColors'
+import { Blur, useIncognito } from '../contexts/IncognitoContext'
 
 const PERIODS = [
   { key: 'alltime', label: 'All time',         days: 9999, titleSuffix: 'All time' },
@@ -72,6 +73,7 @@ export default function Analytics() {
   const { data: accountsData, loading: accountsLoading } = useApi('/api/accounts')
 
   const navigate = useNavigate()
+  const { isIncognito } = useIncognito()
   const isInitialLoad = (snapLoading || overviewLoading) && !snapData
 
   const snapshots = snapData?.snapshots || []
@@ -355,7 +357,7 @@ export default function Analytics() {
           {overview?.topPerformer ? (
             <>
               <div className="text-lg font-extrabold text-white tracking-tight">
-                {overview.topPerformer.username}
+                <Blur>{overview.topPerformer.username}</Blur>
               </div>
               <p className="text-xs text-[#555] mt-1">
                 {formatNumber(overview.topPerformer.followerCount)} followers · {formatNumber(overview.topPerformer.viewsLast30Days)} views
@@ -403,7 +405,7 @@ export default function Analytics() {
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={identityData} margin={{ left: 10 }}>
                 <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" />
-                <XAxis dataKey="name" tick={{ fill: '#999', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} />
+                <XAxis dataKey="name" tick={{ fill: '#999', fontSize: 11, className: isIncognito ? 'incognito-blur' : '' }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} />
                 <YAxis tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
                 <Tooltip {...tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.05)' }} formatter={(v, name) => [formatNumber(v), name]} />
                 <Bar dataKey="viewsPerAccount" name="Views / Account" fill="#3b82f6" radius={[4, 4, 0, 0]} />
@@ -429,7 +431,7 @@ export default function Analytics() {
                 <tbody>
                   {identityData.map((row, i) => (
                     <tr key={row.name || i} className="border-b border-[#141414] last:border-0 hover:bg-[#111] transition-colors">
-                      <td className="px-3 py-2.5 text-white font-medium">{row.name}</td>
+                      <td className="px-3 py-2.5 text-white font-medium"><Blur>{row.name}</Blur></td>
                       <td className="px-3 py-2.5 text-right font-mono text-[#555]">{row.accounts}</td>
                       <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(row.totalFollowers)}</td>
                       <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(row.totalViews)}</td>
@@ -455,7 +457,7 @@ export default function Analytics() {
               <BarChart data={efficiencyData} layout="vertical" margin={{ left: 20 }}>
                 <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" horizontal={false} />
                 <XAxis type="number" tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
-                <YAxis type="category" dataKey="username" tick={{ fill: '#999', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} width={100} />
+                <YAxis type="category" dataKey="username" tick={{ fill: '#999', fontSize: 11, className: isIncognito ? 'incognito-blur' : '' }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} width={100} />
                 <Tooltip {...tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.05)' }} formatter={(v) => formatNumber(v)} labelFormatter={() => ''} />
                 <Bar dataKey="ratio" radius={[0, 4, 4, 0]} barSize={20}>
                   {efficiencyData.map((entry, i) => (
@@ -496,7 +498,7 @@ export default function Analytics() {
                       >
                         <td className="px-3 py-2.5 text-white font-medium">
                           <span className="inline-flex items-center gap-1.5">
-                            {row.username}
+                            <Blur>{row.username}</Blur>
                             {link && (
                               <a
                                 href={link}

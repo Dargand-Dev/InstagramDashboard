@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { BookOpen } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
+import { Blur } from '../contexts/IncognitoContext'
 
 function timeAgo(date) {
   if (!date) return '—'
@@ -74,7 +75,7 @@ export default function PostingHistory() {
                       onClick={() => navigate(`/accounts?username=${encodeURIComponent(entry.username)}`)}
                       className="text-blue-400 hover:text-blue-300 hover:underline transition-colors font-medium"
                     >
-                      {entry.username}
+                      <Blur>{entry.username}</Blur>
                     </button>
                   </td>
                   <td className="px-4 py-3">{entry.baseVideo || '—'}</td>

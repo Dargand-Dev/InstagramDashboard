@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Smartphone, UserPlus, Play, Rocket, Unlock, Loader2, CheckCircle, XCircle, AlertTriangle, Shield, Settings, Key, Video, Image, Clipboard, Container, RefreshCw, Trash2, X, Layers, ExternalLink } from 'lucide-react'
 import Card from '../components/Card'
 import { useApi, apiPost } from '../hooks/useApi'
+import { useIncognito } from '../contexts/IncognitoContext'
 
 const DEVICES_FALLBACK = []
 
@@ -232,6 +233,7 @@ export default function Actions() {
     }
   }, [devices])
 
+  const { isIncognito } = useIncognito()
   const actionsList = actionsData?.actions || []
   const accountList = accounts || []
 
@@ -371,7 +373,7 @@ export default function Actions() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className={labelClass}>Account (optional)</label>
-              <select value={selectedAccount} onChange={e => setSelectedAccount(e.target.value)} className={inputClass}>
+              <select value={selectedAccount} onChange={e => setSelectedAccount(e.target.value)} className={`${inputClass} ${isIncognito ? 'incognito-blur' : ''}`}>
                 <option value="">— No account —</option>
                 {accountList.map(a => (
                   <option key={a.id} value={a.username}>

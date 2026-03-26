@@ -255,15 +255,17 @@ export default function Actions() {
     setLockLoading(true)
     try {
       const res = await fetch('/api/automation/lock-status')
-      if (res.status === 423) {
-        const body = await res.json().catch(() => ({}))
-        setLockStatus({ locked: true, ...body })
-      } else {
-        const body = await res.json().catch(() => ({}))
-        setLockStatus({ locked: false, ...body })
-      }
-    } catch { setLockStatus({ locked: false }) }
-    finally { setLockLoading(false) }
+      const body = await res.json().catch(() => ({}))
+      const status = res.status === 423
+        ? { locked: true, ...body }
+        : { locked: false, ...body }
+      setLockStatus(status)
+      return status
+    } catch {
+      const status = { locked: false }
+      setLockStatus(status)
+      return status
+    } finally { setLockLoading(false) }
   }
 
   useEffect(() => { checkLockStatus() }, [])
@@ -362,8 +364,8 @@ export default function Actions() {
   }
 
   async function handleTrigger() {
-    await checkLockStatus()
-    if (lockStatus?.locked) return
+    const lock = await checkLockStatus()
+    if (lock?.locked) return
     setTriggerLoading(true)
     setTriggerResult(null)
     try {

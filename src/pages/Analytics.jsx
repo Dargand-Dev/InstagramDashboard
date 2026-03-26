@@ -1,9 +1,9 @@
-import { useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell
 } from 'recharts'
-import { Users, Eye, UserCheck, Trophy } from 'lucide-react'
+import { Users, Eye, UserCheck, Trophy, ExternalLink } from 'lucide-react'
 import Card from '../components/Card'
 import InteractiveLineChart from '../components/InteractiveLineChart'
 import { useApi } from '../hooks/useApi'
@@ -23,13 +23,54 @@ function formatNumber(n) {
   return n.toLocaleString()
 }
 
+function computeAllTimeViews(snapshots) {
+  // Group snapshots per account by month, take max viewsLast30Days per month, sum those
+  const byAccount = {}
+  for (const snap of snapshots) {
+    if (!byAccount[snap.username]) byAccount[snap.username] = {}
+    const month = snap.snapshotAt?.slice(0, 7) // "YYYY-MM"
+    if (!month) continue
+    const views = snap.viewsLast30Days || 0
+    if (!byAccount[snap.username][month] || views > byAccount[snap.username][month]) {
+      byAccount[snap.username][month] = views
+    }
+  }
+  const result = {}
+  for (const [username, months] of Object.entries(byAccount)) {
+    result[username] = Object.values(months).reduce((sum, v) => sum + v, 0)
+  }
+  return result
+}
+
 export default function Analytics() {
   const { data: snapData, loading: snapLoading } = useApi('/api/stats/snapshots?days=30')
+  const { data: allSnapData, loading: allSnapLoading } = useApi('/api/stats/snapshots?days=9999')
   const { data: overview, loading: overviewLoading } = useApi('/api/stats/overview')
+  const { data: accountsData, loading: accountsLoading } = useApi('/api/accounts')
 
-  const loading = snapLoading || overviewLoading
+  const [sortCol, setSortCol] = useState('followers')
+  const [sortAsc, setSortAsc] = useState(false)
+
+  const loading = snapLoading || overviewLoading || allSnapLoading || accountsLoading
 
   const snapshots = snapData?.snapshots || []
+
+  // Map of username -> link from accounts
+  const accountLinks = useMemo(() => {
+    const accounts = accountsData?.accounts || accountsData || []
+    if (!Array.isArray(accounts)) return {}
+    const map = {}
+    for (const acc of accounts) {
+      if (acc.username && acc.link) map[acc.username] = acc.link
+    }
+    return map
+  }, [accountsData])
+
+  // All-time views per account
+  const allTimeViews = useMemo(() => {
+    if (!allSnapData?.snapshots?.length) return {}
+    return computeAllTimeViews(allSnapData.snapshots)
+  }, [allSnapData])
 
   // Efficiency data (views per post)
   const efficiencyData = useMemo(() => {
@@ -63,8 +104,47 @@ export default function Analytics() {
         latest[snap.username] = snap
       }
     }
-    return Object.values(latest).sort((a, b) => (b.followerCount || 0) - (a.followerCount || 0))
+    return Object.values(latest)
   }, [snapData])
+
+  // Sorted table data
+  const sortedTableData = useMemo(() => {
+    const getValue = (row) => {
+      const views = allTimeViews[row.username] || 0
+      switch (sortCol) {
+        case 'followers': return row.followerCount || 0
+        case 'views': return views
+        case 'posts': return row.postCount || 0
+        case 'viewsPerPost': return row.postCount ? Math.round(views / row.postCount) : 0
+        default: return 0
+      }
+    }
+    return [...tableData].sort((a, b) => {
+      const diff = getValue(a) - getValue(b)
+      return sortAsc ? diff : -diff
+    })
+  }, [tableData, sortCol, sortAsc, allTimeViews])
+
+  const handleSort = (col) => {
+    if (sortCol === col) {
+      setSortAsc(!sortAsc)
+    } else {
+      setSortCol(col)
+      setSortAsc(false)
+    }
+  }
+
+  const SortHeader = ({ col, children, className = '' }) => (
+    <th
+      className={`px-3 py-2 label-upper !text-[10px] !mb-0 cursor-pointer select-none hover:text-white transition-colors ${className}`}
+      onClick={() => handleSort(col)}
+    >
+      {children}
+      {sortCol === col && (
+        <span className="ml-1 text-white">{sortAsc ? '↑' : '↓'}</span>
+      )}
+    </th>
+  )
 
   if (loading) {
     return (
@@ -192,27 +272,40 @@ export default function Analytics() {
               <thead>
                 <tr className="border-b border-[#1a1a1a]">
                   <th className="px-3 py-2 text-left label-upper !text-[10px] !mb-0">Username</th>
-                  <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Followers</th>
-                  <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Views 30j</th>
-                  <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Posts</th>
-                  <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Views/Post</th>
+                  <SortHeader col="followers" className="text-right">Followers</SortHeader>
+                  <SortHeader col="views" className="text-right">Views All Time</SortHeader>
+                  <SortHeader col="posts" className="text-right">Posts</SortHeader>
+                  <SortHeader col="viewsPerPost" className="text-right">Views/Post</SortHeader>
                 </tr>
               </thead>
               <tbody>
-                {tableData.length === 0 ? (
+                {sortedTableData.length === 0 ? (
                   <tr><td colSpan={5} className="px-3 py-6 text-center text-[#333]">No data</td></tr>
                 ) : (
-                  tableData.map((row, i) => (
-                    <tr key={row.username || i} className="border-b border-[#141414] last:border-0 hover:bg-[#111] transition-colors">
-                      <td className="px-3 py-2.5 text-white font-medium">{row.username}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(row.followerCount)}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(row.viewsLast30Days)}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-[#555]">{row.postCount ?? '—'}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-[#555]">
-                        {row.postCount ? formatNumber(Math.round((row.viewsLast30Days || 0) / row.postCount)) : '—'}
-                      </td>
-                    </tr>
-                  ))
+                  sortedTableData.map((row, i) => {
+                    const views = allTimeViews[row.username] || 0
+                    const link = accountLinks[row.username]
+                    return (
+                      <tr key={row.username || i} className="border-b border-[#141414] last:border-0 hover:bg-[#111] transition-colors">
+                        <td className="px-3 py-2.5 text-white font-medium">
+                          <span className="inline-flex items-center gap-1.5">
+                            {row.username}
+                            {link && (
+                              <a href={link} target="_blank" rel="noopener noreferrer" className="text-[#555] hover:text-blue-400 transition-colors">
+                                <ExternalLink size={12} />
+                              </a>
+                            )}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(row.followerCount)}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(views)}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-[#555]">{row.postCount ?? '—'}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-[#555]">
+                          {row.postCount ? formatNumber(Math.round(views / row.postCount)) : '—'}
+                        </td>
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
             </table>

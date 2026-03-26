@@ -256,13 +256,17 @@ export default function Actions() {
     try {
       const res = await fetch('/api/automation/lock-status')
       const body = await res.json().catch(() => ({}))
-      const status = res.status === 423
-        ? { locked: true, ...body }
-        : { locked: false, ...body }
+      // Normalize: support both old (single lock) and new (per-device) format
+      const status = {
+        locked: res.status === 423 || body.locked || false,
+        devices: body.devices || (body.currentExecution ? { [body.currentExecution.deviceId]: body.currentExecution } : {}),
+        totalLocked: body.totalLocked || (res.status === 423 || body.locked ? 1 : 0),
+        ...body
+      }
       setLockStatus(status)
       return status
     } catch {
-      const status = { locked: false }
+      const status = { locked: false, devices: {}, totalLocked: 0 }
       setLockStatus(status)
       return status
     } finally { setLockLoading(false) }
@@ -364,8 +368,7 @@ export default function Actions() {
   }
 
   async function handleTrigger() {
-    const lock = await checkLockStatus()
-    if (lock?.locked) return
+    await checkLockStatus()
     setTriggerLoading(true)
     setTriggerResult(null)
     try {
@@ -383,12 +386,12 @@ export default function Actions() {
     } finally { setTriggerLoading(false) }
   }
 
-  async function handleForceUnlock() {
+  async function handleForceUnlock(deviceUdid) {
     setUnlockLoading(true)
     try {
-      await apiPost('/api/automation/force-unlock', {})
+      await apiPost('/api/automation/force-unlock', deviceUdid ? { deviceUdid } : {})
       await checkLockStatus()
-      setTriggerResult({ type: 'success', message: 'Lock released' })
+      setTriggerResult({ type: 'success', message: deviceUdid ? `Device ${deviceUdid.slice(-8)} unlocked` : 'All locks released' })
     } catch (err) {
       setTriggerResult({ type: 'error', message: err.message })
     } finally { setUnlockLoading(false) }
@@ -549,21 +552,32 @@ export default function Actions() {
         {/* Manual Posting Run */}
         <Card title="Manual Posting Run" icon={Rocket} iconColor="bg-emerald-500/10 text-emerald-400">
           {lockStatus?.locked && (
-            <div className="flex items-center justify-between bg-amber-500/5 border border-amber-500/15 rounded-md p-3 mb-3">
-              <div className="flex items-center gap-2 text-amber-400 text-xs font-medium">
-                <AlertTriangle size={14} />
-                Automation locked
-                {lockStatus.currentExecution && (
-                  <span className="text-[10px] opacity-60">
-                    — {lockStatus.currentExecution.action} on {lockStatus.currentExecution.deviceId} ({lockStatus.currentExecution.elapsedSeconds}s)
-                  </span>
-                )}
+            <div className="bg-amber-500/5 border border-amber-500/15 rounded-md p-3 mb-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-amber-400 text-xs font-medium">
+                  <AlertTriangle size={14} />
+                  {lockStatus.totalLocked || 1} device{(lockStatus.totalLocked || 1) > 1 ? 's' : ''} locked
+                </div>
+                <button onClick={() => handleForceUnlock()} disabled={unlockLoading}
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/15 rounded-md text-[10px] font-semibold transition-colors disabled:opacity-40">
+                  {unlockLoading ? <Loader2 size={12} className="animate-spin" /> : <Unlock size={12} />}
+                  Unlock All
+                </button>
               </div>
-              <button onClick={handleForceUnlock} disabled={unlockLoading}
-                className="flex items-center gap-1.5 px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/15 rounded-md text-[10px] font-semibold transition-colors disabled:opacity-40">
-                {unlockLoading ? <Loader2 size={12} className="animate-spin" /> : <Unlock size={12} />}
-                Force Unlock
-              </button>
+              {lockStatus.devices && Object.entries(lockStatus.devices).map(([deviceId, info]) => (
+                <div key={deviceId} className="flex items-center justify-between bg-black/20 rounded px-2.5 py-1.5">
+                  <span className="text-[10px] text-amber-400/70 font-mono">
+                    {deviceId.slice(-8)} — {info.action} ({info.elapsedSeconds}s)
+                  </span>
+                  <button
+                    onClick={() => handleForceUnlock(deviceId)}
+                    disabled={unlockLoading}
+                    className="text-[10px] text-red-400/70 hover:text-red-400 font-semibold transition-colors disabled:opacity-40"
+                  >
+                    Unlock
+                  </button>
+                </div>
+              ))}
             </div>
           )}
 
@@ -643,7 +657,7 @@ export default function Actions() {
           )}
 
           <div className="flex items-center gap-3">
-            <button onClick={handleTrigger} disabled={triggerLoading || lockStatus?.locked || (selectiveMode && selectedUsernames.size === 0)}
+            <button onClick={handleTrigger} disabled={triggerLoading || (!selectiveMode && lockStatus?.devices && devices?.length > 0 && devices.every(d => lockStatus.devices[d.udid])) || (selectiveMode && selectedUsernames.size === 0)}
               className="flex items-center gap-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-500/80 text-white rounded-md text-sm font-bold transition-colors disabled:opacity-40">
               {triggerLoading ? <Loader2 size={18} className="animate-spin" /> : <Rocket size={18} />}
               {triggerLoading ? 'Triggering...' : selectiveMode && selectedUsernames.size > 0

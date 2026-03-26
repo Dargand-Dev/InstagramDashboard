@@ -215,6 +215,21 @@ export default function Analytics() {
     </th>
   )
 
+  // Custom tick renderers for incognito blur on SVG text
+  const BlurredXTick = ({ x, y, payload }) => (
+    <text x={x} y={y} dy={14} textAnchor="middle" fill="#999" fontSize={11}
+      style={isIncognito ? { filter: 'blur(5px)', userSelect: 'none' } : undefined}>
+      {payload.value}
+    </text>
+  )
+
+  const BlurredYTick = ({ x, y, payload }) => (
+    <text x={x} y={y} dx={-4} textAnchor="end" fill="#999" fontSize={11}
+      style={isIncognito ? { filter: 'blur(5px)', userSelect: 'none' } : undefined}>
+      {payload.value}
+    </text>
+  )
+
   // Stable color map
   const colorMap = useMemo(() => {
     if (!snapshots.length) return {}
@@ -405,9 +420,9 @@ export default function Analytics() {
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={identityData} margin={{ left: 10 }}>
                 <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" />
-                <XAxis dataKey="name" tick={{ fill: '#999', fontSize: 11, className: isIncognito ? 'incognito-blur' : '' }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} />
+                <XAxis dataKey="name" tick={<BlurredXTick />} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} />
                 <YAxis tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
-                <Tooltip {...tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.05)' }} formatter={(v, name) => [formatNumber(v), name]} />
+                <Tooltip {...tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.05)' }} formatter={(v, name) => [formatNumber(v), name]} labelFormatter={isIncognito ? () => '•••' : undefined} />
                 <Bar dataKey="viewsPerAccount" name="Views / Account" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="followersPerAccount" name="Followers / Account" fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -457,7 +472,7 @@ export default function Analytics() {
               <BarChart data={efficiencyData} layout="vertical" margin={{ left: 20 }}>
                 <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" horizontal={false} />
                 <XAxis type="number" tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
-                <YAxis type="category" dataKey="username" tick={{ fill: '#999', fontSize: 11, className: isIncognito ? 'incognito-blur' : '' }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} width={100} />
+                <YAxis type="category" dataKey="username" tick={<BlurredYTick />} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} width={100} />
                 <Tooltip {...tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.05)' }} formatter={(v) => formatNumber(v)} labelFormatter={() => ''} />
                 <Bar dataKey="ratio" radius={[0, 4, 4, 0]} barSize={20}>
                   {efficiencyData.map((entry, i) => (

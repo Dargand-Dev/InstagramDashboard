@@ -1,15 +1,23 @@
-import { useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell
 } from 'recharts'
-import { Users, Eye, UserCheck, Trophy } from 'lucide-react'
+import { Users, Eye, UserCheck, Trophy, Calendar } from 'lucide-react'
 import Card from '../components/Card'
 import InteractiveLineChart from '../components/InteractiveLineChart'
 import DailyViewsBarChart from '../components/DailyViewsBarChart'
+import DateRangePicker from '../components/DateRangePicker'
 import { useApi } from '../hooks/useApi'
 import { CHART_COLORS, buildColorMap } from '../utils/chartColors'
+
+const PERIODS = [
+  { key: 'alltime', label: 'All time',         days: 9999, titleSuffix: 'All time' },
+  { key: '30d',     label: '30 derniers jours', days: 60,   titleSuffix: '30 days' },
+  { key: '7d',      label: '7 derniers jours',  days: 7,    titleSuffix: '7 days' },
+  { key: '1d',      label: "Aujourd'hui",       days: 1,    titleSuffix: 'Today' },
+]
 
 const tooltipStyle = {
   contentStyle: { backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: 8, fontSize: 12 },
@@ -25,20 +33,73 @@ function formatNumber(n) {
 }
 
 export default function Analytics() {
-  const { data: snapData, loading: snapLoading } = useApi('/api/stats/snapshots?days=60')
-  const { data: overview, loading: overviewLoading } = useApi('/api/stats/overview')
+  const [period, setPeriod] = useState('alltime')
+  const [customRange, setCustomRange] = useState({ start: null, end: null })
+  const [showCalendar, setShowCalendar] = useState(false)
+
+  const currentPeriod = PERIODS.find(p => p.key === period)
+
+  const customDays = customRange.start && customRange.end
+    ? Math.ceil((new Date(customRange.end) - new Date(customRange.start)) / 86400000) + 1
+    : null
+
+  const apiDays = period === 'custom' ? (customDays != null ? customDays + 30 : 9999) : currentPeriod?.days ?? 9999
+
+  const { data: snapData, loading: snapLoading } = useApi(`/api/stats/snapshots?days=${apiDays}`)
+  const { data: overview, loading: overviewLoading } = useApi(`/api/stats/overview?days=${apiDays}`)
 
   const navigate = useNavigate()
-  const loading = snapLoading || overviewLoading
+  const isInitialLoad = (snapLoading || overviewLoading) && !snapData
 
   const snapshots = snapData?.snapshots || []
 
-  // Last 30 days of snapshots for line charts (full 60 days go to DailyViewsBarChart)
-  const snapshots30 = useMemo(() => {
+  const filteredSnapshots = useMemo(() => {
     if (!snapshots.length) return []
-    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    if (period === 'custom') {
+      if (customRange.start && customRange.end) {
+        const startISO = new Date(customRange.start + 'T00:00:00').toISOString()
+        const endISO = new Date(customRange.end + 'T23:59:59').toISOString()
+        return snapshots.filter(s => s.snapshotAt >= startISO && s.snapshotAt <= endISO)
+      }
+      return snapshots
+    }
+    if (currentPeriod?.days >= 9999) return snapshots
+    const displayDays = currentPeriod?.key === '30d' ? 30 : currentPeriod?.days
+    const cutoff = new Date(Date.now() - displayDays * 24 * 60 * 60 * 1000).toISOString()
     return snapshots.filter(s => s.snapshotAt >= cutoff)
-  }, [snapshots])
+  }, [snapshots, currentPeriod, period, customRange])
+
+  const titleSuffix = period === 'custom' && customRange.start && customRange.end
+    ? `${customRange.start.slice(8)}/${customRange.start.slice(5, 7)} — ${customRange.end.slice(8)}/${customRange.end.slice(5, 7)}`
+    : currentPeriod?.titleSuffix ?? 'All time'
+
+  // Period-aware KPIs: for non-alltime, compute delta between first and last snapshot within the displayed period
+  const periodKpis = useMemo(() => {
+    if (period === 'alltime') {
+      return { views: overview?.totalViews, followers: overview?.totalFollowers }
+    }
+    if (!filteredSnapshots.length) return { views: null, followers: null }
+
+    // Group filtered snapshots by username, keep first and last in the period
+    const byUser = {}
+    for (const snap of filteredSnapshots) {
+      if (!byUser[snap.username]) byUser[snap.username] = { first: snap, last: snap }
+      const u = byUser[snap.username]
+      if (snap.snapshotAt < u.first.snapshotAt) u.first = snap
+      if (snap.snapshotAt > u.last.snapshotAt) u.last = snap
+    }
+
+    let totalViewsGain = 0
+    let totalFollowersGain = 0
+    for (const { first, last } of Object.values(byUser)) {
+      if (first !== last) {
+        totalViewsGain += Math.max(0, (last.viewsLast30Days || 0) - (first.viewsLast30Days || 0))
+        totalFollowersGain += Math.max(0, (last.followerCount || 0) - (first.followerCount || 0))
+      }
+    }
+
+    return { views: totalViewsGain, followers: totalFollowersGain }
+  }, [filteredSnapshots, overview, period])
 
   // Efficiency data (views per post)
   const efficiencyData = useMemo(() => {
@@ -99,7 +160,7 @@ export default function Analytics() {
       .sort((a, b) => b.viewsPerAccount - a.viewsPerAccount)
   }, [overview])
 
-  if (loading) {
+  if (isInitialLoad) {
     return (
       <div>
         <h1 className="text-2xl font-extrabold text-white tracking-tight">Analytics</h1>
@@ -117,29 +178,81 @@ export default function Analytics() {
         <p className="text-xs text-[#333] mt-0.5">Account performance & evolution</p>
       </div>
 
+      {/* Period selector */}
+      <div className="flex gap-1.5 mb-6 flex-wrap relative">
+        {PERIODS.map(p => (
+          <button
+            key={p.key}
+            onClick={() => { setPeriod(p.key); setShowCalendar(false); setCustomRange({ start: null, end: null }) }}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide transition-colors border ${
+              period === p.key
+                ? 'bg-white/10 text-white border-[#333]'
+                : 'bg-transparent text-[#555] border-[#1a1a1a] hover:text-white hover:border-[#333]'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+        <div className="relative">
+          <button
+            onClick={() => {
+              if (period === 'custom') {
+                setShowCalendar(prev => !prev)
+              } else {
+                setPeriod('custom')
+                setShowCalendar(true)
+              }
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide transition-colors border ${
+              period === 'custom'
+                ? 'bg-white/10 text-white border-[#333]'
+                : 'bg-transparent text-[#555] border-[#1a1a1a] hover:text-white hover:border-[#333]'
+            }`}
+          >
+            <Calendar size={11} />
+            {period === 'custom' && customRange.start && customRange.end
+              ? `${customRange.start.slice(8)}/${customRange.start.slice(5, 7)} — ${customRange.end.slice(8)}/${customRange.end.slice(5, 7)}`
+              : 'Personnaliser'}
+          </button>
+          {showCalendar && (
+            <DateRangePicker
+              startDate={customRange.start}
+              endDate={customRange.end}
+              onChange={(start, end) => {
+                setCustomRange({ start, end })
+                if (!start && !end) {
+                  setPeriod('alltime')
+                }
+              }}
+              onClose={() => setShowCalendar(false)}
+            />
+          )}
+        </div>
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <Card>
           <div className="flex items-start justify-between mb-3">
-            <span className="label-upper">Total Followers</span>
+            <span className="label-upper">{period === 'alltime' ? 'Total Followers' : `Followers +${titleSuffix}`}</span>
             <div className="w-7 h-7 rounded-md flex items-center justify-center bg-emerald-500/10">
               <Users size={14} className="text-emerald-400" />
             </div>
           </div>
           <div className="text-3xl font-extrabold text-white tracking-tight">
-            {formatNumber(overview?.totalFollowers)}
+            {period !== 'alltime' && periodKpis.followers != null ? '+' : ''}{formatNumber(periodKpis.followers)}
           </div>
         </Card>
 
         <Card>
           <div className="flex items-start justify-between mb-3">
-            <span className="label-upper">Total Views 30j</span>
+            <span className="label-upper">{period === 'alltime' ? 'Total Views' : `Views +${titleSuffix}`}</span>
             <div className="w-7 h-7 rounded-md flex items-center justify-center bg-blue-500/10">
               <Eye size={14} className="text-blue-400" />
             </div>
           </div>
           <div className="text-3xl font-extrabold text-white tracking-tight">
-            {formatNumber(overview?.totalViews)}
+            {period !== 'alltime' && periodKpis.views != null ? '+' : ''}{formatNumber(periodKpis.views)}
           </div>
         </Card>
 
@@ -180,8 +293,8 @@ export default function Analytics() {
       {/* Interactive Charts */}
       <Card className="mb-3">
         <InteractiveLineChart
-          title="Views Evolution (30 days)"
-          snapshots={snapshots30}
+          title={`Views Evolution (${titleSuffix})`}
+          snapshots={filteredSnapshots}
           dataKey="viewsLast30Days"
           colorMap={colorMap}
         />
@@ -189,8 +302,8 @@ export default function Analytics() {
 
       <Card className="mb-3">
         <InteractiveLineChart
-          title="Followers Evolution (30 days)"
-          snapshots={snapshots30}
+          title={`Followers Evolution (${titleSuffix})`}
+          snapshots={filteredSnapshots}
           dataKey="followerCount"
           colorMap={colorMap}
         />
@@ -201,6 +314,7 @@ export default function Analytics() {
           title="Daily Views"
           snapshots={snapshots}
           colorMap={colorMap}
+          displayDays={period === 'custom' ? customDays : (currentPeriod?.key === '30d' ? 30 : currentPeriod?.days)}
         />
       </Card>
 
@@ -285,7 +399,7 @@ export default function Analytics() {
                 <tr className="border-b border-[#1a1a1a]">
                   <th className="px-3 py-2 text-left label-upper !text-[10px] !mb-0">Username</th>
                   <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Followers</th>
-                  <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Views 30j</th>
+                  <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Views {titleSuffix}</th>
                   <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Posts</th>
                   <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Views/Post</th>
                 </tr>

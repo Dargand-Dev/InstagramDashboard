@@ -541,7 +541,7 @@ export default function Actions() {
               {lockLoading ? 'Checking...' : 'Refresh lock'}
             </button>
           </div>
-          <ResultBanner result={triggerResult} />
+          <ResultBanner result={triggerResult} navigate={navigate} />
         </Card>
       </div>
 

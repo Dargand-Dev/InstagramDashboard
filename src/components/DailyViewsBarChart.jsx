@@ -42,7 +42,7 @@ function CustomTooltip({ active, payload, label, activeSet, showTotal, top15, co
   )
 }
 
-export default function DailyViewsBarChart({ title, snapshots, colorMap }) {
+export default function DailyViewsBarChart({ title, snapshots, colorMap, displayDays: displayDaysProp = 30 }) {
   // Top 15 accounts by latest viewsLast30Days
   const top15 = useMemo(() => {
     if (!snapshots?.length) return []
@@ -129,7 +129,7 @@ export default function DailyViewsBarChart({ title, snapshots, colorMap }) {
       }
     }
     const allDays = Array.from(allDaysSet).sort()
-    const displayDays = allDays.slice(-30)
+    const displayDays = displayDaysProp >= 9999 ? allDays : allDays.slice(-displayDaysProp)
 
     // Build chart data
     return displayDays.map(day => {
@@ -148,7 +148,7 @@ export default function DailyViewsBarChart({ title, snapshots, colorMap }) {
       point.__total = total
       return point
     })
-  }, [snapshots, top15])
+  }, [snapshots, top15, displayDaysProp])
 
   const toggle = (username) => {
     setSelected(prev => {

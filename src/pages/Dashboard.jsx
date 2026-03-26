@@ -1,8 +1,11 @@
-import { Users, Activity, Film, Clock, ArrowRight } from 'lucide-react'
+import { Users, Activity, Film, Clock, ArrowRight, AlertTriangle, UserPlus, Send } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Card from '../components/Card'
 import StatusBadge from '../components/StatusBadge'
+import LiveExecutionPanel from '../components/LiveExecutionPanel'
+import { formatDuration } from '../components/LogStreamCard'
 import { useApi } from '../hooks/useApi'
+import { useActiveRuns } from '../hooks/useActiveRuns'
 
 function deriveRunStatus(run) {
   if (run.status) return run.status
@@ -29,13 +32,17 @@ function timeAgo(date) {
   return `${months}mo ago`
 }
 
-function formatDuration(ms) {
-  if (!ms) return '—'
-  if (typeof ms === 'string') return ms
-  const seconds = Math.floor(ms / 1000)
-  const minutes = Math.floor(seconds / 60)
-  if (minutes > 0) return `${minutes}m ${seconds % 60}s`
-  return `${seconds}s`
+const RUN_TYPE_CONFIG = {
+  PostReel: { label: 'Post', icon: Send, cls: 'bg-cyan-500/8 text-cyan-400 border-cyan-500/15' },
+  CreateAccount: { label: 'Creation', icon: UserPlus, cls: 'bg-violet-500/8 text-violet-400 border-violet-500/15' },
+  CreateAccountFromExistingContainer: { label: 'Creation', icon: UserPlus, cls: 'bg-violet-500/8 text-violet-400 border-violet-500/15' },
+}
+const DEFAULT_RUN_TYPE = { label: 'Unknown', icon: Send, cls: 'bg-[#141414] text-[#555] border-[#1a1a1a]' }
+
+function getRunType(run) {
+  const type = run.workflowType
+  if (type && RUN_TYPE_CONFIG[type]) return RUN_TYPE_CONFIG[type]
+  return DEFAULT_RUN_TYPE
 }
 
 export default function Dashboard() {
@@ -44,6 +51,7 @@ export default function Dashboard() {
   const { data: content } = useApi('/api/automation/content-status')
   const { data: schedule } = useApi('/api/automation/schedule')
   const { data: lockStatus, error: lockError } = useApi('/api/automation/lock-status')
+  const { activeRuns, hasActiveRuns } = useActiveRuns(4000)
   const navigate = useNavigate()
 
   const lastRun = runsData?.runs?.[0]
@@ -59,25 +67,39 @@ export default function Dashboard() {
 
   const totalReels = identities.reduce((sum, i) => sum + (i.availableReels ?? i.reelCount ?? i.count ?? 0), 0)
 
+  const exhaustedStoryPools = identities.flatMap(identity =>
+    (identity.storyMediaPool || [])
+      .filter(p => p.status === 'EXHAUSTED')
+      .map(p => ({ ...p, identityId: identity.identityId }))
+  )
+
   return (
     <div>
-      {/* Header */}
+      {exhaustedStoryPools.length > 0 && (
+        <div className="flex items-center gap-2 bg-red-500/5 border border-red-500/15 rounded-md p-3 mb-4">
+          <AlertTriangle size={14} className="text-red-400 shrink-0" />
+          <span className="text-red-400 text-xs font-medium">
+            Story media pool exhausted for: {exhaustedStoryPools.map(p => p.username).join(', ')} — add new media to Drive to resume story posting
+          </span>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-extrabold text-white tracking-tight">Dashboard</h1>
           <p className="text-xs text-[#333] mt-0.5">Instagram automation overview</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${isLocked ? 'bg-warning animate-pulse' : 'bg-success'}`} />
+          <div className={`w-2 h-2 rounded-full ${hasActiveRuns ? 'bg-blue-400 animate-pulse' : isLocked ? 'bg-warning animate-pulse' : 'bg-success'}`} />
           <span className="text-xs text-[#555] font-medium">
-            {isLocked ? 'System locked' : 'System idle'}
+            {hasActiveRuns ? 'Workflow running' : isLocked ? 'System locked' : 'System idle'}
           </span>
         </div>
       </div>
 
-      {/* Metric cards */}
+      <LiveExecutionPanel activeRuns={activeRuns} />
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        {/* Active accounts */}
         <Card>
           <div className="flex items-start justify-between mb-3">
             <span className="label-upper">Active Accounts</span>
@@ -97,7 +119,6 @@ export default function Dashboard() {
           </div>
         </Card>
 
-        {/* Last run */}
         <Card>
           <div className="flex items-start justify-between mb-3">
             <span className="label-upper">Last Run</span>
@@ -127,7 +148,6 @@ export default function Dashboard() {
           )}
         </Card>
 
-        {/* Content stock */}
         <Card>
           <div className="flex items-start justify-between mb-3">
             <span className="label-upper">Content Stock</span>
@@ -139,7 +159,6 @@ export default function Dashboard() {
           <p className="text-xs text-[#333] mt-1">reels across {identities.length} identities</p>
         </Card>
 
-        {/* Next run */}
         <Card>
           <div className="flex items-start justify-between mb-3">
             <span className="label-upper">Next Run</span>
@@ -160,9 +179,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Bottom section: 2 columns */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
-        {/* Recent runs table */}
         <div className="lg:col-span-3">
           <Card>
             <div className="flex items-center justify-between mb-4">
@@ -179,6 +196,7 @@ export default function Dashboard() {
                 <thead>
                   <tr className="border-b border-[#1a1a1a]">
                     <th className="px-3 py-2 text-left label-upper !text-[10px] !mb-0">Date</th>
+                    <th className="px-3 py-2 text-left label-upper !text-[10px] !mb-0">Type</th>
                     <th className="px-3 py-2 text-left label-upper !text-[10px] !mb-0">Status</th>
                     <th className="px-3 py-2 text-left label-upper !text-[10px] !mb-0">Duration</th>
                     <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Results</th>
@@ -186,12 +204,24 @@ export default function Dashboard() {
                 </thead>
                 <tbody>
                   {!runsData?.runs?.length ? (
-                    <tr><td colSpan={4} className="px-3 py-6 text-center text-[#333]">No runs yet</td></tr>
+                    <tr><td colSpan={5} className="px-3 py-6 text-center text-[#333]">No runs yet</td></tr>
                   ) : (
                     runsData.runs.slice(0, 5).map((run, i) => (
                       <tr key={run.id || i} className="border-b border-[#141414] last:border-0 hover:bg-[#111] transition-colors">
                         <td className="px-3 py-2.5 text-[#555]">
                           {timeAgo(run.startTime || run.timestamp)}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {(() => {
+                            const rt = getRunType(run)
+                            const Icon = rt.icon
+                            return (
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md border inline-flex items-center gap-1 ${rt.cls}`}>
+                                <Icon size={9} />
+                                {rt.label}
+                              </span>
+                            )
+                          })()}
                         </td>
                         <td className="px-3 py-2.5">
                           <StatusBadge status={deriveRunStatus(run)} />
@@ -211,9 +241,7 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Right column */}
         <div className="lg:col-span-2 space-y-3">
-          {/* Content by identity */}
           <Card>
             <span className="label-upper block mb-3">Content by Identity</span>
             {identities.length === 0 ? (
@@ -247,7 +275,6 @@ export default function Dashboard() {
             )}
           </Card>
 
-          {/* Account health */}
           <Card>
             <span className="label-upper block mb-3">Account Health</span>
             <div className="grid grid-cols-3 gap-3">

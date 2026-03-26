@@ -4,11 +4,7 @@ import {
   Tooltip, ResponsiveContainer
 } from 'recharts'
 
-const COLORS = [
-  '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444',
-  '#06b6d4', '#f97316', '#ec4899', '#14b8a6', '#a855f7',
-  '#84cc16', '#e11d48', '#0ea5e9', '#d946ef', '#fbbf24'
-]
+import { CHART_COLORS } from '../utils/chartColors'
 
 const tooltipStyle = {
   contentStyle: { backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: 8, fontSize: 12 },
@@ -23,7 +19,7 @@ function formatNumber(n) {
   return n.toLocaleString()
 }
 
-export default function InteractiveLineChart({ title, snapshots, dataKey }) {
+export default function InteractiveLineChart({ title, snapshots, dataKey, colorMap }) {
   // Get top 15 accounts by latest value of dataKey
   const top15 = useMemo(() => {
     if (!snapshots?.length) return []
@@ -40,6 +36,7 @@ export default function InteractiveLineChart({ title, snapshots, dataKey }) {
   }, [snapshots, dataKey])
 
   const [selected, setSelected] = useState(null)
+  const [showTotal, setShowTotal] = useState(false)
 
   // Initialize selected to first 5 on first render / when top15 changes
   const activeSet = useMemo(() => {
@@ -47,21 +44,51 @@ export default function InteractiveLineChart({ title, snapshots, dataKey }) {
     return new Set(top15.slice(0, 5))
   }, [selected, top15])
 
-  // Build series data grouped by date, only for top15 accounts
+  // Build series data with one point per snapshot timeslot (keeps multiple per day)
   const series = useMemo(() => {
     if (!snapshots?.length || !top15.length) return []
     const top15Set = new Set(top15)
-    const byDate = {}
-    for (const snap of snapshots) {
-      if (!top15Set.has(snap.username)) continue
-      const date = snap.snapshotAt?.slice(0, 10)
-      if (!date) continue
-      if (!byDate[date]) byDate[date] = {}
-      byDate[date][snap.username] = snap[dataKey] ?? null
+
+    // Collect all unique timeslots from snapshots
+    // Use date + half-day bucket (AM/PM) so 2 snapshots per day get 2 points
+    const getSlot = (snapshotAt) => {
+      if (!snapshotAt) return null
+      const date = snapshotAt.slice(0, 10)
+      const hour = parseInt(snapshotAt.slice(11, 13) || '0', 10)
+      return `${date}T${hour < 12 ? '0' : '1'}` // 0 = AM, 1 = PM
     }
-    return Object.keys(byDate).sort().map(date => ({
-      date: `${date.slice(8)}/${date.slice(5, 7)}`,
-      ...byDate[date]
+
+    const formatSlot = (slot) => {
+      const date = slot.slice(0, 10)
+      const half = slot.slice(11) === '1' ? 'PM' : 'AM'
+      return `${date.slice(8)}/${date.slice(5, 7)} ${half}`
+    }
+
+    const bySlot = {}
+    const totalBySlot = {}
+    for (const snap of snapshots) {
+      const slot = getSlot(snap.snapshotAt)
+      if (!slot) continue
+      const val = snap[dataKey] ?? 0
+      // Per-account (top15 only) — keep latest snapshot within the slot
+      if (top15Set.has(snap.username)) {
+        if (!bySlot[slot]) bySlot[slot] = {}
+        const existing = bySlot[slot][snap.username]
+        if (existing == null || val > existing) {
+          bySlot[slot][snap.username] = val
+        }
+      }
+      // Total: keep latest snapshot per username per slot
+      if (!totalBySlot[slot]) totalBySlot[slot] = {}
+      const existingTotal = totalBySlot[slot][snap.username]
+      if (existingTotal == null || val > existingTotal) {
+        totalBySlot[slot][snap.username] = val
+      }
+    }
+    return Object.keys(bySlot).sort().map(slot => ({
+      date: formatSlot(slot),
+      ...bySlot[slot],
+      __total: Object.values(totalBySlot[slot] || {}).reduce((sum, v) => sum + (v || 0), 0),
     }))
   }, [snapshots, top15, dataKey])
 
@@ -105,8 +132,19 @@ export default function InteractiveLineChart({ title, snapshots, dataKey }) {
           None
         </button>
         <span className="w-px h-4 bg-[#1a1a1a] mx-1" />
+        <button
+          onClick={() => setShowTotal(t => !t)}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-colors ${
+            showTotal ? '' : 'border-[#1a1a1a] text-[#555] opacity-60'
+          }`}
+          style={showTotal ? { borderColor: '#ffffff', color: 'white' } : undefined}
+        >
+          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#ffffff' }} />
+          Total Fleet
+        </button>
+        <span className="w-px h-4 bg-[#1a1a1a] mx-1" />
         {top15.map((username, i) => {
-          const color = COLORS[i % COLORS.length]
+          const color = colorMap?.[username] || CHART_COLORS[i % CHART_COLORS.length]
           const active = activeSet.has(username)
           return (
             <button
@@ -128,15 +166,28 @@ export default function InteractiveLineChart({ title, snapshots, dataKey }) {
       <ResponsiveContainer width="100%" height={280}>
         <LineChart data={series}>
           <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" />
-          <XAxis dataKey="date" tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} />
+          <XAxis dataKey="date" tick={{ fill: '#555', fontSize: 10 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} interval="preserveStartEnd" angle={-30} textAnchor="end" height={45} />
           <YAxis tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
           <Tooltip {...tooltipStyle} formatter={(v) => formatNumber(v)} />
+          <Line
+            key="__total"
+            type="monotone"
+            dataKey="__total"
+            name="Total Fleet"
+            stroke="#ffffff"
+            strokeWidth={2.5}
+            strokeDasharray="6 3"
+            dot={false}
+            connectNulls
+            hide={!showTotal}
+            isAnimationActive={false}
+          />
           {top15.map((username, i) => (
             <Line
               key={username}
               type="monotone"
               dataKey={username}
-              stroke={COLORS[i % COLORS.length]}
+              stroke={colorMap?.[username] || CHART_COLORS[i % CHART_COLORS.length]}
               strokeWidth={2}
               dot={false}
               connectNulls

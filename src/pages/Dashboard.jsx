@@ -6,6 +6,7 @@ import LiveExecutionPanel from '../components/LiveExecutionPanel'
 import { formatDuration } from '../components/LogStreamCard'
 import { useApi } from '../hooks/useApi'
 import { useActiveRuns } from '../hooks/useActiveRuns'
+import { Blur } from '../contexts/IncognitoContext'
 
 function deriveRunStatus(run) {
   if (run.status) return run.status
@@ -79,7 +80,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-2 bg-red-500/5 border border-red-500/15 rounded-md p-3 mb-4">
           <AlertTriangle size={14} className="text-red-400 shrink-0" />
           <span className="text-red-400 text-xs font-medium">
-            Story media pool exhausted for: {exhaustedStoryPools.map(p => p.username).join(', ')} — add new media to Drive to resume story posting
+            Story media pool exhausted for: <Blur>{exhaustedStoryPools.map(p => p.username).join(', ')}</Blur> — add new media to Drive to resume story posting
           </span>
         </div>
       )}
@@ -261,7 +262,7 @@ export default function Dashboard() {
                     <div key={i}>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs text-white font-medium">
-                          {identity.identityId || identity.identityName || identity.identity || `Identity ${i + 1}`}
+                          <Blur>{identity.identityId || identity.identityName || identity.identity || `Identity ${i + 1}`}</Blur>
                         </span>
                         <span className="text-[10px] font-mono text-[#555]">{count}/{max}</span>
                       </div>

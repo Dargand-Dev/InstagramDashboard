@@ -5,6 +5,7 @@ import Card from '../components/Card'
 import StatusBadge from '../components/StatusBadge'
 import LogStreamCard, { formatDuration } from '../components/LogStreamCard'
 import { useApi } from '../hooks/useApi'
+import { Blur } from '../contexts/IncognitoContext'
 
 const TABS = [
   { id: 'content', label: 'Content' },
@@ -142,9 +143,9 @@ export function RunsTab({ workflowFilter } = {}) {
                               {results.map((detail, di) => (
                                 <div key={di} className="flex items-center justify-between text-xs">
                                   <div className="flex items-center gap-2">
-                                    <span className="text-white font-medium">{detail.username || detail.account || `Account ${di + 1}`}</span>
+                                    <span className="text-white font-medium"><Blur>{detail.username || detail.account || `Account ${di + 1}`}</Blur></span>
                                     {detail.identityId && (
-                                      <span className="text-[#333] text-[10px]">{detail.identityId}</span>
+                                      <span className="text-[#333] text-[10px]"><Blur>{detail.identityId}</Blur></span>
                                     )}
                                   </div>
                                   <div className="flex items-center gap-3">
@@ -205,7 +206,7 @@ function ContentTab() {
             <Card key={i}>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-white font-bold text-sm">
-                  {identity.identityId || identity.identityName || identity.identity || `Identity ${i + 1}`}
+                  <Blur>{identity.identityId || identity.identityName || identity.identity || `Identity ${i + 1}`}</Blur>
                 </h3>
                 {(identity.status || identity.alert) && <StatusBadge status={identity.status || identity.alert} />}
               </div>
@@ -242,7 +243,7 @@ function ContentTab() {
                           <div className="flex items-center gap-1.5">
                             {isExhausted && <AlertTriangle size={10} className="text-red-400" />}
                             <span className={isExhausted ? 'text-red-400 font-medium' : 'text-[#555]'}>
-                              {pool.username}
+                              <Blur>{pool.username}</Blur>
                             </span>
                           </div>
                           <span className={`font-mono text-[10px] ${
@@ -262,7 +263,7 @@ function ContentTab() {
                   <div className="flex flex-wrap gap-1">
                     {identity.accounts.map((acc, j) => (
                       <span key={j} className="text-[10px] bg-[#111] border border-[#1a1a1a] px-2 py-0.5 rounded-md text-[#555] font-medium">
-                        {typeof acc === 'string' ? acc : acc.username}
+                        <Blur>{typeof acc === 'string' ? acc : acc.username}</Blur>
                       </span>
                     ))}
                   </div>
@@ -303,7 +304,7 @@ function TrashTab() {
             items.map((file, i) => (
               <tr key={i} className="border-b border-[#141414] hover:bg-[#111] transition-colors">
                 <td className="px-3 py-2.5 text-white font-medium">{file.fileName || file.name || '—'}</td>
-                <td className="px-3 py-2.5 text-[#555]">{file.identity || file.identityName || '—'}</td>
+                <td className="px-3 py-2.5 text-[#555]"><Blur>{file.identity || file.identityName || '—'}</Blur></td>
                 <td className="px-3 py-2.5"><StatusBadge status={file.status || 'PENDING'} /></td>
                 <td className="px-3 py-2.5 text-[#555]">
                   {file.queuedAt || file.createdAt ? new Date(file.queuedAt || file.createdAt).toLocaleString() : '—'}

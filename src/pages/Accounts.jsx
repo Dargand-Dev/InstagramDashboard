@@ -4,6 +4,7 @@ import { Trash2, Search, Users, Link, Pencil, X, ExternalLink } from 'lucide-rea
 import StatusBadge from '../components/StatusBadge'
 import { useApi, apiPut, apiDelete } from '../hooks/useApi'
 import AccountDailyViewsChart from '../components/AccountDailyViewsChart'
+import { Blur } from '../contexts/IncognitoContext'
 
 const STATUSES = ['ALL', 'ACTIVE', 'SUSPENDED', 'BANNED', 'ERROR']
 
@@ -17,12 +18,14 @@ function statusDotColor(status) {
   }
 }
 
-function DetailRow({ label, value, mono = false }) {
+function DetailRow({ label, value, mono = false, blur = false }) {
   return (
     <div className="flex justify-between items-center py-3 border-b border-[#141414] last:border-0">
       <span className="text-[#555] text-sm">{label}</span>
       {value || value === 0 ? (
-        <span className={`text-sm text-white ${mono ? 'font-mono' : ''}`}>{value}</span>
+        <span className={`text-sm text-white ${mono ? 'font-mono' : ''}`}>
+          {blur ? <Blur>{value}</Blur> : value}
+        </span>
       ) : (
         <span className="text-sm text-[#333] italic">---</span>
       )}
@@ -262,10 +265,10 @@ export default function Accounts() {
                 >
                   <div className="flex items-center gap-2.5">
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDotColor(account.status)}`} />
-                    <span className="text-sm font-semibold text-white truncate">{account.username}</span>
+                    <span className="text-sm font-semibold text-white truncate"><Blur>{account.username}</Blur></span>
                   </div>
                   <p className="text-xs text-[#444] mt-0.5 ml-[18px] truncate">
-                    {usernameToIdentity[account.username] && <span className="text-[#555] font-medium">{usernameToIdentity[account.username]} · </span>}
+                    {usernameToIdentity[account.username] && <span className="text-[#555] font-medium"><Blur>{usernameToIdentity[account.username]}</Blur> · </span>}
                     {postCounts[account.username] || account.postCount || 0} posts · {account.followerCount ?? 0} followers · {(account.viewsLast30Days ?? 0).toLocaleString()} views
                   </p>
                 </button>
@@ -292,12 +295,12 @@ export default function Accounts() {
                     {selectedAccount.username?.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-white">{selectedAccount.username}</h2>
+                    <h2 className="text-xl font-bold text-white"><Blur>{selectedAccount.username}</Blur></h2>
                     <div className="mt-1 flex items-center gap-2">
                       <StatusBadge status={selectedAccount.status} />
                       {usernameToIdentity[selectedAccount.username] && (
                         <span className="text-[11px] bg-[#111] border border-[#1a1a1a] px-2 py-0.5 rounded-md text-[#888]">
-                          {usernameToIdentity[selectedAccount.username]}
+                          <Blur>{usernameToIdentity[selectedAccount.username]}</Blur>
                         </span>
                       )}
                     </div>
@@ -392,7 +395,7 @@ export default function Accounts() {
                       className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 font-mono truncate max-w-[300px] transition-colors"
                     >
                       <ExternalLink size={12} className="flex-shrink-0" />
-                      {selectedAccount.storyLinkUrl}
+                      <Blur>{selectedAccount.storyLinkUrl}</Blur>
                     </a>
                     <button
                       onClick={() => openLinkEditor(selectedAccount.storyLinkUrl)}
@@ -428,23 +431,24 @@ export default function Accounts() {
                 <div className="flex justify-between items-center py-3 border-b border-[#141414]">
                   <span className="text-[#555] text-sm">Password</span>
                   {selectedAccount.password ? (
-                    <span className="text-sm text-white font-mono">{selectedAccount.password}</span>
+                    <span className="text-sm text-white font-mono"><Blur>{selectedAccount.password}</Blur></span>
                   ) : (
                     <span className="text-sm text-[#333] italic">no password</span>
                   )}
                 </div>
 
-                <DetailRow label="Identity" value={usernameToIdentity[selectedAccount.username]} />
-                <DetailRow label="Email" value={selectedAccount.email} />
-                <DetailRow label="Phone" value={selectedAccount.phone} mono />
+                <DetailRow label="Identity" value={usernameToIdentity[selectedAccount.username]} blur />
+                <DetailRow label="Email" value={selectedAccount.email} blur />
+                <DetailRow label="Phone" value={selectedAccount.phone} mono blur />
                 <DetailRow
                   label="2FA Secret"
                   value={selectedAccount.totpSecret ? '••••••' + selectedAccount.totpSecret.slice(-4) : null}
                   mono
+                  blur
                 />
-                <DetailRow label="Container" value={selectedAccount.craneContainer} mono />
-                <DetailRow label="Device UDID" value={selectedAccount.deviceUdid} mono />
-                <DetailRow label="Proxy Session" value={selectedAccount.proxySession} mono />
+                <DetailRow label="Container" value={selectedAccount.craneContainer} mono blur />
+                <DetailRow label="Device UDID" value={selectedAccount.deviceUdid} mono blur />
+                <DetailRow label="Proxy Session" value={selectedAccount.proxySession} mono blur />
                 <DetailRow
                   label="Created"
                   value={selectedAccount.createdAt ? new Date(selectedAccount.createdAt).toLocaleDateString() : null}

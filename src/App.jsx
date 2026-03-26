@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { IncognitoProvider } from './contexts/IncognitoContext'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import Accounts from './pages/Accounts'
@@ -11,19 +12,21 @@ import Analytics from './pages/Analytics'
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/accounts" element={<Accounts />} />
-          <Route path="/actions" element={<Actions />} />
-          <Route path="/activity" element={<Activity />} />
-          <Route path="/posting-runs" element={<PostingRuns />} />
-          <Route path="/creation-runs" element={<CreationRuns />} />
-          <Route path="/posting-history" element={<PostingHistory />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <IncognitoProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/accounts" element={<Accounts />} />
+            <Route path="/actions" element={<Actions />} />
+            <Route path="/activity" element={<Activity />} />
+            <Route path="/posting-runs" element={<PostingRuns />} />
+            <Route path="/creation-runs" element={<CreationRuns />} />
+            <Route path="/posting-history" element={<PostingHistory />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </IncognitoProvider>
   )
 }

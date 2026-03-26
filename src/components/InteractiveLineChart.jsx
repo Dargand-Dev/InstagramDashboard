@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 
 import { CHART_COLORS } from '../utils/chartColors'
+import { Blur, useIncognito } from '../contexts/IncognitoContext'
 
 const tooltipStyle = {
   contentStyle: { backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: 8, fontSize: 12 },
@@ -17,6 +18,30 @@ function formatNumber(n) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
   return n.toLocaleString()
+}
+
+function LineChartTooltip({ active, payload, label, isIncognito, colorMap, top15 }) {
+  if (!active || !payload?.length) return null
+  const items = payload.filter(p => p.value != null && p.value > 0).sort((a, b) => (b.value || 0) - (a.value || 0))
+  if (!items.length) return null
+  return (
+    <div style={{ backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
+      <div style={{ color: '#888', marginBottom: 4 }}>{label}</div>
+      {items.map(item => (
+        <div key={item.dataKey} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
+          <span style={{
+            width: 8, height: 8, borderRadius: '50%',
+            backgroundColor: item.dataKey === '__total' ? '#ffffff' : (colorMap?.[item.dataKey] || CHART_COLORS[top15.indexOf(item.dataKey) % CHART_COLORS.length]),
+            flexShrink: 0
+          }} />
+          <span style={{ color: '#ccc', filter: isIncognito && item.dataKey !== '__total' ? 'blur(5px)' : 'none' }}>
+            {item.dataKey === '__total' ? 'Total Fleet' : item.dataKey}
+          </span>
+          <span style={{ color: '#fff', marginLeft: 'auto', fontWeight: 600 }}>{formatNumber(item.value)}</span>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export default function InteractiveLineChart({ title, snapshots, dataKey, colorMap }) {
@@ -35,6 +60,7 @@ export default function InteractiveLineChart({ title, snapshots, dataKey, colorM
       .map(s => s.username)
   }, [snapshots, dataKey])
 
+  const { isIncognito } = useIncognito()
   const [selected, setSelected] = useState(null)
   const [showTotal, setShowTotal] = useState(false)
 
@@ -156,7 +182,7 @@ export default function InteractiveLineChart({ title, snapshots, dataKey, colorM
               style={active ? { borderColor: color, color: 'white' } : undefined}
             >
               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-              {username}
+              <Blur>{username}</Blur>
             </button>
           )
         })}
@@ -168,7 +194,7 @@ export default function InteractiveLineChart({ title, snapshots, dataKey, colorM
           <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" />
           <XAxis dataKey="date" tick={{ fill: '#555', fontSize: 10 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} interval="preserveStartEnd" angle={-30} textAnchor="end" height={45} />
           <YAxis tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
-          <Tooltip {...tooltipStyle} formatter={(v) => formatNumber(v)} />
+          <Tooltip content={<LineChartTooltip isIncognito={isIncognito} colorMap={colorMap} top15={top15} />} />
           <Line
             key="__total"
             type="monotone"

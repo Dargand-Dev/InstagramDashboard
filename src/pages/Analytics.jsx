@@ -215,18 +215,16 @@ export default function Analytics() {
     </th>
   )
 
-  // Custom tick renderers for incognito blur on SVG text
+  // Custom tick renderers that mask text in incognito mode
   const BlurredXTick = ({ x, y, payload }) => (
-    <text x={x} y={y} dy={14} textAnchor="middle" fill="#999" fontSize={11}
-      style={isIncognito ? { filter: 'blur(5px)', userSelect: 'none' } : undefined}>
-      {payload.value}
+    <text x={x} y={y} dy={14} textAnchor="middle" fill="#999" fontSize={11}>
+      {isIncognito ? '•••' : payload.value}
     </text>
   )
 
   const BlurredYTick = ({ x, y, payload }) => (
-    <text x={x} y={y} dx={-4} textAnchor="end" fill="#999" fontSize={11}
-      style={isIncognito ? { filter: 'blur(5px)', userSelect: 'none' } : undefined}>
-      {payload.value}
+    <text x={x} y={y} dx={-4} textAnchor="end" fill="#999" fontSize={11}>
+      {isIncognito ? '•••' : payload.value}
     </text>
   )
 

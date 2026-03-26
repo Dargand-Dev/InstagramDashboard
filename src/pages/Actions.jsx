@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Smartphone, UserPlus, Play, Rocket, Unlock, Loader2, CheckCircle, XCircle, AlertTriangle, Shield, Settings, Key, Video, Image, Clipboard, Container, RefreshCw, Trash2, X, Layers, ExternalLink } from 'lucide-react'
+import { Smartphone, UserPlus, Play, Rocket, Unlock, Loader2, CheckCircle, XCircle, AlertTriangle, Shield, Settings, Key, Video, Image, Clipboard, Container, RefreshCw, Trash2, X, Layers, ExternalLink, Search, Users, CheckSquare, Square } from 'lucide-react'
 import Card from '../components/Card'
 import { useApi, apiPost } from '../hooks/useApi'
 import { useIncognito } from '../contexts/IncognitoContext'
@@ -222,6 +222,9 @@ export default function Actions() {
   const [triggerLoading, setTriggerLoading] = useState(false)
   const [triggerResult, setTriggerResult] = useState(null)
   const [unlockLoading, setUnlockLoading] = useState(false)
+  const [selectiveMode, setSelectiveMode] = useState(false)
+  const [selectedUsernames, setSelectedUsernames] = useState(new Set())
+  const [accountSearch, setAccountSearch] = useState('')
 
   // Set default device when devices load (intentionally run-once)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -252,15 +255,17 @@ export default function Actions() {
     setLockLoading(true)
     try {
       const res = await fetch('/api/automation/lock-status')
-      if (res.status === 423) {
-        const body = await res.json().catch(() => ({}))
-        setLockStatus({ locked: true, ...body })
-      } else {
-        const body = await res.json().catch(() => ({}))
-        setLockStatus({ locked: false, ...body })
-      }
-    } catch { setLockStatus({ locked: false }) }
-    finally { setLockLoading(false) }
+      const body = await res.json().catch(() => ({}))
+      const status = res.status === 423
+        ? { locked: true, ...body }
+        : { locked: false, ...body }
+      setLockStatus(status)
+      return status
+    } catch {
+      const status = { locked: false }
+      setLockStatus(status)
+      return status
+    } finally { setLockLoading(false) }
   }
 
   useEffect(() => { checkLockStatus() }, [])
@@ -335,15 +340,44 @@ export default function Actions() {
     }
   }, [exDevice, exPort, selectedAccount, exParams])
 
+  // Accounts eligible for posting (active + scheduling enabled)
+  const schedulingAccounts = accountList.filter(a => a.status === 'ACTIVE' && a.schedulingEnabled)
+  const filteredSchedulingAccounts = schedulingAccounts.filter(a =>
+    a.username.toLowerCase().includes(accountSearch.toLowerCase())
+  )
+
+  function toggleUsername(username) {
+    setSelectedUsernames(prev => {
+      const next = new Set(prev)
+      next.has(username) ? next.delete(username) : next.add(username)
+      return next
+    })
+  }
+
+  function toggleAllFiltered() {
+    const allSelected = filteredSchedulingAccounts.every(a => selectedUsernames.has(a.username))
+    setSelectedUsernames(prev => {
+      const next = new Set(prev)
+      filteredSchedulingAccounts.forEach(a => allSelected ? next.delete(a.username) : next.add(a.username))
+      return next
+    })
+  }
+
   async function handleTrigger() {
-    await checkLockStatus()
-    if (lockStatus?.locked) return
+    const lock = await checkLockStatus()
+    if (lock?.locked) return
     setTriggerLoading(true)
     setTriggerResult(null)
     try {
-      const data = await apiPost('/api/automation/trigger', {})
+      const body = selectiveMode && selectedUsernames.size > 0
+        ? { usernames: [...selectedUsernames] }
+        : {}
+      const data = await apiPost('/api/automation/trigger', body)
       if (data.runId) saveWorkflowRun(data.runId, 'PostReel')
-      setTriggerResult({ type: 'success', message: 'Manual run triggered', runId: data.runId })
+      const label = selectiveMode && selectedUsernames.size > 0
+        ? `Manual run triggered for ${selectedUsernames.size} account(s)`
+        : 'Manual run triggered (all accounts)'
+      setTriggerResult({ type: 'success', message: label, runId: data.runId })
     } catch (err) {
       setTriggerResult({ type: 'error', message: err.message })
     } finally { setTriggerLoading(false) }
@@ -532,11 +566,89 @@ export default function Actions() {
               </button>
             </div>
           )}
+
+          {/* Account selection toggle */}
+          <div className="flex items-center gap-3 mb-3">
+            <button
+              onClick={() => { setSelectiveMode(false); setSelectedUsernames(new Set()) }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors border ${
+                !selectiveMode
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  : 'bg-transparent text-[#555] border-[#1a1a1a] hover:text-white hover:border-[#333]'
+              }`}
+            >
+              <Users size={13} />
+              All accounts
+            </button>
+            <button
+              onClick={() => setSelectiveMode(true)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors border ${
+                selectiveMode
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  : 'bg-transparent text-[#555] border-[#1a1a1a] hover:text-white hover:border-[#333]'
+              }`}
+            >
+              <CheckSquare size={13} />
+              Select accounts
+            </button>
+          </div>
+
+          {/* Account selector */}
+          {selectiveMode && (
+            <div className="mb-3 border border-[#1a1a1a] rounded-[10px] overflow-hidden">
+              {/* Search + controls */}
+              <div className="flex items-center gap-2 p-2.5 border-b border-[#1a1a1a] bg-[#080808]">
+                <div className="flex items-center gap-2 flex-1 bg-[#0a0a0a] border border-[#1a1a1a] rounded-md px-2.5 py-1.5">
+                  <Search size={13} className="text-[#333] shrink-0" />
+                  <input
+                    value={accountSearch}
+                    onChange={e => setAccountSearch(e.target.value)}
+                    placeholder="Search accounts..."
+                    className="bg-transparent text-white text-xs w-full focus:outline-none placeholder-[#333]"
+                  />
+                </div>
+                <button
+                  onClick={toggleAllFiltered}
+                  className="text-[10px] text-[#555] hover:text-white font-semibold uppercase tracking-wider whitespace-nowrap transition-colors px-2"
+                >
+                  {filteredSchedulingAccounts.length > 0 && filteredSchedulingAccounts.every(a => selectedUsernames.has(a.username))
+                    ? 'Deselect all' : 'Select all'}
+                </button>
+                <span className="text-[10px] text-[#555] font-mono whitespace-nowrap">
+                  {selectedUsernames.size}/{schedulingAccounts.length}
+                </span>
+              </div>
+              {/* Account list */}
+              <div className="max-h-52 overflow-y-auto">
+                {filteredSchedulingAccounts.length === 0 ? (
+                  <p className="text-[10px] text-[#333] p-3 text-center">No accounts found</p>
+                ) : (
+                  filteredSchedulingAccounts.map(a => (
+                    <button
+                      key={a.id}
+                      onClick={() => toggleUsername(a.username)}
+                      className="flex items-center gap-2.5 w-full px-3 py-2 text-left hover:bg-white/[0.02] transition-colors border-b border-[#0f0f0f] last:border-b-0"
+                    >
+                      {selectedUsernames.has(a.username)
+                        ? <CheckSquare size={14} className="text-emerald-400 shrink-0" />
+                        : <Square size={14} className="text-[#333] shrink-0" />}
+                      <span className={`text-xs font-medium ${selectedUsernames.has(a.username) ? 'text-white' : 'text-[#555]'} ${isIncognito ? 'incognito-blur' : ''}`}>
+                        {a.username}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-3">
-            <button onClick={handleTrigger} disabled={triggerLoading || lockStatus?.locked}
+            <button onClick={handleTrigger} disabled={triggerLoading || lockStatus?.locked || (selectiveMode && selectedUsernames.size === 0)}
               className="flex items-center gap-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-500/80 text-white rounded-md text-sm font-bold transition-colors disabled:opacity-40">
               {triggerLoading ? <Loader2 size={18} className="animate-spin" /> : <Rocket size={18} />}
-              {triggerLoading ? 'Triggering...' : 'Trigger Manual Run'}
+              {triggerLoading ? 'Triggering...' : selectiveMode && selectedUsernames.size > 0
+                ? `Trigger Run (${selectedUsernames.size} account${selectedUsernames.size > 1 ? 's' : ''})`
+                : 'Trigger Manual Run'}
             </button>
             <button onClick={checkLockStatus} disabled={lockLoading}
               className="text-[#333] hover:text-[#555] text-xs font-medium transition-colors">

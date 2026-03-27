@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ChevronDown, ChevronRight, AlertTriangle, Trash2, UserPlus, Send, Smartphone, RotateCw, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, AlertTriangle, Trash2, UserPlus, Send, Smartphone, RotateCw, Loader2, Camera } from 'lucide-react'
 import Card from '../components/Card'
 import StatusBadge from '../components/StatusBadge'
 import LogStreamCard, { formatDuration } from '../components/LogStreamCard'
 import { useApi } from '../hooks/useApi'
 import { Blur } from '../contexts/IncognitoContext'
+import ErrorDetailModal from '../components/ErrorDetailModal'
 
 const TABS = [
   { id: 'content', label: 'Content' },
@@ -72,8 +73,11 @@ export function RunsTab({ workflowFilter, onRetryFailed, retryLoading } = {}) {
       })
     : allRuns
   const [expandedId, setExpandedId] = useState(null)
+  const [errorModalDetail, setErrorModalDetail] = useState(null)
 
   return (
+    <>
+    {errorModalDetail && <ErrorDetailModal detail={errorModalDetail} onClose={() => setErrorModalDetail(null)} />}
     <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-[10px] overflow-hidden">
       <table className="w-full text-xs">
         <thead>
@@ -202,7 +206,14 @@ export function RunsTab({ workflowFilter, onRetryFailed, retryLoading } = {}) {
                                   </div>
                                   <div className="flex items-center gap-3">
                                     {detail.failureReason && (
-                                      <span className="text-red-400/70 truncate max-w-[300px]" title={detail.failureReason}>{detail.failureReason}</span>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setErrorModalDetail(detail) }}
+                                        title={detail.failureReason}
+                                        className="flex items-center gap-1.5 text-red-400/70 hover:text-red-400 transition-colors max-w-[300px]"
+                                      >
+                                        {detail.errorScreenshotPath && <Camera size={12} className="shrink-0 text-red-400/50" />}
+                                        <span className="truncate">{detail.failureReason}</span>
+                                      </button>
                                     )}
                                     {detail.completedSteps != null && detail.totalSteps != null && (
                                       <span className="text-[#555] font-mono">{detail.completedSteps}/{detail.totalSteps} steps</span>
@@ -227,6 +238,7 @@ export function RunsTab({ workflowFilter, onRetryFailed, retryLoading } = {}) {
         </tbody>
       </table>
     </div>
+    </>
   )
 }
 

@@ -9,6 +9,7 @@ import PostingHistory from './pages/PostingHistory'
 import PostingRuns from './pages/PostingRuns'
 import CreationRuns from './pages/CreationRuns'
 import Analytics from './pages/Analytics'
+import Queue from './pages/Queue'
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/actions" element={<Actions />} />
             <Route path="/activity" element={<Activity />} />
+            <Route path="/queue" element={<Queue />} />
             <Route path="/posting-runs" element={<PostingRuns />} />
             <Route path="/creation-runs" element={<CreationRuns />} />
             <Route path="/posting-history" element={<PostingHistory />} />

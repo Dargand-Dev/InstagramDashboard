@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, BarChart3, Users, Zap, Activity, BookOpen, Send, UserPlus, Menu } from 'lucide-react'
+import { LayoutDashboard, BarChart3, Users, Zap, Activity, BookOpen, Send, UserPlus, ListOrdered, Menu } from 'lucide-react'
 
 const links = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -8,6 +8,7 @@ const links = [
   { to: '/accounts', icon: Users, label: 'Accounts' },
   { to: '/actions', icon: Zap, label: 'Actions' },
   { to: '/activity', icon: Activity, label: 'Activity' },
+  { to: '/queue', icon: ListOrdered, label: 'File d\'attente' },
   { to: '/posting-runs', icon: Send, label: 'Posting Runs' },
   { to: '/creation-runs', icon: UserPlus, label: 'Creation Runs' },
   { to: '/posting-history', icon: BookOpen, label: 'Posting History' },

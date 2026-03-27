@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Loader2, CheckCircle, XCircle, SkipForward, Container, Radio, Trash2 } from 'lucide-react'
+import { Loader2, CheckCircle, XCircle, SkipForward, Container, Radio, Trash2, StopCircle, Ban } from 'lucide-react'
 import Card from './Card'
 import StatusBadge from './StatusBadge'
 import { useWorkflowLogs } from '../hooks/useWorkflowLogs'
@@ -11,6 +11,8 @@ export const STEP_ICON = {
   SKIPPED: <SkipForward size={12} className="text-[#555]" />,
   BATCH_PROGRESS: <Container size={12} className="text-orange-400" />,
   COMPLETE: <CheckCircle size={12} className="text-emerald-400" />,
+  STOPPING: <StopCircle size={12} className="animate-pulse text-orange-400" />,
+  CANCELLED: <Ban size={12} className="text-gray-400" />,
 }
 
 export function formatDuration(ms) {
@@ -23,8 +25,13 @@ export function formatDuration(ms) {
 }
 
 export function deriveOverallStatus(events, completed, connected) {
-  if (!completed) return connected ? 'RUNNING' : 'PENDING'
+  if (!completed) {
+    const hasStopping = events.some(e => e.status === 'STOPPING')
+    if (hasStopping) return 'STOPPING'
+    return connected ? 'RUNNING' : 'PENDING'
+  }
   const completeMsg = events.find(e => e.status === 'COMPLETE')?.message || ''
+  if (completeMsg.includes('CANCELLED')) return 'CANCELLED'
   if (completeMsg.includes('SUCCESS')) return 'SUCCESS'
   if (completeMsg.includes('ABORTED') || completeMsg.includes('FAILED') || completeMsg.includes('ERROR')) return 'FAILED'
   return 'PARTIAL'
@@ -36,6 +43,8 @@ export function WorkflowEventRow({ evt }) {
       evt.status === 'FAILED' ? 'bg-red-500/5 border border-red-500/10' :
       evt.status === 'BATCH_PROGRESS' ? 'bg-orange-500/5 border border-orange-500/10' :
       evt.status === 'COMPLETE' ? 'bg-emerald-500/5 border border-emerald-500/10' :
+      evt.status === 'STOPPING' ? 'bg-orange-500/5 border border-orange-500/10' :
+      evt.status === 'CANCELLED' ? 'bg-gray-500/5 border border-gray-500/10' :
       'bg-[#060606]'
     }`}>
       <div className="mt-0.5 shrink-0">{STEP_ICON[evt.status] || STEP_ICON.RUNNING}</div>

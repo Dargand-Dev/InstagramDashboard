@@ -8,6 +8,8 @@ const statusStyles = {
   PARTIAL: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
   ABORTED: 'bg-red-500/10 text-red-400 border-red-500/20',
   RUNNING: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  STOPPING: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+  CANCELLED: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
   ENABLED: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   DISABLED: 'bg-[#141414] text-[#555] border-[#1a1a1a]',
   CLEAN: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',

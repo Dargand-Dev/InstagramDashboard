@@ -4,12 +4,12 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell
 } from 'recharts'
-import { Users, Eye, UserCheck, Trophy, Calendar, ExternalLink } from 'lucide-react'
+import { Users, Eye, UserCheck, Trophy, Calendar, Link2, Link2Off, X } from 'lucide-react'
 import Card from '../components/Card'
 import InteractiveLineChart from '../components/InteractiveLineChart'
 import DailyViewsBarChart from '../components/DailyViewsBarChart'
 import DateRangePicker from '../components/DateRangePicker'
-import { useApi } from '../hooks/useApi'
+import { useApi, apiPut } from '../hooks/useApi'
 import { CHART_COLORS, buildColorMap } from '../utils/chartColors'
 import { Blur, useIncognito } from '../contexts/IncognitoContext'
 
@@ -58,6 +58,8 @@ export default function Analytics() {
   const [showCalendar, setShowCalendar] = useState(false)
   const [sortCol, setSortCol] = useState('followers')
   const [sortAsc, setSortAsc] = useState(false)
+  const [editingLinkUser, setEditingLinkUser] = useState(null)
+  const [linkInputValue, setLinkInputValue] = useState('')
 
   const currentPeriod = PERIODS.find(p => p.key === period)
 
@@ -70,7 +72,7 @@ export default function Analytics() {
   const { data: snapData, loading: snapLoading } = useApi(`/api/stats/snapshots?days=${apiDays}`)
   const { data: allSnapData, loading: allSnapLoading } = useApi('/api/stats/snapshots?days=9999')
   const { data: overview, loading: overviewLoading } = useApi(`/api/stats/overview?days=${apiDays}`)
-  const { data: accountsData, loading: accountsLoading } = useApi('/api/accounts')
+  const { data: accountsData, loading: accountsLoading, refetch: refetchAccounts } = useApi('/api/accounts')
 
   const navigate = useNavigate()
   const { isIncognito } = useIncognito()
@@ -131,7 +133,18 @@ export default function Analytics() {
     if (!Array.isArray(accounts)) return {}
     const map = {}
     for (const acc of accounts) {
-      if (acc.username && acc.link) map[acc.username] = acc.link
+      if (acc.username && acc.storyLinkUrl) map[acc.username] = acc.storyLinkUrl
+    }
+    return map
+  }, [accountsData])
+
+  // Map of username -> account (for link editing)
+  const accountsByUsername = useMemo(() => {
+    const accounts = accountsData?.accounts || accountsData || []
+    if (!Array.isArray(accounts)) return {}
+    const map = {}
+    for (const acc of accounts) {
+      if (acc.username) map[acc.username] = acc
     }
     return map
   }, [accountsData])
@@ -200,6 +213,25 @@ export default function Analytics() {
     } else {
       setSortCol(col)
       setSortAsc(false)
+    }
+  }
+
+  function openLinkEditor(username, e) {
+    e.stopPropagation()
+    const acc = accountsByUsername[username]
+    setLinkInputValue(acc?.storyLinkUrl || 'https://getmysocial.com/')
+    setEditingLinkUser(username)
+  }
+
+  async function handleSaveLink(username) {
+    const acc = accountsByUsername[username]
+    if (!acc) return
+    try {
+      await apiPut(`/api/accounts/${acc.id}`, { ...acc, storyLinkUrl: linkInputValue || null })
+      setEditingLinkUser(null)
+      refetchAccounts()
+    } catch (err) {
+      alert('Failed to update link: ' + err.message)
     }
   }
 
@@ -502,7 +534,8 @@ export default function Analytics() {
                 ) : (
                   sortedTableData.map((row, i) => {
                     const views = allTimeViews[row.username] || 0
-                    const link = accountLinks[row.username]
+                    const hasLink = !!accountLinks[row.username]
+                    const showMissing = !hasLink && views >= 10000
                     return (
                       <tr
                         key={row.username || i}
@@ -512,16 +545,23 @@ export default function Analytics() {
                         <td className="px-3 py-2.5 text-white font-medium">
                           <span className="inline-flex items-center gap-1.5">
                             <Blur>{row.username}</Blur>
-                            {link && (
-                              <a
-                                href={link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[#555] hover:text-blue-400 transition-colors"
-                                onClick={e => e.stopPropagation()}
+                            {hasLink && (
+                              <button
+                                onClick={e => openLinkEditor(row.username, e)}
+                                className="text-emerald-500 hover:text-emerald-400 transition-colors"
+                                title="Has link"
                               >
-                                <ExternalLink size={12} />
-                              </a>
+                                <Link2 size={12} />
+                              </button>
+                            )}
+                            {showMissing && (
+                              <button
+                                onClick={e => openLinkEditor(row.username, e)}
+                                className="text-red-500 hover:text-red-400 transition-colors"
+                                title="No link — click to add"
+                              >
+                                <Link2Off size={12} />
+                              </button>
                             )}
                           </span>
                         </td>
@@ -540,6 +580,53 @@ export default function Analytics() {
           </div>
         </Card>
       </div>
+
+      {/* Link editing modal */}
+      {editingLinkUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setEditingLinkUser(null)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative bg-[#111] border border-[#222] rounded-xl p-6 w-full max-w-md shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setEditingLinkUser(null)}
+              className="absolute top-3 right-3 text-[#555] hover:text-white transition-colors"
+            >
+              <X size={16} />
+            </button>
+
+            <h3 className="text-white font-bold text-sm mb-1">Story Link</h3>
+            <p className="text-[#555] text-xs mb-4">
+              <Blur>{editingLinkUser}</Blur>
+            </p>
+
+            <input
+              type="text"
+              value={linkInputValue}
+              onChange={e => setLinkInputValue(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSaveLink(editingLinkUser); if (e.key === 'Escape') setEditingLinkUser(null) }}
+              autoFocus
+              className="w-full bg-[#0a0a0a] border border-[#333] rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500 transition-colors"
+            />
+
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setEditingLinkUser(null)}
+                className="px-3 py-1.5 text-xs text-[#555] hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleSaveLink(editingLinkUser)}
+                className="px-4 py-1.5 text-xs bg-white text-black font-semibold rounded-lg hover:bg-white/90 transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

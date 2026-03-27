@@ -1,6 +1,6 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useMemo, Fragment } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ChevronDown, ChevronRight, AlertTriangle, Trash2, UserPlus, Send } from 'lucide-react'
+import { ChevronDown, ChevronRight, AlertTriangle, Trash2, UserPlus, Send, Smartphone } from 'lucide-react'
 import Card from '../components/Card'
 import StatusBadge from '../components/StatusBadge'
 import LogStreamCard, { formatDuration } from '../components/LogStreamCard'
@@ -54,6 +54,14 @@ function getRunType(run) {
 
 export function RunsTab({ workflowFilter } = {}) {
   const { data: runsData, loading } = useApi('/api/automation/runs?limit=50')
+  const { data: devicesData } = useApi('/api/devices')
+  const deviceMap = useMemo(() => {
+    const map = {}
+    if (Array.isArray(devicesData)) {
+      devicesData.forEach(d => { map[d.udid] = d.name })
+    }
+    return map
+  }, [devicesData])
   const allRuns = runsData?.runs || []
   const runs = workflowFilter
     ? allRuns.filter(r => {
@@ -73,6 +81,7 @@ export function RunsTab({ workflowFilter } = {}) {
             <th className="px-3 py-3 w-8" />
             <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Date</th>
             <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Type</th>
+            <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Device</th>
             <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Trigger</th>
             <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Duration</th>
             <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Status</th>
@@ -81,9 +90,9 @@ export function RunsTab({ workflowFilter } = {}) {
         </thead>
         <tbody>
           {loading ? (
-            <tr><td colSpan={7} className="px-3 py-8 text-center text-[#333]">Loading...</td></tr>
+            <tr><td colSpan={8} className="px-3 py-8 text-center text-[#333]">Loading...</td></tr>
           ) : !runs.length ? (
-            <tr><td colSpan={7} className="px-3 py-8 text-center text-[#333]">No runs found</td></tr>
+            <tr><td colSpan={8} className="px-3 py-8 text-center text-[#333]">No runs found</td></tr>
           ) : (
             runs.map((run, idx) => {
               const id = run.id || idx
@@ -113,6 +122,19 @@ export function RunsTab({ workflowFilter } = {}) {
                       })()}
                     </td>
                     <td className="px-3 py-2.5">
+                      {(() => {
+                        const udid = run.deviceUdid || (typeof run.device === 'string' ? run.device : null)
+                        if (!udid) return <span className="text-[#333] text-[10px]">—</span>
+                        const name = deviceMap[udid] || udid.slice(-8)
+                        return (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-[#555]">
+                            <Smartphone size={10} className="text-[#333]" />
+                            <Blur>{name}</Blur>
+                          </span>
+                        )
+                      })()}
+                    </td>
+                    <td className="px-3 py-2.5">
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
                         run.trigger === 'manual'
                           ? 'bg-blue-500/8 text-blue-400 border-blue-500/15'
@@ -131,7 +153,7 @@ export function RunsTab({ workflowFilter } = {}) {
                   </tr>
                   {isExpanded && (
                     <tr className="border-b border-[#141414]">
-                      <td colSpan={7} className="px-6 py-3 bg-[#050505]">
+                      <td colSpan={8} className="px-6 py-3 bg-[#050505]">
                         {(() => {
                           const results = Array.isArray(run.accountResults) ? run.accountResults
                             : Array.isArray(run.details) ? run.details : []
@@ -143,6 +165,12 @@ export function RunsTab({ workflowFilter } = {}) {
                               {results.map((detail, di) => (
                                 <div key={di} className="flex items-center justify-between text-xs">
                                   <div className="flex items-center gap-2">
+                                    {(detail.containerName || detail.container) && (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-mono text-orange-400/80 bg-orange-500/5 border border-orange-500/15 px-1.5 py-0.5 rounded">
+                                        <span className="text-orange-400/50">▣</span>
+                                        <Blur>{detail.containerName || detail.container}</Blur>
+                                      </span>
+                                    )}
                                     <span className="text-white font-medium"><Blur>{detail.username || detail.account || `Account ${di + 1}`}</Blur></span>
                                     {detail.identityId && (
                                       <span className="text-[#333] text-[10px]"><Blur>{detail.identityId}</Blur></span>

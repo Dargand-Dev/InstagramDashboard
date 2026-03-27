@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ChevronDown, ChevronRight, AlertTriangle, Trash2, UserPlus, Send, Smartphone } from 'lucide-react'
+import { ChevronDown, ChevronRight, AlertTriangle, Trash2, UserPlus, Send, Smartphone, RotateCw, Loader2 } from 'lucide-react'
 import Card from '../components/Card'
 import StatusBadge from '../components/StatusBadge'
 import LogStreamCard, { formatDuration } from '../components/LogStreamCard'
@@ -52,7 +52,7 @@ function getRunType(run) {
   return DEFAULT_RUN_TYPE
 }
 
-export function RunsTab({ workflowFilter } = {}) {
+export function RunsTab({ workflowFilter, onRetryFailed, retryLoading } = {}) {
   const { data: runsData, loading } = useApi('/api/automation/runs?limit=50')
   const { data: devicesData } = useApi('/api/devices')
   const deviceMap = useMemo(() => {
@@ -86,13 +86,14 @@ export function RunsTab({ workflowFilter } = {}) {
             <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Duration</th>
             <th className="px-3 py-3 text-left label-upper !text-[10px] !mb-0">Status</th>
             <th className="px-3 py-3 text-right label-upper !text-[10px] !mb-0">Results</th>
+            {onRetryFailed && <th className="px-3 py-3 w-8" />}
           </tr>
         </thead>
         <tbody>
           {loading ? (
-            <tr><td colSpan={8} className="px-3 py-8 text-center text-[#333]">Loading...</td></tr>
+            <tr><td colSpan={onRetryFailed ? 9 : 8} className="px-3 py-8 text-center text-[#333]">Loading...</td></tr>
           ) : !runs.length ? (
-            <tr><td colSpan={8} className="px-3 py-8 text-center text-[#333]">No runs found</td></tr>
+            <tr><td colSpan={onRetryFailed ? 9 : 8} className="px-3 py-8 text-center text-[#333]">No runs found</td></tr>
           ) : (
             runs.map((run, idx) => {
               const id = run.id || idx
@@ -150,10 +151,33 @@ export function RunsTab({ workflowFilter } = {}) {
                       <span className="text-[#333]"> / </span>
                       <span className="text-red-400">{run.failureCount || 0}</span>
                     </td>
+                    {onRetryFailed && (() => {
+                      const status = deriveRunStatus(run)
+                      if (status !== 'PARTIAL' && status !== 'FAILED') return <td />
+                      const results = Array.isArray(run.accountResults) ? run.accountResults
+                        : Array.isArray(run.details) ? run.details : []
+                      const failedUsernames = results
+                        .filter(d => ['FAILED', 'ERROR', 'ABORTED'].includes(d.status))
+                        .map(d => d.username || d.account)
+                        .filter(Boolean)
+                      if (!failedUsernames.length) return <td />
+                      return (
+                        <td className="px-2 py-2.5">
+                          <button
+                            onClick={e => { e.stopPropagation(); onRetryFailed(run, failedUsernames) }}
+                            disabled={retryLoading}
+                            className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-md border bg-amber-500/8 text-amber-400 border-amber-500/15 hover:bg-amber-500/15 transition-colors disabled:opacity-40"
+                          >
+                            {retryLoading ? <Loader2 size={10} className="animate-spin" /> : <RotateCw size={10} />}
+                            Retry ({failedUsernames.length})
+                          </button>
+                        </td>
+                      )
+                    })()}
                   </tr>
                   {isExpanded && (
                     <tr className="border-b border-[#141414]">
-                      <td colSpan={8} className="px-6 py-3 bg-[#050505]">
+                      <td colSpan={onRetryFailed ? 9 : 8} className="px-6 py-3 bg-[#050505]">
                         {(() => {
                           const results = Array.isArray(run.accountResults) ? run.accountResults
                             : Array.isArray(run.details) ? run.details : []

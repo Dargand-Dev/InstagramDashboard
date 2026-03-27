@@ -232,7 +232,7 @@ export default function Accounts() {
   async function saveEdits() {
     if (!selectedAccount) return
     try {
-      await apiPut(`/api/accounts/${selectedAccount.id}`, editValues)
+      await apiPut(`/api/accounts/${selectedAccount.id}`, { ...selectedAccount, ...editValues })
       setEditing(false)
       refetch()
     } catch (err) {

@@ -6,7 +6,7 @@ import { useWorkflowLogs } from '../hooks/useWorkflowLogs'
 import { WorkflowEventRow, deriveOverallStatus } from './LogStreamCard'
 import { apiPost } from '../hooks/useApi'
 
-function LiveRunStream({ runId, workflowName }) {
+function LiveRunStream({ runId, workflowName, deviceUdid }) {
   const { events, connected, completed } = useWorkflowLogs(runId)
   const scrollRef = useRef(null)
   const [stopping, setStopping] = useState(false)
@@ -55,6 +55,11 @@ function LiveRunStream({ runId, workflowName }) {
         <div className="flex items-center gap-2">
           {connected && !completed && <Radio size={10} className="text-blue-400 animate-pulse" />}
           <h3 className="text-white font-bold text-sm">{workflowName}</h3>
+          {deviceUdid && (
+            <span className="text-[10px] text-blue-400/60 font-mono">
+              {deviceUdid.length > 16 ? deviceUdid.slice(0, 8) + '…' + deviceUdid.slice(-8) : deviceUdid}
+            </span>
+          )}
           <span className="text-[10px] text-[#333] font-mono">{runId}</span>
         </div>
         <div className="flex items-center gap-3">
@@ -128,7 +133,7 @@ export default function LiveExecutionPanel({ activeRuns }) {
       <span className="label-upper block mb-3">Live Execution</span>
       <div className="space-y-3">
         {activeRuns.map(run => (
-          <LiveRunStream key={run.runId} runId={run.runId} workflowName={run.workflowName} />
+          <LiveRunStream key={run.runId} runId={run.runId} workflowName={run.workflowName} deviceUdid={run.deviceUdid} />
         ))}
       </div>
     </div>

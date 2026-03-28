@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { Play, Loader2, Settings, Key, Video, Image, UserPlus, Shield, Smartphone, Container, RefreshCw, Trash2, Clipboard, MoreHorizontal, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuGroup, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -177,11 +177,9 @@ export default function QuickActionsDropdown({ devices, accounts, actionsList })
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5">
-            <MoreHorizontal size={14} />
-            Quick Actions
-          </Button>
+        <DropdownMenuTrigger className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 h-8 text-xs font-medium text-foreground shadow-xs hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer">
+          <MoreHorizontal size={14} />
+          Quick Actions
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
           {/* Device & Account selectors */}
@@ -215,7 +213,7 @@ export default function QuickActionsDropdown({ devices, accounts, actionsList })
           <DropdownMenuSeparator />
 
           {Object.entries(groups).map(([group, actions]) => (
-            <div key={group}>
+            <DropdownMenuGroup key={group}>
               <DropdownMenuLabel className="text-[10px] uppercase tracking-wider">{group}</DropdownMenuLabel>
               {actions.map((action) => {
                 const ActionIcon = action.icon
@@ -238,7 +236,7 @@ export default function QuickActionsDropdown({ devices, accounts, actionsList })
                   </DropdownMenuItem>
                 )
               })}
-            </div>
+            </DropdownMenuGroup>
           ))}
 
           {result && (

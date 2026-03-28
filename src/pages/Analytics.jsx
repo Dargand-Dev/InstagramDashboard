@@ -69,10 +69,10 @@ export default function Analytics() {
 
   const apiDays = period === 'custom' ? (customDays != null ? customDays + 30 : 9999) : currentPeriod?.days ?? 9999
 
-  const { data: snapData, loading: snapLoading } = useApi(`/api/stats/snapshots?days=${apiDays}`)
-  const { data: allSnapData, loading: allSnapLoading } = useApi('/api/stats/snapshots?days=9999')
-  const { data: overview, loading: overviewLoading } = useApi(`/api/stats/overview?days=${apiDays}`)
-  const { data: accountsData, loading: accountsLoading, refetch: refetchAccounts } = useApi('/api/accounts')
+  const { data: snapData, loading: snapLoading } = useApi(`/api/stats/snapshots?days=${apiDays}`, { pollInterval: 30_000 })
+  const { data: allSnapData, loading: allSnapLoading } = useApi('/api/stats/snapshots?days=9999', { pollInterval: 30_000 })
+  const { data: overview, loading: overviewLoading } = useApi(`/api/stats/overview?days=${apiDays}`, { pollInterval: 30_000 })
+  const { data: accountsData, loading: accountsLoading, refetch: refetchAccounts } = useApi('/api/accounts', { pollInterval: 30_000 })
 
   const navigate = useNavigate()
   const { isIncognito } = useIncognito()

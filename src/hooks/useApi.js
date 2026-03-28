@@ -1,16 +1,20 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 export function useApi(url, options = {}) {
-  const { autoFetch = true, initialData = null } = options
+  const { autoFetch = true, initialData = null, pollInterval = null } = options
   const [data, setData] = useState(initialData)
   const [loading, setLoading] = useState(autoFetch)
   const [error, setError] = useState(null)
+  const prevJsonRef = useRef(null)
 
   const fetchData = useCallback(async (fetchOptions = {}) => {
-    setLoading(true)
-    setError(null)
+    const { _poll, ...rest } = fetchOptions
+    if (!_poll) {
+      setLoading(true)
+      setError(null)
+    }
     try {
-      const res = await fetch(url, fetchOptions)
+      const res = await fetch(url, rest)
       if (!res.ok) {
         if (res.status === 423) {
           const body = await res.json().catch(() => ({}))
@@ -20,19 +24,49 @@ export function useApi(url, options = {}) {
         throw new Error(`${res.status} ${res.statusText}`)
       }
       const json = await res.json()
-      setData(json)
+      if (_poll) {
+        const jsonStr = JSON.stringify(json)
+        if (jsonStr !== prevJsonRef.current) {
+          prevJsonRef.current = jsonStr
+          setData(json)
+        }
+      } else {
+        prevJsonRef.current = JSON.stringify(json)
+        setData(json)
+      }
       return json
     } catch (err) {
-      setError(err.message)
+      if (err.name === 'AbortError') return null
+      if (!_poll) setError(err.message)
       return null
     } finally {
-      setLoading(false)
+      if (!_poll) setLoading(false)
     }
   }, [url])
 
   useEffect(() => {
-    if (autoFetch) fetchData()
-  }, [autoFetch, fetchData])
+    prevJsonRef.current = null
+  }, [url])
+
+  useEffect(() => {
+    let cancelled = false
+    const controller = new AbortController()
+
+    if (autoFetch) fetchData({ signal: controller.signal })
+
+    let interval
+    if (pollInterval && autoFetch) {
+      interval = setInterval(() => {
+        if (!cancelled) fetchData({ _poll: true, signal: controller.signal })
+      }, pollInterval)
+    }
+
+    return () => {
+      cancelled = true
+      controller.abort()
+      if (interval) clearInterval(interval)
+    }
+  }, [autoFetch, fetchData, pollInterval])
 
   return { data, loading, error, refetch: fetchData }
 }

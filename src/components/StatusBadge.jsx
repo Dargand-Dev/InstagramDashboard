@@ -2,7 +2,7 @@ const statusStyles = {
   ACTIVE: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   SUSPENDED: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
   BANNED: 'bg-red-500/10 text-red-400 border-red-500/20',
-  ERROR: 'bg-red-500/10 text-red-400 border-red-500/20',
+  ERROR: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
   SUCCESS: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   FAILED: 'bg-red-500/10 text-red-400 border-red-500/20',
   PARTIAL: 'bg-amber-500/10 text-amber-400 border-amber-500/20',

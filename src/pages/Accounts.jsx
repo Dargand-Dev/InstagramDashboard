@@ -13,7 +13,7 @@ function statusDotColor(status) {
     case 'ACTIVE': return 'bg-emerald-500'
     case 'BANNED': return 'bg-red-500'
     case 'SUSPENDED': return 'bg-amber-500'
-    case 'ERROR': return 'bg-red-500'
+    case 'ERROR': return 'bg-orange-500'
     default: return 'bg-gray-500'
   }
 }

@@ -1,5 +1,6 @@
 import { Outlet, useLocation, Link } from 'react-router-dom'
 import { useState } from 'react'
+import { useWebSocket } from '@/hooks/useWebSocket'
 import {
   LayoutDashboard,
   Zap,
@@ -131,7 +132,7 @@ function NavItem({ item, collapsed, isActive }) {
   return content
 }
 
-function SidebarContent({ collapsed, setCollapsed }) {
+function SidebarContent({ collapsed, setCollapsed, wsStatus }) {
   const location = useLocation()
   const logout = useAuthStore((s) => s.logout)
   const user = useAuthStore((s) => s.user)
@@ -170,6 +171,20 @@ function SidebarContent({ collapsed, setCollapsed }) {
 
       {/* Footer */}
       <div className={cn('border-t border-[#1a1a1a] p-3 shrink-0', collapsed && 'px-2')}>
+        {/* WebSocket status */}
+        <div className={cn('flex items-center gap-2 mb-2', collapsed && 'justify-center')}>
+          <span className={cn(
+            'w-2 h-2 rounded-full shrink-0',
+            wsStatus === 'CONNECTED' ? 'bg-[#22C55E]' :
+            wsStatus === 'CONNECTING' ? 'bg-[#F59E0B] animate-pulse' :
+            'bg-[#EF4444]'
+          )} />
+          {!collapsed && (
+            <span className="text-[10px] text-[#52525B]">
+              {wsStatus === 'CONNECTED' ? 'Live' : wsStatus === 'CONNECTING' ? 'Connecting' : 'Offline'}
+            </span>
+          )}
+        </div>
         <div className={cn('flex items-center gap-3', collapsed && 'justify-center')}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -207,6 +222,7 @@ export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
   const unreadCount = useNotificationStore((s) => s.unreadCount)
+  const { status: wsStatus } = useWebSocket()
 
   // Find current page info for breadcrumb
   const currentSection = NAV_SECTIONS.find((s) =>
@@ -228,11 +244,12 @@ export default function AppLayout() {
           collapsed ? 'w-[60px]' : 'w-[240px]'
         )}
       >
-        <SidebarContent collapsed={collapsed} setCollapsed={setCollapsed} />
+        <SidebarContent collapsed={collapsed} setCollapsed={setCollapsed} wsStatus={wsStatus} />
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="absolute top-3.5 hidden lg:flex items-center justify-center w-5 h-5 rounded-full border border-[#1a1a1a] bg-[#0A0A0A] hover:bg-[#111111] transition-colors duration-150 z-10"
           style={{ left: collapsed ? 48 : 228 }}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           <ChevronLeft className={cn('w-3 h-3 text-[#52525B] transition-transform duration-200', collapsed && 'rotate-180')} />
         </button>
@@ -245,7 +262,7 @@ export default function AppLayout() {
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <SidebarContent collapsed={false} setCollapsed={() => {}} />
+        <SidebarContent collapsed={false} setCollapsed={() => {}} wsStatus={wsStatus} />
       </aside>
 
       {/* Main */}
@@ -258,6 +275,7 @@ export default function AppLayout() {
               size="icon"
               className="lg:hidden text-[#A1A1AA] hover:text-[#FAFAFA] h-8 w-8"
               onClick={() => setMobileOpen(true)}
+              aria-label="Open menu"
             >
               <Menu className="w-4 h-4" />
             </Button>
@@ -287,11 +305,12 @@ export default function AppLayout() {
               size="icon"
               className="sm:hidden h-8 w-8 text-[#A1A1AA]"
               onClick={() => setCmdOpen(true)}
+              aria-label="Search"
             >
               <Search className="w-4 h-4" />
             </Button>
             <Link to="/notifications">
-              <Button variant="ghost" size="icon" className="relative h-8 w-8 text-[#A1A1AA] hover:text-[#FAFAFA]">
+              <Button variant="ghost" size="icon" className="relative h-8 w-8 text-[#A1A1AA] hover:text-[#FAFAFA]" aria-label="Notifications">
                 <Bell className="w-4 h-4" />
                 {unreadCount > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#EF4444] rounded-full text-[10px] text-white flex items-center justify-center">

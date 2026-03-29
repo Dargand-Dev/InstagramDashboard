@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   CommandDialog,
   CommandEmpty,
@@ -28,6 +29,7 @@ import {
   Upload,
 } from 'lucide-react'
 import { apiGet } from '@/lib/api'
+import { toast } from 'sonner'
 
 const PAGES = [
   { label: 'Dashboard', path: '/', icon: LayoutDashboard },
@@ -51,11 +53,18 @@ const ACTIONS = [
   { label: 'Start Story Posting Run', icon: Play, action: 'post-stories' },
 ]
 
-const RECENT_KEY = 'cmd_recent_searches'
-
 export default function CommandPalette({ open, onOpenChange }) {
   const navigate = useNavigate()
-  const [accounts, setAccounts] = useState([])
+
+  const { data: accountsData } = useQuery({
+    queryKey: ['accounts-search'],
+    queryFn: () => apiGet('/api/accounts'),
+    enabled: open,
+    staleTime: 30000,
+    meta: { silent: true },
+  })
+
+  const accounts = ((accountsData?.data || accountsData || []).slice(0, 50))
 
   // Keyboard shortcut
   useEffect(() => {
@@ -68,14 +77,6 @@ export default function CommandPalette({ open, onOpenChange }) {
     document.addEventListener('keydown', down)
     return () => document.removeEventListener('keydown', down)
   }, [onOpenChange])
-
-  // Fetch accounts for search
-  useEffect(() => {
-    if (!open) return
-    apiGet('/api/accounts')
-      .then((res) => setAccounts((res.data || res || []).slice(0, 50)))
-      .catch(() => {})
-  }, [open])
 
   const runCommand = useCallback(
     (callback) => {

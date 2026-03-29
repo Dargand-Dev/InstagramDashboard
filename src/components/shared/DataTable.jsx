@@ -72,6 +72,7 @@ export default function DataTable({
         const selectedRows = Object.keys(next)
           .filter((k) => next[k])
           .map((k) => data[parseInt(k)])
+          .filter(Boolean)
         onSelectionChange(selectedRows)
       }
     },
@@ -171,6 +172,7 @@ export default function DataTable({
               className="h-8 w-8 text-[#A1A1AA]"
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
+              aria-label="Previous page"
             >
               <ChevronLeft className="w-4 h-4" />
             </Button>
@@ -183,6 +185,7 @@ export default function DataTable({
               className="h-8 w-8 text-[#A1A1AA]"
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
+              aria-label="Next page"
             >
               <ChevronRight className="w-4 h-4" />
             </Button>

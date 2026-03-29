@@ -94,6 +94,7 @@ function NotificationRow({ notification, onMarkRead, onDelete }) {
             size="icon"
             className="w-6 h-6 text-[#52525B] hover:text-[#A1A1AA]"
             onClick={(e) => { e.stopPropagation(); onMarkRead(notification.id) }}
+            aria-label="Mark as read"
           >
             <CheckCheck className="w-3 h-3" />
           </Button>
@@ -103,6 +104,7 @@ function NotificationRow({ notification, onMarkRead, onDelete }) {
           size="icon"
           className="w-6 h-6 text-[#52525B] hover:text-[#EF4444]"
           onClick={(e) => { e.stopPropagation(); onDelete(notification.id) }}
+          aria-label="Delete notification"
         >
           <Trash2 className="w-3 h-3" />
         </Button>
@@ -137,12 +139,12 @@ export default function Notifications() {
 
   const handleMarkRead = (id) => {
     markRead(id)
-    apiPut(`/api/notifications/${id}/read`).catch(() => {})
+    apiPut(`/api/notifications/${id}/read`).catch(() => toast.error('Failed to mark as read'))
   }
 
   const handleMarkAllRead = () => {
     markAllRead()
-    apiPut('/api/notifications/read-all').catch(() => {})
+    apiPut('/api/notifications/read-all').catch(() => toast.error('Action failed'))
   }
 
   const handleDelete = (id) => {
@@ -152,7 +154,7 @@ export default function Notifications() {
         ? Math.max(0, state.unreadCount - 1)
         : state.unreadCount,
     }))
-    apiDelete(`/api/notifications/${id}`).catch(() => {})
+    apiDelete(`/api/notifications/${id}`).catch(() => toast.error('Failed to delete notification'))
   }
 
   const filtered = useMemo(() => {

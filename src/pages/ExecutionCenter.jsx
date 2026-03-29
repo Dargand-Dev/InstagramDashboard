@@ -231,6 +231,7 @@ function ExecutionCard({ run, onStopGraceful, onKill, wsSubscribe, wsConnected }
               size="icon"
               className="h-8 w-8 text-[#52525B]"
               onClick={() => setExpanded(!expanded)}
+              aria-label={expanded ? 'Collapse details' : 'Expand details'}
             >
               {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </Button>

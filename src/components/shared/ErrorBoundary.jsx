@@ -13,6 +13,10 @@ export default class ErrorBoundary extends Component {
     return { hasError: true, error }
   }
 
+  componentDidCatch(error, info) {
+    console.error('UI Error:', error, info)
+  }
+
   render() {
     if (this.state.hasError) {
       return (

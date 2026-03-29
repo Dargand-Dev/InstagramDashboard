@@ -23,6 +23,7 @@ const Analytics = lazy(() => import('@/pages/Analytics'))
 const PostingHistory = lazy(() => import('@/pages/PostingHistory'))
 const Schedule = lazy(() => import('@/pages/Schedule'))
 const Settings = lazy(() => import('@/pages/Settings'))
+const NotFound = lazy(() => import('@/pages/NotFound'))
 
 function LazyPage({ children }) {
   return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
@@ -56,6 +57,7 @@ export default function App() {
                 <Route path="/posting-history" element={<LazyPage><PostingHistory /></LazyPage>} />
                 <Route path="/schedule" element={<LazyPage><Schedule /></LazyPage>} />
                 <Route path="/settings" element={<LazyPage><Settings /></LazyPage>} />
+                <Route path="*" element={<LazyPage><NotFound /></LazyPage>} />
               </Route>
             </Routes>
           </ErrorBoundary>

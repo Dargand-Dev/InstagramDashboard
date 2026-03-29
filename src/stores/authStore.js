@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { queryClient } from '@/lib/queryClient'
 
 const TOKEN_KEY = 'ig_auth_token'
 const USER_KEY = 'ig_auth_user'
@@ -30,6 +31,7 @@ export const useAuthStore = create((set, get) => ({
   logout: () => {
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
+    queryClient.clear()
     set({ token: null, user: null, isAuthenticated: false })
   },
 

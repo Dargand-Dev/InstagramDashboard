@@ -16,6 +16,7 @@ export function useWebSocket() {
   const clientRef = useRef(null)
   const subscriptionsRef = useRef(new Map())
   const reconnectDelayRef = useRef(1000)
+  const reconnectTimeoutRef = useRef(null)
 
   const token = useAuthStore((s) => s.token)
 
@@ -46,7 +47,7 @@ export function useWebSocket() {
       onStompError: () => {
         setStatus(CONNECTION_STATUS.DISCONNECTED)
         // Exponential backoff reconnect
-        setTimeout(() => {
+        reconnectTimeoutRef.current = setTimeout(() => {
           if (clientRef.current) {
             reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30000)
             clientRef.current.activate()
@@ -60,6 +61,7 @@ export function useWebSocket() {
     client.activate()
 
     return () => {
+      clearTimeout(reconnectTimeoutRef.current)
       client.deactivate()
       clientRef.current = null
       setStatus(CONNECTION_STATUS.DISCONNECTED)

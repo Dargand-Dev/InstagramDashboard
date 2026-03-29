@@ -103,6 +103,7 @@ function ActiveRunCard({ run, onStop }) {
         size="icon"
         className="h-7 w-7 text-[#52525B] hover:text-[#EF4444] hover:bg-[#EF4444]/10 opacity-0 group-hover:opacity-100 transition-opacity"
         onClick={() => onStop(run.runId || run.id)}
+        aria-label="Stop run"
       >
         <Square className="w-3.5 h-3.5" />
       </Button>

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPut, apiDelete } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -410,6 +410,12 @@ export default function Accounts() {
   }, [accounts, statusFilter, search, sortBy])
 
   const selectedAccount = useMemo(() => accounts.find((a) => a.id === selectedId), [accounts, selectedId])
+
+  useEffect(() => {
+    if (selectedId && filtered.length > 0 && !filtered.find((a) => a.id === selectedId)) {
+      setSelectedId(null)
+    }
+  }, [filtered, selectedId])
 
   const toggleSelect = useCallback((id) => {
     setSelectedIds((prev) => {

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { LazyLog } from '@melloware/react-logviewer'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -6,6 +6,15 @@ import { ArrowDown, Search, Filter } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const LOG_LEVELS = ['ALL', 'ERROR', 'WARN', 'INFO']
+
+function useDebounced(value, delay) {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(id)
+  }, [value, delay])
+  return debounced
+}
 
 export default function LogViewer({
   text = '',
@@ -18,20 +27,23 @@ export default function LogViewer({
   const [filter, setFilter] = useState('ALL')
   const [follow, setFollow] = useState(initialFollow)
   const containerRef = useRef(null)
+  const debouncedSearch = useDebounced(search, 300)
 
-  const filteredText = filter === 'ALL'
-    ? text
-    : text
-        .split('\n')
-        .filter((line) => line.toUpperCase().includes(filter))
-        .join('\n')
+  const filteredText = useMemo(() => {
+    if (filter === 'ALL') return text
+    return text
+      .split('\n')
+      .filter((line) => line.toUpperCase().includes(filter))
+      .join('\n')
+  }, [text, filter])
 
-  const displayText = search
-    ? filteredText
-        .split('\n')
-        .filter((line) => line.toLowerCase().includes(search.toLowerCase()))
-        .join('\n')
-    : filteredText
+  const displayText = useMemo(() => {
+    if (!debouncedSearch) return filteredText
+    return filteredText
+      .split('\n')
+      .filter((line) => line.toLowerCase().includes(debouncedSearch.toLowerCase()))
+      .join('\n')
+  }, [filteredText, debouncedSearch])
 
   return (
     <div className={cn('rounded-lg border border-[#1a1a1a] overflow-hidden bg-[#0A0A0A]', className)}>
@@ -69,6 +81,7 @@ export default function LogViewer({
           size="icon"
           className={cn('h-7 w-7', follow ? 'text-[#3B82F6]' : 'text-[#52525B]')}
           onClick={() => setFollow(!follow)}
+          aria-label={follow ? 'Disable auto-follow' : 'Follow logs'}
         >
           <ArrowDown className="w-3.5 h-3.5" />
         </Button>

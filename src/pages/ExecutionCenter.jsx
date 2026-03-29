@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { apiGet, apiPost, apiPut } from '@/lib/api'
@@ -145,13 +145,12 @@ function ExecutionTimeline({ runs }) {
   )
 }
 
-function ExecutionCard({ run, onStopGraceful, onKill }) {
+function ExecutionCard({ run, onStopGraceful, onKill, wsSubscribe, wsConnected }) {
   const [expanded, setExpanded] = useState(false)
   const [showLogs, setShowLogs] = useState(false)
   const [logText, setLogText] = useState('')
   const [killDialogOpen, setKillDialogOpen] = useState(false)
   const [accountSearch, setAccountSearch] = useState('')
-  const eventSourceRef = useRef(null)
 
   const runId = run.runId || run.id
   const accounts = run.accounts || run.accountList || []
@@ -159,22 +158,27 @@ function ExecutionCard({ run, onStopGraceful, onKill }) {
     !accountSearch || (a.name || a.username || '').toLowerCase().includes(accountSearch.toLowerCase())
   )
 
-  // SSE log stream
+  // Log stream: prefer WebSocket, fall back to SSE
   useEffect(() => {
     if (!showLogs || !runId) return
 
-    const es = new EventSource(`/api/automation/workflow/logs/stream?runId=${runId}`)
-    eventSourceRef.current = es
+    if (wsConnected) {
+      return wsSubscribe(`/topic/executions/${runId}/logs`, (data) => {
+        const line = typeof data === 'string' ? data : data.message || JSON.stringify(data)
+        setLogText(prev => prev + line + '\n')
+      })
+    }
 
+    // SSE fallback
+    const es = new EventSource(`/api/automation/workflow/logs/stream?runId=${runId}`)
     es.onmessage = (event) => {
       setLogText(prev => prev + event.data + '\n')
     }
     es.onerror = () => {
       es.close()
     }
-
     return () => es.close()
-  }, [showLogs, runId])
+  }, [showLogs, runId, wsConnected, wsSubscribe])
 
   return (
     <Card className="bg-[#111111] border-[#1a1a1a]">
@@ -397,6 +401,8 @@ export default function ExecutionCenter() {
                   run={run}
                   onStopGraceful={(id) => stopGraceful.mutate(id)}
                   onKill={(id) => killImmediate.mutate(id)}
+                  wsSubscribe={subscribe}
+                  wsConnected={isConnected}
                 />
               ))}
             </div>

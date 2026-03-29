@@ -1,346 +1,272 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api'
+import { Card, CardContent, CardHeader, CardTitle, CardAction } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import {
-  ListOrdered, Play, Pause, X, ArrowUp, ArrowDown, Clock,
-  CheckCircle, XCircle, AlertCircle, Loader, Smartphone, ChevronDown, ChevronUp
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog'
+import DataTable from '@/components/shared/DataTable'
+import StatusBadge from '@/components/shared/StatusBadge'
+import TimeAgo from '@/components/shared/TimeAgo'
+import EmptyState from '@/components/shared/EmptyState'
+import { toast } from 'sonner'
+import {
+  ListOrdered,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  XCircle,
+  RefreshCw,
 } from 'lucide-react'
-import { useDeviceQueue } from '../hooks/useDeviceQueue'
-import { useApi } from '../hooks/useApi'
-
-function formatElapsed(startedAt) {
-  if (!startedAt) return ''
-  const start = new Date(startedAt)
-  const now = new Date()
-  const secs = Math.floor((now - start) / 1000)
-  if (secs < 60) return `${secs}s`
-  const mins = Math.floor(secs / 60)
-  const remSecs = secs % 60
-  return `${mins}m ${remSecs}s`
-}
-
-function formatTime(dateStr) {
-  if (!dateStr) return '-'
-  const d = new Date(dateStr)
-  return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-}
-
-function TaskStatusIcon({ status }) {
-  switch (status) {
-    case 'RUNNING':
-      return <Loader size={16} className="text-blue-400 animate-spin" />
-    case 'COMPLETED':
-      return <CheckCircle size={16} className="text-emerald-400" />
-    case 'FAILED':
-      return <XCircle size={16} className="text-red-400" />
-    case 'CANCELLED':
-      return <AlertCircle size={16} className="text-amber-400" />
-    case 'QUEUED':
-    default:
-      return <Clock size={16} className="text-[#555]" />
-  }
-}
-
-function statusColor(status) {
-  switch (status) {
-    case 'RUNNING': return 'text-blue-400'
-    case 'COMPLETED': return 'text-emerald-400'
-    case 'FAILED': return 'text-red-400'
-    case 'CANCELLED': return 'text-amber-400'
-    case 'QUEUED': return 'text-[#555]'
-    default: return 'text-[#555]'
-  }
-}
-
-function DeviceCard({ deviceUdid, tasks, paused, onPause, onResume, onCancel, onMoveUp, onMoveDown }) {
-  const [showHistory, setShowHistory] = useState(false)
-  const [elapsed, setElapsed] = useState({})
-  const [history, setHistory] = useState([])
-  const [historyLoading, setHistoryLoading] = useState(false)
-
-  const runningTask = tasks.find(t => t.status === 'RUNNING')
-  const queuedTasks = tasks.filter(t => t.status === 'QUEUED')
-
-  // Mettre à jour l'elapsed time toutes les secondes pour les tâches RUNNING
-  useEffect(() => {
-    if (!runningTask) return
-    const interval = setInterval(() => {
-      setElapsed(prev => ({ ...prev, [runningTask.id]: formatElapsed(runningTask.startedAt) }))
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [runningTask])
-
-  const loadHistory = async () => {
-    if (showHistory) {
-      setShowHistory(false)
-      return
-    }
-    setHistoryLoading(true)
-    try {
-      const res = await fetch(`/api/queue/${encodeURIComponent(deviceUdid)}`)
-      if (res.ok) {
-        const data = await res.json()
-        setHistory(data.history || [])
-      }
-    } catch { /* ignore */ }
-    finally {
-      setHistoryLoading(false)
-      setShowHistory(true)
-    }
-  }
-
-  const deviceLabel = deviceUdid.length > 20 ? deviceUdid.slice(0, 8) + '...' + deviceUdid.slice(-8) : deviceUdid
-
-  return (
-    <div className="border border-[#1a1a1a] rounded-lg bg-[#0a0a0a] overflow-hidden">
-      {/* Device header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a1a1a]">
-        <div className="flex items-center gap-3">
-          <Smartphone size={18} className="text-[#555]" />
-          <span className="text-sm font-semibold text-white">{deviceLabel}</span>
-          <div className={`w-2 h-2 rounded-full ${
-            paused ? 'bg-amber-400' : runningTask ? 'bg-blue-400 animate-pulse' : 'bg-emerald-400'
-          }`} />
-          <span className="text-xs text-[#555]">
-            {paused ? 'En pause' : runningTask ? 'En cours' : 'Libre'}
-          </span>
-          {queuedTasks.length > 0 && (
-            <span className="text-xs bg-white/[0.06] text-[#999] px-2 py-0.5 rounded-full">
-              {queuedTasks.length} en attente
-            </span>
-          )}
-        </div>
-        <button
-          onClick={() => paused ? onResume(deviceUdid) : onPause(deviceUdid)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-            paused
-              ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-              : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
-          }`}
-        >
-          {paused ? <Play size={14} /> : <Pause size={14} />}
-          {paused ? 'Reprendre' : 'Pause'}
-        </button>
-      </div>
-
-      {/* Running task */}
-      {runningTask && (
-        <div className="px-4 py-3 bg-blue-500/[0.04] border-b border-[#1a1a1a]">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <Loader size={16} className="text-blue-400 animate-spin" />
-              <span className="text-sm font-medium text-white">{runningTask.actionName}</span>
-              <span className="text-xs text-[#555]">{runningTask.type}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-blue-400 font-mono">
-                {elapsed[runningTask.id] || formatElapsed(runningTask.startedAt)}
-              </span>
-              {runningTask.runId && (
-                <span className="text-xs text-[#333] font-mono">{runningTask.runId}</span>
-              )}
-              <button
-                onClick={() => onCancel(runningTask.id)}
-                className="p-1 rounded hover:bg-red-500/10 text-[#555] hover:text-red-400 transition-colors"
-                title="Arrêter"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          </div>
-          {runningTask.parameters?.containerNames && (
-            <div className="mt-1.5 text-xs text-[#555]">
-              {runningTask.parameters.containerNames.length} containers
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Queued tasks */}
-      {queuedTasks.length > 0 ? (
-        <div className="divide-y divide-[#141414]">
-          {queuedTasks.map((task, idx) => (
-            <div key={task.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.02] transition-colors">
-              <div className="flex items-center gap-2.5">
-                <span className="text-xs text-[#333] font-mono w-6 text-center">{idx + 1}</span>
-                <Clock size={14} className="text-[#555]" />
-                <span className="text-sm text-[#999]">{task.actionName}</span>
-                <span className="text-xs text-[#333]">{task.type}</span>
-                {task.parameters?.containerNames && (
-                  <span className="text-xs text-[#555]">
-                    ({task.parameters.containerNames.length} containers)
-                  </span>
-                )}
-                <span className="text-xs text-[#333]">P{task.priority}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-[#333] mr-2">{formatTime(task.createdAt)}</span>
-                <button
-                  onClick={() => onMoveUp(task.id, queuedTasks)}
-                  disabled={idx === 0}
-                  className="p-1 rounded hover:bg-white/[0.06] text-[#555] hover:text-white disabled:opacity-20 disabled:hover:bg-transparent transition-colors"
-                  title="Monter"
-                >
-                  <ArrowUp size={14} />
-                </button>
-                <button
-                  onClick={() => onMoveDown(task.id, queuedTasks)}
-                  disabled={idx === queuedTasks.length - 1}
-                  className="p-1 rounded hover:bg-white/[0.06] text-[#555] hover:text-white disabled:opacity-20 disabled:hover:bg-transparent transition-colors"
-                  title="Descendre"
-                >
-                  <ArrowDown size={14} />
-                </button>
-                <button
-                  onClick={() => onCancel(task.id)}
-                  className="p-1 rounded hover:bg-red-500/10 text-[#555] hover:text-red-400 transition-colors"
-                  title="Annuler"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : !runningTask ? (
-        <div className="px-4 py-6 text-center text-xs text-[#333]">
-          Aucune tache en attente
-        </div>
-      ) : null}
-
-      {/* History toggle */}
-      <div className="border-t border-[#1a1a1a]">
-        <button
-          onClick={loadHistory}
-          className="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-xs text-[#555] hover:text-[#999] hover:bg-white/[0.02] transition-colors"
-        >
-          {showHistory ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          {historyLoading ? 'Chargement...' : showHistory ? 'Masquer historique' : 'Historique recent'}
-        </button>
-        {showHistory && history.length > 0 && (
-          <div className="divide-y divide-[#141414]">
-            {history.map(task => (
-              <div key={task.id} className="flex items-center justify-between px-4 py-2 opacity-60">
-                <div className="flex items-center gap-2.5">
-                  <TaskStatusIcon status={task.status} />
-                  <span className="text-xs text-[#999]">{task.actionName}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs font-medium ${statusColor(task.status)}`}>
-                    {task.status}
-                  </span>
-                  <span className="text-xs text-[#333]">{formatTime(task.completedAt)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        {showHistory && history.length === 0 && (
-          <div className="px-4 py-3 text-center text-xs text-[#333]">Aucun historique</div>
-        )}
-      </div>
-    </div>
-  )
-}
 
 export default function Queue() {
-  const {
-    queues, loading, connected,
-    cancelTask, pauseDevice, resumeDevice, moveUp, moveDown
-  } = useDeviceQueue()
+  const queryClient = useQueryClient()
+  const [selectedRows, setSelectedRows] = useState([])
+  const [clearAllOpen, setClearAllOpen] = useState(false)
 
-  const { data: devicesData } = useApi('/api/devices')
+  const { data: queueData, isLoading } = useQuery({
+    queryKey: ['queue'],
+    queryFn: () => apiGet('/api/queue'),
+    refetchInterval: 15000,
+  })
 
-  // Fusionner les devices connus avec les queues
-  const allDevices = useMemo(() => {
-    const deviceSet = new Set()
+  const cancelTask = useMutation({
+    mutationFn: (taskId) => apiDelete(`/api/queue/${taskId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue'] })
+      toast.success('Task cancelled')
+    },
+  })
 
-    // Devices depuis la config
-    if (devicesData?.devices) {
-      for (const d of devicesData.devices) {
-        deviceSet.add(d.udid || d.deviceUdid)
-      }
-    }
+  const reprioritize = useMutation({
+    mutationFn: ({ taskId, priority }) => apiPut(`/api/queue/${taskId}/priority`, { priority }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue'] })
+      toast.success('Priority updated')
+    },
+  })
 
-    // Devices ayant des tâches en queue
-    for (const udid of Object.keys(queues)) {
-      deviceSet.add(udid)
-    }
+  const cancelSelected = useMutation({
+    mutationFn: async () => {
+      await Promise.all(selectedRows.map(row => apiDelete(`/api/queue/${row.id}`)))
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue'] })
+      setSelectedRows([])
+      toast.success(`${selectedRows.length} tasks cancelled`)
+    },
+  })
 
-    return Array.from(deviceSet)
-  }, [devicesData, queues])
+  const clearAll = useMutation({
+    mutationFn: () => apiDelete('/api/queue'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue'] })
+      setClearAllOpen(false)
+      toast.success('Queue cleared')
+    },
+  })
 
-  // Déterminer quels devices sont en pause (on le déduit des appels SSE; pour l'instant on fetch)
-  const [pausedMap, setPausedMap] = useState({})
+  const queue = queueData?.data || queueData || []
 
-  useEffect(() => {
-    // Charger l'état de pause pour chaque device ayant une queue
-    const loadPauseStates = async () => {
-      const map = {}
-      for (const udid of allDevices) {
-        try {
-          const res = await fetch(`/api/queue/${encodeURIComponent(udid)}`)
-          if (res.ok) {
-            const data = await res.json()
-            map[udid] = data.paused || false
-          }
-        } catch { /* ignore */ }
-      }
-      setPausedMap(map)
-    }
-    if (allDevices.length > 0) loadPauseStates()
-  }, [allDevices, queues])
-
-  const totalQueued = Object.values(queues).flat().filter(t => t.status === 'QUEUED').length
-  const totalRunning = Object.values(queues).flat().filter(t => t.status === 'RUNNING').length
+  const columns = [
+    {
+      accessorKey: 'accountName',
+      header: 'Account',
+      cell: ({ row }) => (
+        <span className="text-[#FAFAFA] text-sm">
+          {row.original.accountName || row.original.account || '—'}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'deviceName',
+      header: 'Device',
+      cell: ({ row }) => (
+        <span className="text-[#A1A1AA] text-sm">
+          {row.original.deviceName || row.original.device || '—'}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'action',
+      header: 'Action',
+      cell: ({ row }) => (
+        <span className="text-[#A1A1AA] text-sm">
+          {row.original.action || row.original.workflow || '—'}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'scheduledAt',
+      header: 'Scheduled',
+      cell: ({ row }) => <TimeAgo date={row.original.scheduledAt} className="text-sm text-[#52525B]" />,
+    },
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      cell: ({ row }) => <StatusBadge status={row.original.status || 'QUEUED'} />,
+    },
+    {
+      accessorKey: 'priority',
+      header: 'Priority',
+      cell: ({ row }) => {
+        const p = row.original.priority ?? 0
+        return (
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-[#A1A1AA] tabular-nums w-4 text-center">{p}</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-[#52525B] hover:text-[#22C55E]"
+              onClick={(e) => {
+                e.stopPropagation()
+                reprioritize.mutate({ taskId: row.original.id, priority: p + 1 })
+              }}
+            >
+              <ArrowUp className="w-3 h-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-[#52525B] hover:text-[#F59E0B]"
+              onClick={(e) => {
+                e.stopPropagation()
+                reprioritize.mutate({ taskId: row.original.id, priority: Math.max(0, p - 1) })
+              }}
+            >
+              <ArrowDown className="w-3 h-3" />
+            </Button>
+          </div>
+        )
+      },
+    },
+    {
+      id: 'actions',
+      header: '',
+      cell: ({ row }) => (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-[#52525B] hover:text-[#EF4444] hover:bg-[#EF4444]/10"
+          onClick={(e) => {
+            e.stopPropagation()
+            cancelTask.mutate(row.original.id)
+          }}
+        >
+          <XCircle className="w-3.5 h-3.5" />
+        </Button>
+      ),
+      size: 40,
+    },
+  ]
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-3">
-            <ListOrdered size={22} className="text-primary" />
-            <h1 className="text-xl font-bold text-white">File d'attente</h1>
-          </div>
-          <p className="text-sm text-[#555] mt-1">
-            {totalRunning > 0 && <span className="text-blue-400">{totalRunning} en cours</span>}
-            {totalRunning > 0 && totalQueued > 0 && <span className="mx-1.5">·</span>}
-            {totalQueued > 0 && <span>{totalQueued} en attente</span>}
-            {totalRunning === 0 && totalQueued === 0 && 'Aucune tache active'}
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold text-[#FAFAFA]">Queue</h1>
         <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-400' : 'bg-red-400'}`} />
-          <span className="text-xs text-[#555]">{connected ? 'Connecte' : 'Deconnecte'}</span>
+          {selectedRows.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-[#EF4444] hover:text-[#EF4444] hover:bg-[#EF4444]/10"
+              onClick={() => cancelSelected.mutate()}
+              disabled={cancelSelected.isPending}
+            >
+              <Trash2 className="w-3 h-3 mr-1.5" />
+              Cancel Selected ({selectedRows.length})
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs text-[#52525B] hover:text-[#A1A1AA]"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['queue'] })}
+          >
+            <RefreshCw className="w-3 h-3 mr-1.5" />
+            Refresh
+          </Button>
+          {Array.isArray(queue) && queue.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-[#EF4444] hover:text-[#EF4444] hover:bg-[#EF4444]/10"
+              onClick={() => setClearAllOpen(true)}
+            >
+              Clear All
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Device cards */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader size={20} className="text-[#555] animate-spin" />
-        </div>
-      ) : allDevices.length === 0 ? (
-        <div className="border border-[#1a1a1a] rounded-lg bg-[#0a0a0a] px-6 py-16 text-center">
-          <Smartphone size={32} className="text-[#333] mx-auto mb-3" />
-          <p className="text-sm text-[#555]">Aucun device configure</p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {allDevices.map(udid => (
-            <DeviceCard
-              key={udid}
-              deviceUdid={udid}
-              tasks={queues[udid] || []}
-              paused={pausedMap[udid] || false}
-              onPause={async (d) => { await pauseDevice(d); setPausedMap(p => ({...p, [d]: true})) }}
-              onResume={async (d) => { await resumeDevice(d); setPausedMap(p => ({...p, [d]: false})) }}
-              onCancel={cancelTask}
-              onMoveUp={moveUp}
-              onMoveDown={moveDown}
-            />
-          ))}
+      {/* Queue Stats */}
+      {Array.isArray(queue) && queue.length > 0 && (
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="bg-[#8B5CF6]/10 text-[#8B5CF6] border-[#8B5CF6]/20 text-xs">
+              {queue.length} queued
+            </Badge>
+          </div>
+          <span className="text-xs text-[#3f3f46]">Auto-refreshing every 15s</span>
         </div>
       )}
+
+      <Card className="bg-[#111111] border-[#1a1a1a]">
+        <CardContent className={Array.isArray(queue) && queue.length > 0 ? 'p-4' : 'p-0'}>
+          {Array.isArray(queue) && queue.length > 0 ? (
+            <DataTable
+              columns={columns}
+              data={queue}
+              loading={isLoading}
+              searchable
+              searchPlaceholder="Search queue..."
+              selectable
+              onSelectionChange={setSelectedRows}
+              pageSize={20}
+            />
+          ) : isLoading ? (
+            <DataTable columns={columns} data={[]} loading={true} />
+          ) : (
+            <EmptyState
+              icon={ListOrdered}
+              title="Queue is empty"
+              description="No tasks are currently queued for execution"
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Clear All Confirmation */}
+      <Dialog open={clearAllOpen} onOpenChange={setClearAllOpen}>
+        <DialogContent className="bg-[#111111] border-[#1a1a1a] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[#FAFAFA]">Clear Entire Queue?</DialogTitle>
+            <DialogDescription className="text-[#52525B]">
+              This will cancel all {queue.length} queued tasks. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="ghost" className="text-[#A1A1AA]" />}>
+              Cancel
+            </DialogClose>
+            <Button
+              className="bg-[#EF4444] hover:bg-[#DC2626] text-white"
+              onClick={() => clearAll.mutate()}
+              disabled={clearAll.isPending}
+            >
+              Clear All
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

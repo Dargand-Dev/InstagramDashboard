@@ -1,0 +1,18 @@
+import { QueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30 * 1000,
+      refetchInterval: false,
+      retry: 1,
+      refetchOnWindowFocus: true,
+    },
+    mutations: {
+      onError: (error) => {
+        toast.error(error.message || 'Something went wrong')
+      },
+    },
+  },
+})

@@ -74,7 +74,17 @@ export default function Queue() {
     },
   })
 
-  const queue = queueData?.data || queueData || []
+  // Backend returns { queues: { deviceUdid: [tasks] }, totalQueued, ... }
+  const queue = (() => {
+    const raw = queueData?.data || queueData || {}
+    if (Array.isArray(raw)) return raw
+    if (raw.queues) {
+      return Object.entries(raw.queues).flatMap(([deviceUdid, tasks]) =>
+        tasks.map(t => ({ ...t, deviceName: deviceUdid }))
+      )
+    }
+    return []
+  })()
 
   const columns = [
     {
@@ -100,14 +110,14 @@ export default function Queue() {
       header: 'Action',
       cell: ({ row }) => (
         <span className="text-[#A1A1AA] text-sm">
-          {row.original.action || row.original.workflow || '—'}
+          {row.original.actionName || row.original.action || row.original.workflow || '—'}
         </span>
       ),
     },
     {
       accessorKey: 'scheduledAt',
       header: 'Scheduled',
-      cell: ({ row }) => <TimeAgo date={row.original.scheduledAt} className="text-sm text-[#52525B]" />,
+      cell: ({ row }) => <TimeAgo date={row.original.createdAt || row.original.scheduledAt} className="text-sm text-[#52525B]" />,
     },
     {
       accessorKey: 'status',

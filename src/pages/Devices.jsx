@@ -80,7 +80,7 @@ function DeviceCard({ device, onSelect, onToggle }) {
         <div className="mb-3 p-2 rounded-md bg-[#3B82F6]/5 border border-[#3B82F6]/10">
           <div className="flex items-center gap-1.5 text-xs text-[#3B82F6] mb-1">
             <Loader2 className="w-3 h-3 animate-spin" />
-            <span className="font-medium">{device.currentWorkflow || 'Running workflow'}</span>
+            <span className="font-medium">{device.currentAction || device.currentWorkflow || 'Running workflow'}</span>
           </div>
           {device.currentAccount && (
             <div className="flex items-center gap-1 text-xs text-[#A1A1AA]">
@@ -113,7 +113,7 @@ function DeviceCard({ device, onSelect, onToggle }) {
           ) : (
             <Wifi className="w-3 h-3 text-[#22C55E]" />
           )}
-          <span>{device.port ? `Port ${device.port}` : 'No port'}</span>
+          <span>{(device.port || device.ports?.appium) ? `Port ${device.port || device.ports?.appium}` : 'No port'}</span>
         </div>
         <div onClick={(e) => e.stopPropagation()}>
           <Switch
@@ -136,7 +136,11 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
     queryKey: ['device-runs', device?.id],
     queryFn: () => apiGet(`/api/automation/runs?deviceUdid=${device?.udid}&limit=20`),
     enabled: !!device?.udid && open,
-    select: (res) => res.data || res || [],
+    select: (res) => {
+      const raw = res.data || res || {}
+      if (Array.isArray(raw)) return raw
+      return raw.runs || []
+    },
   })
 
   useEffect(() => {
@@ -144,7 +148,7 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
       setEditForm({
         name: device.name || device.label || '',
         port: device.port || '',
-        proxyUrl: device.proxyUrl || '',
+        proxyUrl: device.proxyUrl || device.rotatingUrl || '',
       })
       setEditing(false)
     }
@@ -191,9 +195,9 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
                 <div className="p-3 rounded-lg bg-[#3B82F6]/5 border border-[#3B82F6]/10 space-y-2">
                   <p className="text-xs font-medium text-[#3B82F6]">Current Run</p>
                   <div className="space-y-1 text-xs text-[#A1A1AA]">
-                    {device.currentWorkflow && <p>Workflow: {device.currentWorkflow}</p>}
+                    {(device.currentAction || device.currentWorkflow) && <p>Workflow: {device.currentAction || device.currentWorkflow}</p>}
                     {device.currentAccount && <p>Account: {device.currentAccount}</p>}
-                    {device.elapsedTime && <p>Elapsed: {device.elapsedTime}</p>}
+                    {device.lastActivityAt && <p>Last activity: <TimeAgo date={device.lastActivityAt} /></p>}
                     {device.currentRunId && (
                       <a
                         href={`/execution-center?run=${device.currentRunId}`}
@@ -257,7 +261,7 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
                     {[
                       ['UDID', device.udid],
                       ['Port', device.port],
-                      ['Proxy', device.proxyUrl],
+                      ['Proxy', device.proxyUrl || device.rotatingUrl],
                       ['Enabled', device.enabled !== false ? 'Yes' : 'No'],
                     ].map(([label, value]) => (
                       <div key={label} className="flex items-center justify-between py-1.5 border-b border-[#1a1a1a] last:border-0">
@@ -281,7 +285,7 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
                 runHistory.map((run) => (
                   <div key={run.id} className="p-3 rounded-lg bg-[#111111] border border-[#1a1a1a] space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-[#FAFAFA]">{run.workflowType || run.type || 'Run'}</span>
+                      <span className="text-xs font-medium text-[#FAFAFA]">{run.workflowName || run.workflowType || run.type || 'Run'}</span>
                       <StatusBadge status={run.status} />
                     </div>
                     <div className="flex items-center justify-between text-xs text-[#52525B]">
@@ -382,22 +386,52 @@ export default function Devices() {
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const { subscribe, isConnected } = useWebSocket()
 
-  const { data: devices = [], isLoading } = useQuery({
-    queryKey: ['devices'],
+  const { data: staticDevices = [], isLoading: loadingStatic } = useQuery({
+    queryKey: ['devices-config'],
+    queryFn: () => apiGet('/api/devices'),
+    select: (res) => {
+      const raw = res.data || res || []
+      return Array.isArray(raw) ? raw : []
+    },
+  })
+
+  const { data: liveStatuses = [], isLoading: loadingLive } = useQuery({
+    queryKey: ['devices-live'],
     queryFn: () => apiGet('/api/devices/live-status'),
-    select: (res) => res.data || res || [],
+    select: (res) => {
+      const raw = res.data || res || []
+      return Array.isArray(raw) ? raw : []
+    },
     refetchInterval: 10000,
   })
 
+  // Merge static device config with live status
+  const devices = useMemo(() => {
+    const liveMap = {}
+    liveStatuses.forEach(ls => {
+      liveMap[ls.deviceUdid || ls.udid] = ls
+    })
+    return staticDevices.map(d => {
+      const live = liveMap[d.udid] || {}
+      return {
+        ...d,
+        name: d.name || live.deviceName,
+        status: live.status || 'OFFLINE',
+        currentAction: live.currentAction,
+        currentAccount: live.currentAccount,
+        currentRunId: live.currentRunId,
+        lastActivityAt: live.lastActivityAt,
+        port: d.ports?.appium || d.port,
+      }
+    })
+  }, [staticDevices, liveStatuses])
+
+  const isLoading = loadingStatic || loadingLive
+
   useEffect(() => {
     if (!isConnected) return
-    const unsub = subscribe('/topic/devices/status', (update) => {
-      queryClient.setQueryData(['devices'], (old) => {
-        if (!old) return old
-        const list = old.data || old || []
-        const updated = list.map((d) => (d.id === update.id ? { ...d, ...update } : d))
-        return old.data ? { ...old, data: updated } : updated
-      })
+    const unsub = subscribe('/topic/devices/status', () => {
+      queryClient.invalidateQueries({ queryKey: ['devices-live'] })
     })
     return unsub
   }, [isConnected, subscribe, queryClient])

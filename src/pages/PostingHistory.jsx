@@ -33,7 +33,7 @@ function exportCSV(records) {
   const headers = ['Date', 'Username', 'Identity', 'Status', 'Reel', 'Duration']
   const rows = records.map(r => [
     r.date || r.postedAt || '', r.username || r.accountName || '',
-    r.identity || '', r.status || '', r.reelTitle || r.reelId || '',
+    r.identity || '', r.status || '', r.driveFilename || r.baseVideo || r.reelTitle || '',
     r.duration ? formatDuration(r.duration) : '',
   ])
   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
@@ -57,8 +57,9 @@ export default function PostingHistory() {
   })
 
   const records = useMemo(() => {
-    const raw = historyData?.data || historyData || []
-    return Array.isArray(raw) ? raw : []
+    const raw = historyData?.data || historyData || {}
+    if (Array.isArray(raw)) return raw
+    return raw.entries || []
   }, [historyData])
 
   const filteredRecords = useMemo(() => {
@@ -112,9 +113,9 @@ export default function PostingHistory() {
     {
       accessorKey: 'reelTitle',
       header: 'Reel',
-      accessorFn: row => row.reelTitle || row.reelId || row.contentId,
+      accessorFn: row => row.driveFilename || row.baseVideo || row.reelTitle || row.contentId,
       cell: ({ row }) => (
-        <span className="truncate max-w-[200px] block">{row.original.reelTitle || row.original.reelId || row.original.contentId || '—'}</span>
+        <span className="truncate max-w-[200px] block">{row.original.driveFilename || row.original.baseVideo || row.original.reelTitle || '—'}</span>
       ),
     },
     {
@@ -252,7 +253,7 @@ export default function PostingHistory() {
                 ['Username', selectedRecord.username || selectedRecord.accountName],
                 ['Identity', selectedRecord.identity],
                 ['Status', null],
-                ['Reel', selectedRecord.reelTitle || selectedRecord.reelId || selectedRecord.contentId],
+                ['Reel', selectedRecord.driveFilename || selectedRecord.baseVideo || selectedRecord.reelTitle],
                 ['Date', selectedRecord.date || selectedRecord.postedAt ? new Date(selectedRecord.date || selectedRecord.postedAt).toLocaleString() : null],
                 ['Duration', formatDuration(selectedRecord.duration)],
                 ['Device', selectedRecord.device || selectedRecord.deviceName],

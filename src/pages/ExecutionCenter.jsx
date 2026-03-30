@@ -356,11 +356,24 @@ export default function ExecutionCenter() {
   })
 
   const runs = activeRuns?.data || activeRuns || []
-  const allRuns = recentRuns?.data || recentRuns || []
+  // Backend returns { totalRuns, showing, runs: [...] }
+  const allRuns = (() => {
+    const raw = recentRuns?.data || recentRuns || {}
+    if (Array.isArray(raw)) return raw
+    return raw.runs || []
+  })()
   const timelineRuns = [...(Array.isArray(runs) ? runs : []), ...(Array.isArray(allRuns) ? allRuns : [])]
     .filter((r, i, arr) => arr.findIndex(x => (x.runId || x.id) === (r.runId || r.id)) === i)
 
-  const queue = queueData?.data || queueData || []
+  // Backend returns { queues: { deviceUdid: [tasks] }, totalQueued, ... }
+  const queue = (() => {
+    const raw = queueData?.data || queueData || {}
+    if (Array.isArray(raw)) return raw
+    if (raw.queues) {
+      return Object.values(raw.queues).flat()
+    }
+    return []
+  })()
 
   return (
     <div className="space-y-6">
@@ -447,8 +460,8 @@ export default function ExecutionCenter() {
                   {queue.slice(0, 8).map((item, i) => (
                     <div key={item.id || i} className="flex items-center justify-between py-1.5">
                       <div className="min-w-0">
-                        <span className="text-xs text-[#A1A1AA] truncate block">{item.action || item.workflow}</span>
-                        <span className="text-[10px] text-[#3f3f46]">{item.accountName || item.account}</span>
+                        <span className="text-xs text-[#A1A1AA] truncate block">{item.actionName || item.action || item.workflow}</span>
+                        <span className="text-[10px] text-[#3f3f46]">{item.accountName || item.account || ''}</span>
                       </div>
                       <StatusBadge status={item.status || 'QUEUED'} />
                     </div>

@@ -163,8 +163,9 @@ export default function ErrorCenter() {
     queryKey: ['error-runs'],
     queryFn: () => apiGet('/api/automation/runs?limit=50'),
     select: (res) => {
-      const list = res.data || res || []
-      return Array.isArray(list) ? list.filter((r) => r.status === 'FAILED' || r.status === 'ERROR') : []
+      const raw = res.data || res || {}
+      const list = Array.isArray(raw) ? raw : (raw.runs || [])
+      return list.filter((r) => r.status === 'FAILED' || r.status === 'ERROR')
     },
   })
 
@@ -173,7 +174,7 @@ export default function ErrorCenter() {
     queryFn: () => apiGet('/api/accounts/health/overview'),
     select: (res) => {
       const list = res.data || res || []
-      return Array.isArray(list) ? list.filter((a) => (a.healthScore || a.health || 100) < 50) : []
+      return Array.isArray(list) ? list.filter((a) => (a.score ?? a.healthScore ?? 100) < 50) : []
     },
   })
 
@@ -205,8 +206,8 @@ export default function ErrorCenter() {
         source: 'account',
         accountId: a.id,
         accountUsername: a.username,
-        error: `Low health score: ${a.healthScore || a.health || 0}`,
-        severity: (a.healthScore || a.health || 0) < 25 ? 'CRITICAL' : 'WARNING',
+        error: `Low health score: ${a.score ?? a.healthScore ?? 0}`,
+        severity: (a.score ?? a.healthScore ?? 0) < 25 ? 'CRITICAL' : 'WARNING',
         timestamp: a.lastChecked || a.updatedAt,
       })
     })
@@ -215,9 +216,9 @@ export default function ErrorCenter() {
       errors.push({
         id: `device-${d.id}`,
         source: 'device',
-        deviceId: d.id,
-        deviceName: d.name || d.label,
-        deviceUdid: d.udid,
+        deviceId: d.id || d.deviceUdid,
+        deviceName: d.deviceName || d.name || d.label,
+        deviceUdid: d.deviceUdid || d.udid,
         error: d.lastError || 'Device in error state',
         severity: 'ERROR',
         timestamp: d.lastErrorAt || d.updatedAt,

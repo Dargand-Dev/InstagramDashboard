@@ -86,7 +86,7 @@ function CustomTooltip({ active, payload, label }) {
 function exportTableCSV(accounts) {
   const headers = ['Username', 'Status', 'Followers', 'Views (30d)', 'Posts', 'Health Score', 'Last Post']
   const rows = accounts.map(a => [
-    a.username, a.status, a.followers ?? '', a.views ?? '', a.posts ?? a.postsCount ?? '',
+    a.username, a.status, a.followers ?? a.followerCount ?? '', a.views ?? a.viewsLast30Days ?? '', a.posts ?? a.postCount ?? '',
     a.healthScore ?? '', a.lastPostDate || '',
   ])
   const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
@@ -132,13 +132,15 @@ export default function Analytics() {
   }, [accountsData])
 
   const healthAccounts = useMemo(() => {
-    const raw = healthData?.data || healthData || {}
+    const raw = healthData?.data || healthData || []
+    if (Array.isArray(raw)) return raw
     return raw.accounts || raw.data || []
   }, [healthData])
 
   const snapshots = useMemo(() => {
-    const raw = snapshotsData?.data || snapshotsData || []
-    return Array.isArray(raw) ? raw : []
+    const raw = snapshotsData?.data || snapshotsData || {}
+    if (Array.isArray(raw)) return raw
+    return raw.snapshots || raw.data || []
   }, [snapshotsData])
 
   const content = useMemo(() => {
@@ -150,8 +152,8 @@ export default function Analytics() {
   const fleetMetrics = useMemo(() => {
     const activeAccounts = accounts.filter(a => a.status === 'ACTIVE' || a.status === 'active')
     const totalFollowers = activeAccounts.reduce((sum, a) => sum + (a.followers || a.followerCount || 0), 0)
-    const totalViews = activeAccounts.reduce((sum, a) => sum + (a.views || a.viewCount || a.views30d || 0), 0)
-    const totalPosts = activeAccounts.reduce((sum, a) => sum + (a.posts || a.postsCount || a.postCount || 0), 0)
+    const totalViews = activeAccounts.reduce((sum, a) => sum + (a.views || a.viewsLast30Days || a.viewCount || 0), 0)
+    const totalPosts = activeAccounts.reduce((sum, a) => sum + (a.posts || a.postCount || a.postsCount || 0), 0)
     const avgPosts = activeAccounts.length > 0 ? Math.round(totalPosts / activeAccounts.length) : 0
 
     // Growth rate from snapshots
@@ -160,8 +162,8 @@ export default function Analytics() {
       const recentWeek = snapshots.slice(-7)
       const previousWeek = snapshots.slice(-14, -7)
       if (previousWeek.length > 0) {
-        const recentFollowers = recentWeek.reduce((sum, s) => sum + (s.totalFollowers || s.followers || 0), 0) / recentWeek.length
-        const prevFollowers = previousWeek.reduce((sum, s) => sum + (s.totalFollowers || s.followers || 0), 0) / previousWeek.length
+        const recentFollowers = recentWeek.reduce((sum, s) => sum + (s.totalFollowers || s.followerCount || s.followers || 0), 0) / recentWeek.length
+        const prevFollowers = previousWeek.reduce((sum, s) => sum + (s.totalFollowers || s.followerCount || s.followers || 0), 0) / previousWeek.length
         if (prevFollowers > 0) {
           growthRate = ((recentFollowers - prevFollowers) / prevFollowers) * 100
         }
@@ -177,10 +179,10 @@ export default function Analytics() {
 
     const byDate = {}
     snapshots.forEach(s => {
-      const date = (s.date || s.snapshotDate || '').slice(0, 10)
+      const date = (s.date || s.snapshotAt || s.snapshotDate || '').slice(0, 10)
       if (!date) return
       if (!byDate[date]) byDate[date] = { date, totalViews: 0, accounts: {} }
-      const views = s.views || s.viewCount || 0
+      const views = s.views || s.viewsLast30Days || s.viewCount || 0
       byDate[date].totalViews += views
       if (s.username || s.accountName) {
         byDate[date].accounts[s.username || s.accountName] = views
@@ -218,7 +220,7 @@ export default function Analytics() {
     snapshots.forEach(s => {
       const name = s.username || s.accountName
       if (!name) return
-      const followers = s.followers || s.followerCount || 0
+      const followers = s.followerCount || s.followers || 0
       if (!latestByAccount[name] || followers > latestByAccount[name]) {
         latestByAccount[name] = followers
       }
@@ -234,10 +236,10 @@ export default function Analytics() {
     snapshots.forEach(s => {
       const name = s.username || s.accountName
       if (!name || !top10.includes(name)) return
-      const date = (s.date || s.snapshotDate || '').slice(0, 10)
+      const date = (s.date || s.snapshotAt || s.snapshotDate || '').slice(0, 10)
       if (!date) return
       if (!byDate[date]) byDate[date] = { date }
-      byDate[date][name] = s.followers || s.followerCount || 0
+      byDate[date][name] = s.followerCount || s.followers || 0
     })
 
     return {
@@ -272,9 +274,9 @@ export default function Analytics() {
     return accounts.map(a => ({
       ...a,
       healthScore: healthMap[a.username] ?? healthMap[a.id] ?? a.healthScore ?? null,
-      views: a.views || a.viewCount || a.views30d || 0,
+      views: a.views || a.viewsLast30Days || a.viewCount || 0,
       followers: a.followers || a.followerCount || 0,
-      posts: a.posts || a.postsCount || a.postCount || 0,
+      posts: a.posts || a.postCount || a.postsCount || 0,
     }))
   }, [accounts, healthAccounts])
 
@@ -328,8 +330,19 @@ export default function Analytics() {
   // Content stock chart data
   const contentChartData = useMemo(() => {
     if (!content || typeof content !== 'object') return []
+    // Backend returns array of { identityId, availableReels, ... } or object map
+    if (Array.isArray(content)) {
+      return content.map(item => {
+        const count = item.availableReels || item.reelCount || item.count || 0
+        return {
+          name: item.identityId || item.name || 'Unknown',
+          reels: count,
+          fill: count > 20 ? '#22C55E' : count >= 5 ? '#F59E0B' : '#EF4444',
+        }
+      })
+    }
     return Object.entries(content).map(([name, data]) => {
-      const count = data.reelCount || data.count || (typeof data === 'number' ? data : 0)
+      const count = data.reelCount || data.availableReels || data.count || (typeof data === 'number' ? data : 0)
       return {
         name,
         reels: count,

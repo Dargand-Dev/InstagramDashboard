@@ -23,9 +23,9 @@ function IdentityRow({ identity, onEdit, onDelete }) {
   return (
     <div className="flex items-center justify-between p-3 rounded-lg bg-[#0A0A0A] border border-[#1a1a1a] group">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-[#FAFAFA]">{identity.name || identity.identityName}</p>
-        {identity.driveFolder && (
-          <p className="text-xs text-[#52525B] mt-0.5 truncate">{identity.driveFolder}</p>
+        <p className="text-sm font-medium text-[#FAFAFA]">{identity.identityId || identity.name || identity.identityName}</p>
+        {(identity.driveFolderId || identity.driveFolder) && (
+          <p className="text-xs text-[#52525B] mt-0.5 truncate">{identity.driveFolderId || identity.driveFolder}</p>
         )}
       </div>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -41,14 +41,14 @@ function IdentityRow({ identity, onEdit, onDelete }) {
 }
 
 function IdentityDialog({ open, onOpenChange, identity, onSave, isPending }) {
-  const [name, setName] = useState(identity?.name || identity?.identityName || '')
-  const [driveFolder, setDriveFolder] = useState(identity?.driveFolder || '')
+  const [name, setName] = useState(identity?.identityId || identity?.name || identity?.identityName || '')
+  const [driveFolder, setDriveFolder] = useState(identity?.driveFolderId || identity?.driveFolder || '')
 
   const isEdit = !!identity?.id
 
   const handleSave = () => {
     if (!name.trim()) { toast.error('Name is required'); return }
-    onSave({ ...identity, name: name.trim(), identityName: name.trim(), driveFolder: driveFolder.trim() })
+    onSave({ ...identity, identityId: name.trim(), driveFolderId: driveFolder.trim() })
   }
 
   return (
@@ -384,7 +384,7 @@ export default function Settings() {
             <DialogTitle className="text-sm">Delete Identity</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-[#A1A1AA]">
-            Are you sure you want to delete <span className="text-[#FAFAFA] font-medium">{deleteTarget?.name || deleteTarget?.identityName}</span>?
+            Are you sure you want to delete <span className="text-[#FAFAFA] font-medium">{deleteTarget?.identityId || deleteTarget?.name || deleteTarget?.identityName}</span>?
           </p>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(null)} className="text-[#A1A1AA]">Cancel</Button>

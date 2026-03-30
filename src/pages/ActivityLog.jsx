@@ -51,7 +51,7 @@ function RunRow({ run }) {
           </div>
           <div className="flex items-center gap-3 mt-0.5 text-xs text-[#52525B]">
             <span>{run.triggerType || run.trigger || 'manual'}</span>
-            {run.device && <span>{run.device}</span>}
+            {(run.deviceUdid || run.device) && <span>{run.deviceUdid || run.device}</span>}
           </div>
         </div>
         <div className="flex items-center gap-4 shrink-0">
@@ -61,7 +61,7 @@ function RunRow({ run }) {
               {failCount > 0 && <span className="text-[#EF4444]">{failCount} fail</span>}
             </div>
           )}
-          <span className="text-xs text-[#52525B] tabular-nums w-16 text-right">{formatDuration(run.duration)}</span>
+          <span className="text-xs text-[#52525B] tabular-nums w-16 text-right">{formatDuration(run.duration || run.durationMs)}</span>
           <TimeAgo date={run.startedAt || run.date || run.createdAt} className="text-xs text-[#52525B] w-16 text-right" />
         </div>
       </button>
@@ -153,8 +153,9 @@ export default function ActivityLog() {
   })
 
   const runs = useMemo(() => {
-    const raw = runsData?.data || runsData || []
-    return Array.isArray(raw) ? raw : []
+    const raw = runsData?.data || runsData || {}
+    if (Array.isArray(raw)) return raw
+    return raw.runs || []
   }, [runsData])
 
   const filteredRuns = useMemo(() => {
@@ -177,12 +178,26 @@ export default function ActivityLog() {
 
   const contentIdentities = useMemo(() => {
     const raw = contentData?.data || contentData || {}
-    return raw.identities || raw.byIdentity || raw
+    const identities = raw.identities || raw.byIdentity || raw
+    // Backend returns array: [{identityId, availableReels, ...}] — convert to map for ContentCard
+    if (Array.isArray(identities)) {
+      const map = {}
+      identities.forEach(i => {
+        map[i.identityId || i.name || 'Unknown'] = {
+          reelCount: i.availableReels ?? i.reelCount ?? 0,
+          status: i.status,
+          accounts: (i.accounts || []).map(a => a.username || a),
+        }
+      })
+      return map
+    }
+    return identities
   }, [contentData])
 
   const trashQueue = useMemo(() => {
-    const raw = trashData?.data || trashData || []
-    return Array.isArray(raw) ? raw : []
+    const raw = trashData?.data || trashData || {}
+    if (Array.isArray(raw)) return raw
+    return raw.entries || []
   }, [trashData])
 
   const trashColumns = useMemo(() => [

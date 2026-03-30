@@ -93,13 +93,13 @@ function AccountRow({ account, selected, onSelect, onClick, isActive }) {
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-[#FAFAFA] truncate">{account.username || 'Unknown'}</p>
         <div className="flex items-center gap-2 text-xs text-[#52525B]">
-          <span>{account.followers?.toLocaleString() || 0} followers</span>
+          <span>{(account.followers || account.followerCount || 0).toLocaleString()} followers</span>
           <span>·</span>
-          <span>{account.views?.toLocaleString() || 0} views</span>
+          <span>{(account.views || account.viewsLast30Days || 0).toLocaleString()} views</span>
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <HealthScoreBadge score={account.healthScore || 0} size={28} />
+        <HealthScoreBadge score={account.healthScore ?? account.score ?? 0} size={28} />
         <span className={`w-2 h-2 rounded-full`} style={{ backgroundColor: statusColor }} />
       </div>
     </div>
@@ -109,10 +109,10 @@ function AccountRow({ account, selected, onSelect, onClick, isActive }) {
 function HealthBreakdown({ health }) {
   if (!health) return null
   const components = [
-    { label: 'Views Trend', value: health.viewsTrend || 0, color: '#3B82F6' },
-    { label: 'Posting Success', value: health.postingSuccessRate || 0, color: '#22C55E' },
-    { label: 'Recency', value: health.recency || 0, color: '#F59E0B' },
-    { label: 'Account Age', value: health.accountAge || 0, color: '#8B5CF6' },
+    { label: 'Views Trend', value: health.breakdown?.viewsTrendScore ?? health.viewsTrend ?? 0, color: '#3B82F6' },
+    { label: 'Posting Success', value: health.breakdown?.postingFailuresScore ?? health.postingSuccessRate ?? 0, color: '#22C55E' },
+    { label: 'Recency', value: health.breakdown?.daysSinceLastPostScore ?? health.recency ?? 0, color: '#F59E0B' },
+    { label: 'Account Age', value: health.breakdown?.accountAgeScore ?? health.accountAge ?? 0, color: '#8B5CF6' },
   ]
 
   return (
@@ -238,15 +238,15 @@ function AccountDetail({ account }) {
         {/* Stats bar */}
         <div className="grid grid-cols-4 gap-3">
           {[
-            { label: 'Posts', value: account.posts || 0, icon: Image },
-            { label: 'Followers', value: account.followers?.toLocaleString() || '0', icon: Users },
-            { label: 'Views (30d)', value: account.views?.toLocaleString() || '0', icon: Eye },
-            { label: 'Health', value: account.healthScore || 0, icon: Activity, isHealth: true },
+            { label: 'Posts', value: account.posts || account.postCount || 0, icon: Image },
+            { label: 'Followers', value: (account.followers || account.followerCount || 0).toLocaleString(), icon: Users },
+            { label: 'Views (30d)', value: (account.views || account.viewsLast30Days || 0).toLocaleString(), icon: Eye },
+            { label: 'Health', value: health?.score ?? account.healthScore ?? 0, icon: Activity, isHealth: true },
           ].map((stat) => (
             <div key={stat.label} className="bg-[#111111] border border-[#1a1a1a] rounded-lg p-3 text-center">
               <stat.icon className="w-3.5 h-3.5 text-[#52525B] mx-auto mb-1" />
               <p className={`text-sm font-semibold ${stat.isHealth ? '' : 'text-[#FAFAFA]'}`}
-                style={stat.isHealth ? { color: (account.healthScore || 0) >= 80 ? '#22C55E' : (account.healthScore || 0) >= 50 ? '#F59E0B' : '#EF4444' } : undefined}
+                style={stat.isHealth ? { color: stat.value >= 80 ? '#22C55E' : stat.value >= 50 ? '#F59E0B' : '#EF4444' } : undefined}
               >
                 {stat.value}
               </p>
@@ -259,7 +259,7 @@ function AccountDetail({ account }) {
         <div className="bg-[#111111] border border-[#1a1a1a] rounded-lg p-4 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-[#FAFAFA]">Health Score</h3>
-            <HealthScoreBadge score={account.healthScore || 0} size={32} />
+            <HealthScoreBadge score={health?.score ?? account.healthScore ?? 0} size={32} />
           </div>
 
           {viewsData.length > 0 && (
@@ -399,9 +399,9 @@ export default function Accounts() {
     }
     list = [...list].sort((a, b) => {
       switch (sortBy) {
-        case 'health': return (b.healthScore || 0) - (a.healthScore || 0)
-        case 'followers': return (b.followers || 0) - (a.followers || 0)
-        case 'views': return (b.views || 0) - (a.views || 0)
+        case 'health': return (b.healthScore ?? b.score ?? 0) - (a.healthScore ?? a.score ?? 0)
+        case 'followers': return (b.followers || b.followerCount || 0) - (a.followers || a.followerCount || 0)
+        case 'views': return (b.views || b.viewsLast30Days || 0) - (a.views || a.viewsLast30Days || 0)
         case 'username': return (a.username || '').localeCompare(b.username || '')
         default: return 0
       }

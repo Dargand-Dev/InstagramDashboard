@@ -136,8 +136,8 @@ function RecentRunRow({ run }) {
               {failCount > 0 && <span className="text-[#EF4444]">{failCount} fail</span>}
             </div>
           )}
-          <span className="text-xs text-[#52525B] tabular-nums w-14 text-right">{formatDuration(run.duration)}</span>
-          <TimeAgo date={run.startedAt || run.date} className="text-xs text-[#52525B] w-16 text-right" />
+          <span className="text-xs text-[#52525B] tabular-nums w-14 text-right">{formatDuration(run.duration || run.durationMs)}</span>
+          <TimeAgo date={run.startedAt || run.startTime || run.date} className="text-xs text-[#52525B] w-16 text-right" />
           <ChevronRight className={`w-3.5 h-3.5 text-[#3f3f46] transition-transform ${expanded ? 'rotate-90' : ''}`} />
         </div>
       </button>
@@ -146,7 +146,7 @@ function RecentRunRow({ run }) {
           <div className="rounded-lg border border-[#1a1a1a] bg-[#0A0A0A] divide-y divide-[#1a1a1a]">
             {results.map((r, i) => (
               <div key={i} className="flex items-center justify-between px-3 py-2 text-xs">
-                <span className="text-[#A1A1AA]">{r.accountName || r.account || `Account ${i + 1}`}</span>
+                <span className="text-[#A1A1AA]">{r.username || r.accountName || r.account || `Account ${i + 1}`}</span>
                 <div className="flex items-center gap-2">
                   {r.failureReason && <span className="text-[#EF4444] truncate max-w-[200px]">{r.failureReason}</span>}
                   <StatusBadge status={r.status || (r.success ? 'SUCCESS' : 'FAILED')} />
@@ -234,23 +234,48 @@ export default function Dashboard() {
   const isRunning = lock.locked || lock.status === 'RUNNING'
 
   const content = contentStatus?.data || contentStatus || {}
-  const totalReels = content.totalReels ?? content.total ?? Object.values(content.identities || {}).reduce((sum, v) => sum + (v.reelCount || v.count || 0), 0)
+  // Backend returns identities as array: [{ identityId, availableReels, ... }]
+  // Convert to { name: { reelCount, status, ... } } for display
+  const rawIdentities = content.identities || content.byIdentity || {}
+  const contentIdentities = Array.isArray(rawIdentities)
+    ? Object.fromEntries(rawIdentities.map(i => [i.identityId, { reelCount: i.availableReels ?? 0, status: i.warning || i.status }]))
+    : rawIdentities
+  const totalReels = content.totalReels ?? content.total ?? Object.values(contentIdentities).reduce((sum, v) => sum + (v.reelCount || v.count || 0), 0)
 
   const sched = schedule?.data || schedule || {}
-  const nextRunTime = sched.nextRun || sched.nextRunTime
+  // Backend returns Java ZonedDateTime like "2026-03-30T12:15:22-07:00[America/Los_Angeles]"
+  // JS can't parse the [timezone] suffix — strip it
+  const rawNextRun = (sched.nextRun || sched.nextRunTime || '').replace(/\[.*\]$/, '') || null
+  const nextRunTime = rawNextRun && !isNaN(new Date(rawNextRun).getTime()) ? rawNextRun : null
 
   const activeRunsList = activeRuns?.data || activeRuns || []
-  const recentRunsList = recentRuns?.data || recentRuns || []
+  // Backend returns { totalRuns, showing, runs: [...] }
+  const recentRunsList = useMemo(() => {
+    const raw = recentRuns?.data || recentRuns || {}
+    if (Array.isArray(raw)) return raw
+    return raw.runs || []
+  }, [recentRuns])
 
-  const health = healthOverview?.data || healthOverview || {}
-  const statusCounts = health.statusCounts || health.byStatus || {}
+  // Backend returns List<HealthScore> with { accountId, username, score, ... }
+  const healthList = useMemo(() => {
+    const raw = healthOverview?.data || healthOverview || []
+    return Array.isArray(raw) ? raw : []
+  }, [healthOverview])
+  // Build status counts from accounts (health endpoint doesn't have them)
+  const statusCounts = useMemo(() => {
+    const counts = {}
+    ;(Array.isArray(allAccounts) ? allAccounts : []).forEach(a => {
+      const s = a.status || 'UNKNOWN'
+      counts[s] = (counts[s] || 0) + 1
+    })
+    return counts
+  }, [allAccounts])
 
   // Alert conditions
-  const contentIdentities = content.identities || content.byIdentity || {}
   const lowStockIdentities = Object.entries(contentIdentities).filter(
     ([, v]) => v.status === 'LOW_STOCK' || v.status === 'EMPTY' || (v.reelCount || v.count || 0) < 3
   )
-  const lowHealthAccounts = health.lowHealthCount ?? (health.accounts || []).filter(a => (a.healthScore || 100) < 50).length
+  const lowHealthAccounts = healthList.filter(a => (a.score ?? a.healthScore ?? 100) < 50).length
 
   const showAlert = lowStockIdentities.length > 0 || lowHealthAccounts > 0
 

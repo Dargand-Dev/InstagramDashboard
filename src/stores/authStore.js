@@ -21,7 +21,8 @@ export const useAuthStore = create((set, get) => ({
     }
     const data = await res.json()
     const token = data.token || data.data?.token
-    const user = data.user || data.data?.user || { username }
+    // Backend returns { token, username, expiresIn } — no user object
+    const user = data.user || data.data?.user || { username: data.username || username }
 
     localStorage.setItem(TOKEN_KEY, token)
     localStorage.setItem(USER_KEY, JSON.stringify(user))

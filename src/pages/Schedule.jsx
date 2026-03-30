@@ -199,14 +199,17 @@ export default function Schedule() {
   const schedule = scheduleData?.data || scheduleData || {}
   const lock = lockData?.data || lockData || {}
   const runs = useMemo(() => {
-    const raw = runsData?.data || runsData || []
-    return Array.isArray(raw) ? raw : []
+    const raw = runsData?.data || runsData || {}
+    if (Array.isArray(raw)) return raw
+    return raw.runs || []
   }, [runsData])
 
   const isLocked = lock.locked || lock.status === 'LOCKED' || lock.status === 'RUNNING'
   const isEnabled = schedule.enabled !== false
   const windows = schedule.windows || schedule.postingWindows || schedule.timeWindows || []
-  const nextRun = schedule.nextRun || schedule.nextRunTime
+  // Strip Java ZonedDateTime [timezone] suffix that JS can't parse
+  const rawNextRun = (schedule.nextRun || schedule.nextRunTime || '').replace(/\[.*\]$/, '') || null
+  const nextRun = rawNextRun && !isNaN(new Date(rawNextRun).getTime()) ? rawNextRun : null
 
   // Trigger mutation
   const triggerMutation = useMutation({

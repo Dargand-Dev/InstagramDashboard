@@ -322,13 +322,13 @@ export default function ExecutionCenter() {
   const { data: activeRuns, isLoading } = useQuery({
     queryKey: ['active-runs'],
     queryFn: () => apiGet('/api/automation/runs/active'),
-    refetchInterval: 10000,
+    refetchInterval: isConnected ? false : 10000,
   })
 
   const { data: recentRuns } = useQuery({
     queryKey: ['recent-runs-timeline'],
     queryFn: () => apiGet('/api/automation/runs?limit=20'),
-    refetchInterval: 10000,
+    refetchInterval: isConnected ? false : 10000,
   })
 
   const { data: queueData } = useQuery({

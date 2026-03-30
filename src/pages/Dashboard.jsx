@@ -179,7 +179,7 @@ export default function Dashboard() {
   const { data: lockStatus, isLoading: lockLoading } = useQuery({
     queryKey: ['lock-status'],
     queryFn: () => apiGet('/api/automation/lock-status'),
-    refetchInterval: 10000,
+    refetchInterval: isConnected ? false : 10000,
   })
 
   const { data: contentStatus, isLoading: contentLoading } = useQuery({
@@ -195,7 +195,7 @@ export default function Dashboard() {
   const { data: activeRuns, isLoading: activeRunsLoading } = useQuery({
     queryKey: ['active-runs'],
     queryFn: () => apiGet('/api/automation/runs/active'),
-    refetchInterval: 10000,
+    refetchInterval: isConnected ? false : 10000,
   })
 
   const { data: recentRuns, isLoading: recentRunsLoading } = useQuery({
@@ -214,6 +214,7 @@ export default function Dashboard() {
     return subscribe('/topic/executions/status', () => {
       queryClient.invalidateQueries({ queryKey: ['active-runs'] })
       queryClient.invalidateQueries({ queryKey: ['recent-runs'] })
+      queryClient.invalidateQueries({ queryKey: ['lock-status'] })
     })
   }, [isConnected, subscribe, queryClient])
 

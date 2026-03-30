@@ -15,8 +15,7 @@ export default function HealthScoreBadge({ score = 0, size = 36, className }) {
 
   return (
     <Tooltip delayDuration={200}>
-      <TooltipTrigger asChild>
-        <div className={cn('inline-flex items-center justify-center relative', className)} style={{ width: size, height: size }}>
+      <TooltipTrigger render={<div className={cn('inline-flex items-center justify-center relative', className)} style={{ width: size, height: size }} />}>
           <svg width={size} height={size} className="-rotate-90">
             <circle
               cx={size / 2}
@@ -45,7 +44,6 @@ export default function HealthScoreBadge({ score = 0, size = 36, className }) {
           >
             {score}
           </span>
-        </div>
       </TooltipTrigger>
       <TooltipContent className="bg-[#1a1a1a] text-[#FAFAFA] border-[#1a1a1a] text-xs">
         Health Score: {score}/100

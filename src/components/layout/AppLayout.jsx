@@ -121,7 +121,7 @@ function NavItem({ item, collapsed, isActive }) {
   if (collapsed) {
     return (
       <Tooltip delayDuration={0}>
-        <TooltipTrigger asChild>{content}</TooltipTrigger>
+        <TooltipTrigger render={<div />}>{content}</TooltipTrigger>
         <TooltipContent side="right" className="bg-[#1a1a1a] text-[#FAFAFA] border-[#1a1a1a]">
           {item.label}
         </TooltipContent>
@@ -187,8 +187,7 @@ function SidebarContent({ collapsed, setCollapsed, wsStatus }) {
         </div>
         <div className={cn('flex items-center gap-3', collapsed && 'justify-center')}>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-3 w-full rounded-lg p-1.5 hover:bg-[#111111] transition-colors duration-150">
+            <DropdownMenuTrigger className="flex items-center gap-3 w-full rounded-lg p-1.5 hover:bg-[#111111] transition-colors duration-150 cursor-pointer border-0 bg-transparent">
                 <Avatar className="w-7 h-7">
                   <AvatarFallback className="bg-[#3B82F6] text-white text-xs">
                     {user?.username?.[0]?.toUpperCase() || 'U'}
@@ -197,7 +196,6 @@ function SidebarContent({ collapsed, setCollapsed, wsStatus }) {
                 {!collapsed && (
                   <span className="text-sm text-[#A1A1AA] truncate">{user?.username || 'User'}</span>
                 )}
-              </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="start" className="w-48 bg-[#111111] border-[#1a1a1a]">
               <DropdownMenuItem className="text-[#A1A1AA]" disabled>

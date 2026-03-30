@@ -188,8 +188,7 @@ function LockStatusIndicator({ lockStatus, onRefresh, onForceUnlock }) {
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[#1a1a1a] bg-[#111111] hover:bg-[#161616] transition-colors text-xs font-medium">
+      <PopoverTrigger className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[#1a1a1a] bg-[#111111] hover:bg-[#161616] transition-colors text-xs font-medium">
           <span className={`w-1.5 h-1.5 rounded-full ${isLocked ? 'bg-[#F59E0B]' : 'bg-[#22C55E]'}`} />
           {isLocked ? (
             <span className="text-[#F59E0B] flex items-center gap-1">
@@ -202,7 +201,6 @@ function LockStatusIndicator({ lockStatus, onRefresh, onForceUnlock }) {
               Idle
             </span>
           )}
-        </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 p-0 bg-[#111111] border-[#1a1a1a]">
         <div className="p-3 border-b border-[#1a1a1a] flex items-center justify-between">

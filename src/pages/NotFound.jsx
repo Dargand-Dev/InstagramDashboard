@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import { FileQuestion } from 'lucide-react'
 
 export default function NotFound() {
@@ -10,9 +10,9 @@ export default function NotFound() {
       </div>
       <h1 className="text-xl font-semibold text-[#FAFAFA] mb-1">Page not found</h1>
       <p className="text-sm text-[#52525B] mb-6">The page you're looking for doesn't exist.</p>
-      <Button asChild className="bg-[#3B82F6] hover:bg-[#2563EB] text-white">
-        <Link to="/">Back to Dashboard</Link>
-      </Button>
+      <Link to="/" className={buttonVariants({ className: "bg-[#3B82F6] hover:bg-[#2563EB] text-white" })}>
+        Back to Dashboard
+      </Link>
     </div>
   )
 }

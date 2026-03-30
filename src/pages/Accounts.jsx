@@ -1,7 +1,9 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPut, apiDelete } from '@/lib/api'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -216,10 +218,8 @@ function AccountDetail({ account }) {
             </div>
           </div>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="border-[#1a1a1a] text-[#A1A1AA] h-8">
+            <DropdownMenuTrigger className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[#1a1a1a] text-[#A1A1AA] h-8")}>
                 Change Status <ChevronDown className="w-3 h-3 ml-1" />
-              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="bg-[#111111] border-[#1a1a1a]">
               {['ACTIVE', 'SUSPENDED', 'DISABLED'].map((s) => (
@@ -372,6 +372,7 @@ function AccountDetail({ account }) {
 
 export default function Accounts() {
   const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [sortBy, setSortBy] = useState('health')
@@ -412,10 +413,20 @@ export default function Accounts() {
   const selectedAccount = useMemo(() => accounts.find((a) => a.id === selectedId), [accounts, selectedId])
 
   useEffect(() => {
+    const idFromUrl = searchParams.get('id')
+    if (idFromUrl && accounts.length > 0) {
+      const match = accounts.find((a) => a.id === idFromUrl)
+      if (match) setSelectedId(match.id)
+    }
+  }, [accounts, searchParams])
+
+  useEffect(() => {
+    const idFromUrl = searchParams.get('id')
+    if (idFromUrl) return
     if (selectedId && filtered.length > 0 && !filtered.find((a) => a.id === selectedId)) {
       setSelectedId(null)
     }
-  }, [filtered, selectedId])
+  }, [filtered, selectedId, searchParams])
 
   const toggleSelect = useCallback((id) => {
     setSelectedIds((prev) => {
@@ -543,8 +554,8 @@ export default function Accounts() {
               <span className="text-xs text-[#3B82F6] font-medium">{selectedIds.size} selected</span>
               <div className="ml-auto flex items-center gap-1">
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-6 text-xs text-[#A1A1AA]">Status</Button>
+                  <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-6 text-xs text-[#A1A1AA]")}>
+                    Status
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="bg-[#111111] border-[#1a1a1a]">
                     {['ACTIVE', 'SUSPENDED', 'DISABLED'].map((s) => (
@@ -559,8 +570,8 @@ export default function Accounts() {
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-6 text-xs text-[#A1A1AA]">Scheduling</Button>
+                  <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-6 text-xs text-[#A1A1AA]")}>
+                    Scheduling
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="bg-[#111111] border-[#1a1a1a]">
                     <DropdownMenuItem className="text-xs text-[#A1A1AA] focus:bg-[#1a1a1a]" onClick={() => bulkSchedulingMutation.mutate({ ids: [...selectedIds], enabled: true })}>

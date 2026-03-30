@@ -20,6 +20,10 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': 'http://localhost:8081',
+      '/ws': {
+        target: 'http://localhost:8081',
+        ws: true,
+      },
     },
   },
 })

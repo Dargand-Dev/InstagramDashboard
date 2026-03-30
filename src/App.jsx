@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { IncognitoProvider } from '@/contexts/IncognitoContext'
 import { queryClient } from '@/lib/queryClient'
 import ProtectedRoute from '@/components/auth/ProtectedRoute'
 import AppLayout from '@/components/layout/AppLayout'
@@ -33,6 +34,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={200}>
+        <IncognitoProvider>
         <BrowserRouter>
           <ErrorBoundary>
             <Routes>
@@ -62,6 +64,7 @@ export default function App() {
             </Routes>
           </ErrorBoundary>
         </BrowserRouter>
+        </IncognitoProvider>
         <Toaster
           theme="dark"
           position="bottom-right"

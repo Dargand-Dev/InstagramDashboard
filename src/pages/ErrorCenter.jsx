@@ -1,7 +1,9 @@
 import { useState, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPut } from '@/lib/api'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
@@ -26,7 +28,6 @@ import {
   ShieldAlert,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
 
 const ERROR_TYPES = [
   { key: 'execution', label: 'Execution Errors', icon: Zap, color: '#EF4444' },
@@ -97,9 +98,9 @@ function ErrorCard({ error, onAction }) {
         <div className="flex items-center gap-1 ml-9">
           {errorType === 'account' && (
             <>
-              <Button variant="ghost" size="sm" className="h-6 text-[10px] text-[#A1A1AA]" asChild>
-                <a href={`/accounts?id=${error.accountId}`}><Eye className="w-3 h-3 mr-1" /> View Account</a>
-              </Button>
+              <Link to={`/accounts?id=${error.accountId}`} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-6 text-[10px] text-[#A1A1AA]")}>
+                <Eye className="w-3 h-3 mr-1" /> View Account
+              </Link>
               <Button
                 variant="ghost"
                 size="sm"
@@ -111,14 +112,14 @@ function ErrorCard({ error, onAction }) {
             </>
           )}
           {errorType === 'device' && (
-            <Button variant="ghost" size="sm" className="h-6 text-[10px] text-[#A1A1AA]" asChild>
-              <a href={`/devices?id=${error.deviceId}`}><Eye className="w-3 h-3 mr-1" /> View Device</a>
-            </Button>
+            <Link to={`/devices?id=${error.deviceId}`} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-6 text-[10px] text-[#A1A1AA]")}>
+              <Eye className="w-3 h-3 mr-1" /> View Device
+            </Link>
           )}
           {errorType === 'execution' && (
-            <Button variant="ghost" size="sm" className="h-6 text-[10px] text-[#A1A1AA]" asChild>
-              <a href={`/execution-center?run=${error.id || error.runId}`}><Eye className="w-3 h-3 mr-1" /> View Run</a>
-            </Button>
+            <Link to={`/execution-center?run=${error.id || error.runId}`} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-6 text-[10px] text-[#A1A1AA]")}>
+              <Eye className="w-3 h-3 mr-1" /> View Run
+            </Link>
           )}
           <Button
             variant="ghost"
@@ -201,10 +202,11 @@ export default function ErrorCenter() {
     })
 
     healthOverview.forEach((a) => {
+      const aid = a.accountId || a.id
       errors.push({
-        id: `health-${a.id}`,
+        id: `health-${aid}`,
         source: 'account',
-        accountId: a.id,
+        accountId: aid,
         accountUsername: a.username,
         error: `Low health score: ${a.score ?? a.healthScore ?? 0}`,
         severity: (a.score ?? a.healthScore ?? 0) < 25 ? 'CRITICAL' : 'WARNING',

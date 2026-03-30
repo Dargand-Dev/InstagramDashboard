@@ -44,8 +44,8 @@ export default function TimeAgo({ date, className }) {
 
   return (
     <Tooltip delayDuration={200}>
-      <TooltipTrigger asChild>
-        <span className={className}>{getTimeAgo(date)}</span>
+      <TooltipTrigger render={<span className={className} />}>
+        {getTimeAgo(date)}
       </TooltipTrigger>
       <TooltipContent className="bg-[#1a1a1a] text-[#FAFAFA] border-[#1a1a1a] text-xs">
         {absolute}

@@ -79,37 +79,57 @@ const STATUS_COLORS = {
   QUEUED: '#8B5CF6',
 }
 
+function formatTimeLabel(ms) {
+  if (ms < 60 * 1000) return `${Math.round(ms / 1000)}s ago`
+  if (ms < 60 * 60 * 1000) return `${Math.round(ms / 60000)}m ago`
+  const h = Math.floor(ms / 3600000)
+  const m = Math.round((ms % 3600000) / 60000)
+  return m > 0 ? `${h}h${m}m ago` : `${h}h ago`
+}
+
 function ExecutionTimeline({ runs }) {
   const now = Date.now()
-  const thirtyMinAgo = now - 30 * 60 * 1000
+  const MIN_WINDOW = 30 * 60 * 1000 // 30 min minimum
 
-  const chartData = (runs || []).map((run) => {
+  // First pass: compute raw start/end for each run
+  const rawData = (runs || []).filter(r => r.startedAt).map((run) => {
     const start = new Date(run.startedAt).getTime()
     const end = run.completedAt ? new Date(run.completedAt).getTime() : now
     return {
       name: run.workflowName || run.workflow || 'Run',
-      start: Math.max(start, thirtyMinAgo),
+      start,
       end: Math.min(end, now),
       duration: end - start,
       status: run.status || 'RUNNING',
       device: run.deviceName || run.device,
       runId: run.runId || run.id,
     }
-  }).filter(d => d.end > thirtyMinAgo)
+  })
+
+  // Compute window: from the earliest run start to now, with a minimum of 30 min
+  const earliestStart = rawData.length > 0
+    ? Math.min(...rawData.map(d => d.start))
+    : now - MIN_WINDOW
+  const windowMs = Math.max(now - earliestStart, MIN_WINDOW)
+  const windowStart = now - windowMs
+
+  const chartData = rawData.filter(d => d.end > windowStart)
 
   if (chartData.length === 0) {
     return (
       <div className="flex items-center justify-center py-6 text-[#52525B] text-xs">
-        No executions in the last 30 minutes
+        No recent executions
       </div>
     )
   }
 
   const data = chartData.map(d => ({
     ...d,
-    offset: ((d.start - thirtyMinAgo) / (now - thirtyMinAgo)) * 100,
-    width: ((d.end - d.start) / (now - thirtyMinAgo)) * 100,
+    offset: ((Math.max(d.start, windowStart) - windowStart) / windowMs) * 100,
+    width: ((d.end - Math.max(d.start, windowStart)) / windowMs) * 100,
   }))
+
+  const midMs = windowMs / 2
 
   return (
     <div className="space-y-2">
@@ -137,8 +157,8 @@ function ExecutionTimeline({ runs }) {
         </div>
       ))}
       <div className="flex justify-between text-[10px] text-[#3f3f46] px-[104px]">
-        <span>30m ago</span>
-        <span>15m ago</span>
+        <span>{formatTimeLabel(windowMs)}</span>
+        <span>{formatTimeLabel(midMs)}</span>
         <span>now</span>
       </div>
     </div>
@@ -162,21 +182,33 @@ function ExecutionCard({ run, onStopGraceful, onKill, wsSubscribe, wsConnected }
   useEffect(() => {
     if (!showLogs || !runId) return
 
+    const extractLine = (data) => {
+      if (typeof data === 'string') {
+        // Try parsing JSON strings
+        try {
+          const parsed = JSON.parse(data)
+          return parsed.message || JSON.stringify(parsed)
+        } catch {
+          return data
+        }
+      }
+      return data.message || JSON.stringify(data)
+    }
+
     if (wsConnected) {
       return wsSubscribe(`/topic/executions/${runId}/logs`, (data) => {
-        const line = typeof data === 'string' ? data : data.message || JSON.stringify(data)
-        setLogText(prev => prev + line + '\n')
+        setLogText(prev => prev + extractLine(data) + '\n')
       })
     }
 
     // SSE fallback
     const es = new EventSource(`/api/automation/workflow/logs/stream?runId=${runId}`)
-    es.onmessage = (event) => {
-      setLogText(prev => prev + event.data + '\n')
+    const handler = (event) => {
+      setLogText(prev => prev + extractLine(event.data) + '\n')
     }
-    es.onerror = () => {
-      es.close()
-    }
+    // Backend sends named "log" events, onmessage only catches unnamed events
+    es.addEventListener('log', handler)
+    es.onmessage = handler
     return () => es.close()
   }, [showLogs, runId, wsConnected, wsSubscribe])
 
@@ -382,7 +414,7 @@ export default function ExecutionCenter() {
       {/* Execution Timeline */}
       <Card className="bg-[#111111] border-[#1a1a1a]">
         <CardHeader>
-          <CardTitle className="text-sm text-[#A1A1AA]">Execution Timeline (last 30 min)</CardTitle>
+          <CardTitle className="text-sm text-[#A1A1AA]">Execution Timeline</CardTitle>
         </CardHeader>
         <CardContent>
           <ExecutionTimeline runs={timelineRuns} />

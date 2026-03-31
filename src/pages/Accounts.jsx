@@ -236,7 +236,7 @@ export default function Accounts() {
     try {
       const account = accounts.find(a => a.id === id)
       if (!account) return
-      await apiPut(`/api/accounts/${id}`, { ...account, storyLinkUrl: linkValue || null })
+      await apiPut(`/api/accounts/${id}`, { ...account, storyLinkUrl: linkValue || null, necessaryLink: !!linkValue })
       setEditingLink(false)
       refetch()
     } catch (err) {
@@ -248,7 +248,7 @@ export default function Accounts() {
     try {
       const account = accounts.find(a => a.id === id)
       if (!account) return
-      await apiPut(`/api/accounts/${id}`, { ...account, storyLinkUrl: null })
+      await apiPut(`/api/accounts/${id}`, { ...account, storyLinkUrl: null, necessaryLink: false })
       setEditingLink(false)
       refetch()
     } catch (err) {

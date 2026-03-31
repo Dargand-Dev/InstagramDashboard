@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronRight, AlertTriangle, Trash2, UserPlus, Send, Smartphone, RotateCw, Loader2, Camera, CheckCircle, XCircle, ExternalLink } from 'lucide-react'
+import { ChevronDown, ChevronRight, AlertTriangle, Trash2, UserPlus, Send, Smartphone, RotateCw, Loader2, Camera, CheckCircle, XCircle, ExternalLink, Clock } from 'lucide-react'
 import Card from '../components/Card'
 import StatusBadge from '../components/StatusBadge'
 import LogStreamCard, { formatDuration } from '../components/LogStreamCard'
@@ -47,6 +47,15 @@ const RUN_TYPE_CONFIG = {
 }
 
 const DEFAULT_RUN_TYPE = { label: 'Unknown', icon: Send, cls: 'bg-[#141414] text-[#555] border-[#1a1a1a]' }
+
+const CREATION_TYPES = ['CreateAccount', 'CreateAccountFromExistingContainer']
+
+function getAccountDisplayName(detail, run, index) {
+  if (detail.username && detail.username !== 'unknown') return detail.username
+  if (CREATION_TYPES.includes(run?.workflowType) && (detail.containerName || detail.container))
+    return detail.containerName || detail.container
+  return detail.account || detail.accountName || `Account ${index + 1}`
+}
 
 function getRunType(run) {
   const type = run.workflowType
@@ -163,7 +172,7 @@ export function RunsTab({ workflowFilter, onRetryFailed, retryLoading } = {}) {
                         : Array.isArray(run.details) ? run.details : []
                       const failedUsernames = results
                         .filter(d => ['FAILED', 'ERROR', 'ABORTED'].includes(d.status))
-                        .map(d => d.username || d.account)
+                        .map((d, i) => getAccountDisplayName(d, run, i))
                         .filter(Boolean)
                       if (!failedUsernames.length) return <td />
                       return (
@@ -191,16 +200,25 @@ export function RunsTab({ workflowFilter, onRetryFailed, retryLoading } = {}) {
                           }
                           return (
                             <div className="space-y-1.5">
-                              {results.map((detail, di) => (
+                              {results.map((detail, di) => {
+                                const displayName = getAccountDisplayName(detail, run, di)
+                                const containerLabel = detail.containerName || detail.container
+                                const showContainerBadge = containerLabel && containerLabel !== displayName
+                                const isSuccess = detail.status === 'SUCCESS' || (!detail.status && !detail.failureReason)
+                                return (
                                 <div key={di} className="flex items-center justify-between text-xs">
                                   <div className="flex items-center gap-2">
-                                    {(detail.containerName || detail.container) && (
+                                    {isSuccess
+                                      ? <CheckCircle size={12} className="text-emerald-400 shrink-0" />
+                                      : <XCircle size={12} className="text-red-400 shrink-0" />
+                                    }
+                                    {showContainerBadge && (
                                       <span className="inline-flex items-center gap-1 text-[10px] font-mono text-orange-400/80 bg-orange-500/5 border border-orange-500/15 px-1.5 py-0.5 rounded">
                                         <span className="text-orange-400/50">▣</span>
-                                        <Blur>{detail.containerName || detail.container}</Blur>
+                                        <Blur>{containerLabel}</Blur>
                                       </span>
                                     )}
-                                    <span className="text-white font-medium"><Blur>{detail.username || detail.account || `Account ${di + 1}`}</Blur></span>
+                                    <span className="text-white font-medium"><Blur>{displayName}</Blur></span>
                                     {detail.identityId && (
                                       <span className="text-[#333] text-[10px]"><Blur>{detail.identityId}</Blur></span>
                                     )}
@@ -208,7 +226,7 @@ export function RunsTab({ workflowFilter, onRetryFailed, retryLoading } = {}) {
                                   <div className="flex items-center gap-3">
                                     {detail.failureReason && (
                                       <button
-                                        onClick={(e) => { e.stopPropagation(); setErrorModalDetail(detail) }}
+                                        onClick={(e) => { e.stopPropagation(); setErrorModalDetail({ ...detail, displayName }) }}
                                         title={detail.failureReason}
                                         className="flex items-center gap-1.5 text-red-400/70 hover:text-red-400 transition-colors max-w-[300px]"
                                       >
@@ -220,12 +238,16 @@ export function RunsTab({ workflowFilter, onRetryFailed, retryLoading } = {}) {
                                       <span className="text-[#555] font-mono">{detail.completedSteps}/{detail.totalSteps} steps</span>
                                     )}
                                     {detail.durationMs > 0 && (
-                                      <span className="text-[#555] font-mono">{formatDuration(detail.durationMs)}</span>
+                                      <span className="flex items-center gap-1 text-[#555] font-mono">
+                                        <Clock size={10} className="text-[#333]" />
+                                        {formatDuration(detail.durationMs)}
+                                      </span>
                                     )}
                                     <StatusBadge status={detail.status || 'SUCCESS'} />
                                   </div>
                                 </div>
-                              ))}
+                                )
+                              })}
                             </div>
                           )
                         })()}

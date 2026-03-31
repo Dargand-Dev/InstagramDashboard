@@ -34,7 +34,7 @@ export default function ErrorDetailModal({ detail, onClose }) {
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#1a1a1a] sticky top-0 bg-[#0a0a0a] z-10">
           <div className="flex items-center gap-3 min-w-0">
             <span className="text-white font-bold text-sm truncate">
-              <Blur>{detail.username || 'Unknown'}</Blur>
+              <Blur>{detail.displayName || detail.username || 'Unknown'}</Blur>
             </span>
             <StatusBadge status={detail.status || 'FAILED'} />
             {detail.completedSteps != null && detail.totalSteps != null && (

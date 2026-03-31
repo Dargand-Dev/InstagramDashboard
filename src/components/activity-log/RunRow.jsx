@@ -3,9 +3,18 @@ import { formatDuration } from '@/utils/format'
 import StatusBadge from '@/components/shared/StatusBadge'
 import TimeAgo from '@/components/shared/TimeAgo'
 import {
-  ChevronRight, ChevronDown, RotateCw, Loader2, Image,
+  ChevronRight, ChevronDown, RotateCw, Loader2, Image, CheckCircle, XCircle, Clock,
 } from 'lucide-react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+
+const CREATION_TYPES = ['CreateAccount', 'CreateAccountFromExistingContainer']
+
+function getAccountDisplayName(detail, run, index) {
+  if (detail.username && detail.username !== 'unknown') return detail.username
+  if (CREATION_TYPES.includes(run?.workflowType) && (detail.containerName || detail.container))
+    return detail.containerName || detail.container
+  return detail.account || detail.accountName || `Account ${index + 1}`
+}
 
 export default function RunRow({ run, onRetry, retryingId }) {
   const [expanded, setExpanded] = useState(false)
@@ -18,7 +27,7 @@ export default function RunRow({ run, onRetry, retryingId }) {
 
   const failedAccounts = results
     .filter(r => ['FAILED', 'ERROR', 'ABORTED'].includes(r.status) || r.failed)
-    .map(r => r.username || r.account || r.accountName)
+    .map((r, i) => getAccountDisplayName(r, run, i))
     .filter(Boolean)
 
   const canRetry = onRetry && failCount > 0 && failedAccounts.length > 0
@@ -73,11 +82,25 @@ export default function RunRow({ run, onRetry, retryingId }) {
       {expanded && results.length > 0 && (
         <div className="px-4 pb-3 pl-12">
           <div className="rounded-lg border border-[#1a1a1a] bg-[#0A0A0A] divide-y divide-[#1a1a1a]">
-            {results.map((r, i) => (
+            {results.map((r, i) => {
+              const isSuccess = r.status === 'SUCCESS' || r.success
+              return (
               <div key={i} className="px-3 py-2 text-xs space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-[#A1A1AA]">{r.accountName || r.account || r.username || `Account ${i + 1}`}</span>
+                  <div className="flex items-center gap-2">
+                    {isSuccess
+                      ? <CheckCircle className="w-3 h-3 text-[#22C55E] shrink-0" />
+                      : <XCircle className="w-3 h-3 text-[#EF4444] shrink-0" />
+                    }
+                    <span className="text-[#A1A1AA]">{getAccountDisplayName(r, run, i)}</span>
+                  </div>
                   <div className="flex items-center gap-3">
+                    {r.durationMs > 0 && (
+                      <span className="flex items-center gap-1 text-[#52525B] font-mono">
+                        <Clock className="w-3 h-3 text-[#333]" />
+                        {formatDuration(r.durationMs)}
+                      </span>
+                    )}
                     {r.errorScreenshotPath && (
                       <button
                         onClick={(e) => { e.stopPropagation(); setScreenshotOpen(r.errorScreenshotPath) }}
@@ -107,7 +130,7 @@ export default function RunRow({ run, onRetry, retryingId }) {
                   </div>
                 )}
               </div>
-            ))}
+            )})}
           </div>
         </div>
       )}

@@ -11,7 +11,7 @@ Instagram automation dashboard — a React frontend for monitoring and managing 
 ## Commands
 
 ```bash
-npm run dev      # Start dev server (port 5173, proxies /api → localhost:8081)
+npm run dev      # Start dev server (port 5173, proxies /api → localhost:8081, /ws → ws://localhost:8081)
 npm run build    # Production build to /dist
 npm run lint     # ESLint
 npm run preview  # Preview production build
@@ -23,60 +23,58 @@ No test framework is configured.
 
 - React 19 + JSX (no TypeScript)
 - Vite 8 (build + HMR + dev proxy)
-- Tailwind CSS 4 (via `@tailwindcss/vite` plugin, theme in `src/index.css`)
+- Tailwind CSS 4 via `@tailwindcss/vite` plugin, theme tokens in `src/index.css` `@theme` block
+- shadcn/ui (base-nova style, JSX not TSX) — components in `src/components/ui/`
 - React Router 7 (client-side routing in `src/App.jsx`)
-- Recharts (charts/visualization)
-- Lucide React (icons)
-- Native Fetch API (no axios, no React Query)
+- TanStack React Query (server state) + Zustand (client state)
+- STOMP over SockJS for WebSocket connections
+- Recharts (charts), Lucide React (icons), Sonner (toasts)
+- Path alias: `@/` → `src/`
 
 ## Architecture
 
-### Data Fetching Pattern
+### Two Data Fetching Systems (coexist)
 
-All API calls go through three utilities in `src/hooks/useApi.js`:
-- `useApi(url, options)` — custom hook for GET requests with loading/error/refetch state
-- `apiPost`, `apiPut`, `apiDelete` — standalone functions for mutations
-- Components call these directly; there is no service layer
+The codebase has two API layers — use the right one depending on context:
 
-Two specialized hooks for real-time data:
-- `useActiveRuns` (`src/hooks/useActiveRuns.js`) — polls `/api/automation/workflow/logs/active-runs` every 4 seconds, uses JSON diff to avoid unnecessary re-renders
-- `useWorkflowLogs` (`src/hooks/useWorkflowLogs.js`) — EventSource (SSE) stream for live execution logs
+1. **React Query + `src/lib/api.js`** (preferred for new code): `apiGet`/`apiPost`/`apiPut`/`apiDelete` functions that include JWT auth headers from `authStore` and handle 401 auto-logout. Used with `useQuery`/`useMutation` from React Query via `queryClient` in `src/lib/queryClient.js`.
+
+2. **Legacy `src/hooks/useApi.js`**: Standalone `useApi(url, options)` hook with built-in polling, JSON diff optimization, and loading/error state. Also exports `apiPost`/`apiPut`/`apiDelete` (without auth headers). Some components still use this — don't mix the two in the same component.
+
+### Real-Time Data
+
+- **`useActiveRuns`** — polls `/api/automation/workflow/logs/active-runs` every 4s with JSON diff to avoid re-renders
+- **`useWorkflowLogs(runId)`** — EventSource (SSE) stream for live execution logs
+- **`useDeviceLogs(udid)`** — SSE stream for per-device log events
+- **`useDeviceQueue`** — SSE stream for queue state changes, with mutation helpers (cancel, pause, resume, reorder)
+- **`useWebSocket`** — STOMP/SockJS client with auto-reconnect (exponential backoff), subscription management, and JWT auth
 
 ### State Management
 
-- **No external state library** — uses React Context and local useState
-- `IncognitoContext` (`src/contexts/`) — global toggle to blur sensitive data (usernames, identities), persisted to localStorage
-- `PasswordGate` component (`src/components/`) — client-side session auth using localStorage token
+- **Zustand stores** (`src/stores/`):
+  - `authStore` — JWT token + user, persisted to localStorage (`ig_auth_token`, `ig_auth_user`), auto-logout on 401
+  - `notificationStore` — in-memory notification list with unread count
+- **React Context**: `IncognitoContext` — global toggle to blur sensitive data, persisted to localStorage. Exports `useIncognito()` hook and `<Blur>` wrapper component.
 
 ### Routing
 
-Routes defined in `src/App.jsx`. All pages render inside `Layout` which provides the sidebar:
-
-| Path | Page | Purpose |
-|------|------|---------|
-| `/` | Dashboard | Overview metrics, recent runs, live execution panel |
-| `/accounts` | Accounts | Account list with detail editor, inline field editing |
-| `/actions` | Actions | Manual trigger of automation actions with device/account selection |
-| `/activity` | Activity | Execution history with expandable run details |
-| `/posting-runs` | PostingRuns | Reel posting run management |
-| `/creation-runs` | CreationRuns | Account creation run management |
-| `/posting-history` | PostingHistory | Historical posting records |
-| `/analytics` | Analytics | Account performance metrics, sortable table, charts |
+All routes defined in `src/App.jsx`. Pages load lazily via `React.lazy()` with `<PageSkeleton />` fallback. All protected routes render inside `AppLayout` which provides the sidebar. Login page is unprotected.
 
 ### Styling
 
-Dark-mode only. Custom theme defined via `@theme` in `src/index.css`:
-- Background: `#000000` (black), surfaces: `#0a0a0a`
-- Borders: `#1a1a1a`
-- Primary: blue `#3b82f6`
-- All styling is inline Tailwind classes — no separate CSS files per component
+Dark-mode only. Theme tokens defined via `@theme` in `src/index.css` (surface colors, border, primary/success/error/warning, text hierarchy). All styling uses inline Tailwind classes. shadcn/ui components use `cn()` from `src/lib/utils.js` for class merging.
 
 ### API Contract
 
-The backend returns responses wrapped in an object with a `data` field. The frontend destructures this (e.g., `response.data`). HTTP 423 is handled specially to detect distributed lock conflicts.
+- Backend wraps responses in `{ data: ... }` — destructure accordingly
+- HTTP 423 indicates distributed lock conflict — handled specially in both API layers (returns `{ locked: true, ...body }`)
+- Key API prefixes: `/api/accounts`, `/api/automation/*`, `/api/stats/*`, `/api/devices`, `/api/queue`, `/api/notifications`, `/api/auth`
 
-Key API prefixes:
-- `/api/accounts` — account CRUD + status/scheduling updates
-- `/api/automation/*` — workflow triggers, run history, content status, scheduling
-- `/api/stats/*` — account performance snapshots
-- `/api/devices` — device listing
+### Component Organization
+
+- `src/components/ui/` — shadcn/ui primitives (don't edit manually, use `npx shadcn@latest add`)
+- `src/components/shared/` — reusable app components (DataTable, StatusBadge, EmptyState, LogViewer, ErrorBoundary, etc.)
+- `src/components/layout/` — AppLayout (sidebar + outlet)
+- `src/components/auth/` — ProtectedRoute
+- `src/components/actions/`, `activity-log/`, `charts/` — domain-specific components
+- `src/pages/` — one file per route, lightweight wrappers composing shared/domain components

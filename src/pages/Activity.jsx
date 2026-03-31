@@ -1,14 +1,15 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { ChevronDown, ChevronRight, AlertTriangle, Trash2, UserPlus, Send, Smartphone, RotateCw, Loader2, Camera } from 'lucide-react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
+import { ChevronDown, ChevronRight, AlertTriangle, Trash2, UserPlus, Send, Smartphone, RotateCw, Loader2, Camera, CheckCircle, XCircle, ExternalLink } from 'lucide-react'
 import Card from '../components/Card'
 import StatusBadge from '../components/StatusBadge'
 import LogStreamCard, { formatDuration } from '../components/LogStreamCard'
-import { useApi } from '../hooks/useApi'
+import { useApi, apiPost } from '../hooks/useApi'
 import { Blur } from '../contexts/IncognitoContext'
 import ErrorDetailModal from '../components/ErrorDetailModal'
 
 const TABS = [
+  { id: 'runs', label: 'Runs' },
   { id: 'content', label: 'Content' },
   { id: 'trash', label: 'Drive Trash' },
   { id: 'logs', label: 'Logs' },
@@ -433,10 +434,39 @@ function LogsTab() {
   )
 }
 
+function saveWorkflowRun(runId, workflowName) {
+  try {
+    const runs = JSON.parse(localStorage.getItem('activeWorkflowRuns') || '[]')
+    runs.unshift({ runId, workflowName, timestamp: Date.now() })
+    localStorage.setItem('activeWorkflowRuns', JSON.stringify(runs))
+  } catch { /* ignore */ }
+}
+
 export default function Activity() {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const initialTab = TABS.find(t => t.id === searchParams.get('tab'))?.id || 'content'
+  const initialTab = TABS.find(t => t.id === searchParams.get('tab'))?.id || 'runs'
   const [tab, setTab] = useState(initialTab)
+  const [retryState, setRetryState] = useState({ loading: false, result: null })
+
+  async function handleRetryFailed(run, failedUsernames) {
+    setRetryState({ loading: true, result: null })
+    try {
+      const data = await apiPost('/api/automation/trigger', { usernames: failedUsernames })
+      if (data.runId) saveWorkflowRun(data.runId, run.workflowType || 'PostReel')
+      setRetryState({
+        loading: false,
+        result: { type: 'success', message: `Retry triggered for ${failedUsernames.length} account(s)`, runId: data.runId },
+      })
+    } catch (err) {
+      setRetryState({
+        loading: false,
+        result: { type: 'error', message: err.message || 'Retry failed' },
+      })
+    }
+  }
+
+  const { result } = retryState
 
   return (
     <div>
@@ -465,6 +495,29 @@ export default function Activity() {
         ))}
       </div>
 
+      {tab === 'runs' && (
+        <>
+          {result && (
+            <div className={`flex items-center justify-between mb-4 p-3 rounded-md border text-xs font-medium ${
+              result.type === 'error' ? 'bg-red-500/5 text-red-400 border-red-500/15' : 'bg-emerald-500/5 text-emerald-400 border-emerald-500/15'
+            }`}>
+              <div className="flex items-center gap-2">
+                {result.type === 'error' ? <XCircle size={14} /> : <CheckCircle size={14} />}
+                {result.message}
+              </div>
+              {result.runId && (
+                <button
+                  onClick={() => setTab('logs')}
+                  className="flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 transition-colors font-semibold"
+                >
+                  View logs <ExternalLink size={10} />
+                </button>
+              )}
+            </div>
+          )}
+          <RunsTab onRetryFailed={handleRetryFailed} retryLoading={retryState.loading} />
+        </>
+      )}
       {tab === 'content' && <ContentTab />}
       {tab === 'trash' && <TrashTab />}
       {tab === 'logs' && <LogsTab />}

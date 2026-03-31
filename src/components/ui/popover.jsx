@@ -1,5 +1,3 @@
-"use client"
-
 import * as React from "react"
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 
@@ -12,6 +10,7 @@ function Popover({
 }
 
 function PopoverTrigger({
+  asChild,
   ...props
 }) {
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />;

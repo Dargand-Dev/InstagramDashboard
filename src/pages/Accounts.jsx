@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Trash2, Search, Users, Link, Pencil, X, ExternalLink, Smartphone, Check, Calendar } from 'lucide-react'
+import { Trash2, Search, Users, Link, Pencil, X, ExternalLink, Smartphone, Check, Calendar, LayoutList, LayoutGrid, ChevronRight, ChevronDown } from 'lucide-react'
 import StatusBadge from '../components/StatusBadge'
 import { useApi, apiPut, apiDelete } from '../hooks/useApi'
 import AccountDailyViewsChart from '../components/AccountDailyViewsChart'
@@ -168,6 +168,44 @@ export default function Accounts() {
     return { deviceNames: noDevice > 0 ? [...names, 'No Device'] : names, deviceCounts: counts }
   }, [accounts, accountDeviceMap])
 
+  // Build device groups with KPIs for device view
+  const deviceGroups = useMemo(() => {
+    if (!accounts) return []
+    const groups = {}
+    for (const a of accounts) {
+      const deviceName = a.deviceUdid ? (deviceMap[a.deviceUdid] || a.deviceUdid.slice(-8)) : null
+      const key = deviceName || '__no_device'
+      if (!groups[key]) {
+        groups[key] = {
+          name: deviceName || 'No Device',
+          udid: a.deviceUdid || null,
+          accounts: [],
+          kpis: { total: 0, active: 0, suspended: 0, banned: 0, error: 0, schedulingEnabled: 0, totalViews: 0, totalFollowers: 0, totalPosts: 0 },
+        }
+      }
+      groups[key].accounts.push(a)
+      groups[key].kpis.total++
+      const s = a.status?.toLowerCase()
+      if (s === 'active') groups[key].kpis.active++
+      else if (s === 'suspended') groups[key].kpis.suspended++
+      else if (s === 'banned') groups[key].kpis.banned++
+      else if (s === 'error') groups[key].kpis.error++
+      if (a.schedulingEnabled) groups[key].kpis.schedulingEnabled++
+      groups[key].kpis.totalViews += (a.viewsLast30Days ?? 0)
+      groups[key].kpis.totalFollowers += (a.followerCount ?? 0)
+      groups[key].kpis.totalPosts += (postCounts[a.username] || a.postCount || 0)
+    }
+    return Object.values(groups).sort((a, b) => b.kpis.total - a.kpis.total)
+  }, [accounts, deviceMap, postCounts])
+
+  function toggleDeviceExpanded(name) {
+    setExpandedDevices(prev => {
+      const next = new Set(prev)
+      next.has(name) ? next.delete(name) : next.add(name)
+      return next
+    })
+  }
+
   const filtered = accounts
     ? (filter === 'ALL' ? accounts : accounts.filter(a => a.status === filter))
         .filter(a => identityFilter === 'ALL' || usernameToIdentity[a.username] === identityFilter)
@@ -180,6 +218,9 @@ export default function Accounts() {
     : []
 
   const selectedAccount = filtered.find(a => a.id === selectedId)
+
+  const [viewMode, setViewMode] = useState('list') // 'list' | 'device'
+  const [expandedDevices, setExpandedDevices] = useState(new Set())
 
   const [editingLink, setEditingLink] = useState(false)
   const [linkValue, setLinkValue] = useState('')
@@ -297,15 +338,154 @@ export default function Accounts() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-4">
-        <h1 className="text-2xl font-extrabold text-white tracking-tight">Accounts</h1>
-        <p className="text-xs text-[#333] mt-0.5">
-          {accounts ? `${accounts.length} total accounts` : 'Loading...'}
-        </p>
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-extrabold text-white tracking-tight">Accounts</h1>
+          <p className="text-xs text-[#333] mt-0.5">
+            {accounts ? `${accounts.length} total accounts` : 'Loading...'}
+          </p>
+        </div>
+        <div className="flex items-center gap-1 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg p-0.5">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              viewMode === 'list' ? 'bg-white/10 text-white' : 'text-[#555] hover:text-white'
+            }`}
+          >
+            <LayoutList size={14} />
+            List
+          </button>
+          <button
+            onClick={() => setViewMode('device')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              viewMode === 'device' ? 'bg-white/10 text-white' : 'text-[#555] hover:text-white'
+            }`}
+          >
+            <Smartphone size={14} />
+            By Device
+          </button>
+        </div>
       </div>
 
+      {/* Device View */}
+      {viewMode === 'device' && (
+        <div className="space-y-3" style={{ height: 'calc(100vh - 120px)', overflowY: 'auto' }}>
+          {/* Device KPI summary row */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {deviceGroups.map(group => {
+              const k = group.kpis
+              const healthPct = k.total > 0 ? Math.round((k.active / k.total) * 100) : 0
+              return (
+                <button
+                  key={group.name}
+                  onClick={() => toggleDeviceExpanded(group.name)}
+                  className={`text-left bg-[#0a0a0a] border rounded-[10px] p-4 transition-colors ${
+                    expandedDevices.has(group.name)
+                      ? 'border-blue-500/30 bg-blue-500/5'
+                      : 'border-[#1a1a1a] hover:border-[#333]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <Smartphone size={14} className="text-[#555]" />
+                    <span className="text-sm font-semibold text-white truncate">{group.name}</span>
+                  </div>
+                  {/* Health bar */}
+                  <div className="w-full h-1.5 bg-[#1a1a1a] rounded-full mb-3 overflow-hidden">
+                    <div className="h-full flex">
+                      {k.active > 0 && <div className="bg-emerald-500 h-full" style={{ width: `${(k.active / k.total) * 100}%` }} />}
+                      {k.suspended > 0 && <div className="bg-amber-500 h-full" style={{ width: `${(k.suspended / k.total) * 100}%` }} />}
+                      {k.error > 0 && <div className="bg-orange-500 h-full" style={{ width: `${(k.error / k.total) * 100}%` }} />}
+                      {k.banned > 0 && <div className="bg-red-500 h-full" style={{ width: `${(k.banned / k.total) * 100}%` }} />}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                    <div className="flex justify-between">
+                      <span className="text-[10px] text-[#555]">Total</span>
+                      <span className="text-xs font-bold text-white">{k.total}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[10px] text-[#555]">Active</span>
+                      <span className="text-xs font-bold text-emerald-400">{k.active}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[10px] text-[#555]">Banned</span>
+                      <span className="text-xs font-bold text-red-400">{k.banned}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[10px] text-[#555]">Error</span>
+                      <span className="text-xs font-bold text-orange-400">{k.error}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[10px] text-[#555]">Sched</span>
+                      <span className="text-xs font-bold text-blue-400">{k.schedulingEnabled}/{k.total}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[10px] text-[#555]">Health</span>
+                      <span className={`text-xs font-bold ${healthPct >= 80 ? 'text-emerald-400' : healthPct >= 50 ? 'text-amber-400' : 'text-red-400'}`}>{healthPct}%</span>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-[#1a1a1a] grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <p className="text-xs font-bold text-white">{k.totalViews.toLocaleString()}</p>
+                      <p className="text-[9px] text-[#555] uppercase">Views</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-white">{k.totalFollowers.toLocaleString()}</p>
+                      <p className="text-[9px] text-[#555] uppercase">Followers</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-white">{k.totalPosts}</p>
+                      <p className="text-[9px] text-[#555] uppercase">Posts</p>
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Expanded device account lists */}
+          {deviceGroups.filter(g => expandedDevices.has(g.name)).map(group => (
+            <div key={group.name} className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-[10px] overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-[#1a1a1a]">
+                <Smartphone size={14} className="text-[#555]" />
+                <span className="text-sm font-semibold text-white">{group.name}</span>
+                <span className="text-xs text-[#333] ml-auto">{group.kpis.total} accounts</span>
+              </div>
+              <div className="divide-y divide-[#141414]">
+                {group.accounts.map(account => (
+                  <button
+                    key={account.id}
+                    onClick={() => { setViewMode('list'); handleSelectAccount(account.id) }}
+                    className="w-full text-left px-4 py-3 hover:bg-[#111] transition-colors flex items-center gap-3"
+                  >
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDotColor(account.status)}`} />
+                    <span className="text-sm font-semibold text-white truncate min-w-[120px]"><Blur>{account.username}</Blur></span>
+                    <span className="text-xs text-[#444]">{(account.viewsLast30Days ?? 0).toLocaleString()} views</span>
+                    <span className="text-xs text-[#444]">{account.followerCount ?? 0} followers</span>
+                    <span className="text-xs text-[#444]">{postCounts[account.username] || account.postCount || 0} posts</span>
+                    <div className="ml-auto flex items-center gap-2">
+                      {account.schedulingEnabled && (
+                        <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded">Sched</span>
+                      )}
+                      <StatusBadge status={account.status} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {deviceGroups.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16">
+              <Smartphone size={48} className="text-[#1a1a1a] mb-4" />
+              <p className="text-base text-[#333]">No devices found</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Main layout */}
-      <div className="flex flex-col lg:flex-row gap-3" style={{ height: 'calc(100vh - 120px)' }}>
+      {viewMode === 'list' && <div className="flex flex-col lg:flex-row gap-3" style={{ height: 'calc(100vh - 120px)' }}>
         {/* Left Panel — Account List */}
         <div className="w-full lg:w-[380px] flex flex-col bg-[#0a0a0a] border border-[#1a1a1a] rounded-[10px] overflow-hidden max-h-[400px] lg:max-h-none">
           {/* Search */}
@@ -668,7 +848,7 @@ export default function Accounts() {
             </div>
           )}
         </div>
-      </div>
+      </div>}
     </div>
   )
 }

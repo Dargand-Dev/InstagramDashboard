@@ -93,15 +93,19 @@ export default function DeviceGroupList({ devices, accounts, selectedUsernames, 
                 <span className="text-[10px] text-muted-foreground font-mono">
                   {selectedCount}/{deviceAccounts.length}
                 </span>
-                <button
+                <span
+                  role="button"
+                  tabIndex={0}
                   onClick={e => {
                     e.stopPropagation()
+                    e.preventDefault()
                     onToggleAll(deviceAccounts.map(a => a.username))
                   }}
-                  className="text-[10px] text-muted-foreground hover:text-foreground font-semibold uppercase tracking-wider px-1.5 transition-colors"
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); onToggleAll(deviceAccounts.map(a => a.username)) } }}
+                  className="text-[10px] text-muted-foreground hover:text-foreground font-semibold uppercase tracking-wider px-1.5 transition-colors cursor-pointer"
                 >
                   {allSelected ? 'Clear' : 'All'}
-                </button>
+                </span>
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="border-t border-border">

@@ -1,17 +1,20 @@
 import { useState, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Cell
+  Tooltip as RechartsTooltip, ResponsiveContainer, Cell
 } from 'recharts'
-import { Users, Eye, UserCheck, Trophy, Calendar, Link2, Link2Off, X } from 'lucide-react'
-import Card from '../components/Card'
-import InteractiveLineChart from '../components/InteractiveLineChart'
-import DailyViewsBarChart from '../components/DailyViewsBarChart'
-import DateRangePicker from '../components/DateRangePicker'
-import { useApi, apiPut } from '../hooks/useApi'
-import { CHART_COLORS, buildColorMap } from '../utils/chartColors'
-import { Blur, useIncognito } from '../contexts/IncognitoContext'
+import { Users, Eye, UserCheck, Trophy, Calendar, Link2, Link2Off } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { apiGet, apiPut } from '@/lib/api'
+import InteractiveLineChart from '@/components/charts/InteractiveLineChart'
+import DailyViewsBarChart from '@/components/charts/DailyViewsBarChart'
+import DateRangePicker from '@/components/shared/DateRangePicker'
+import { CHART_COLORS, buildColorMap } from '@/utils/chartColors'
+import { Blur, useIncognito } from '@/contexts/IncognitoContext'
 
 const PERIODS = [
   { key: 'alltime', label: 'All time',         days: 9999, titleSuffix: 'All time' },
@@ -34,11 +37,10 @@ function formatNumber(n) {
 }
 
 function computeAllTimeViews(snapshots) {
-  // Group snapshots per account by month, take max viewsLast30Days per month, sum those
   const byAccount = {}
   for (const snap of snapshots) {
     if (!byAccount[snap.username]) byAccount[snap.username] = {}
-    const month = snap.snapshotAt?.slice(0, 7) // "YYYY-MM"
+    const month = snap.snapshotAt?.slice(0, 7)
     if (!month) continue
     const views = snap.viewsLast30Days || 0
     if (!byAccount[snap.username][month] || views > byAccount[snap.username][month]) {
@@ -69,16 +71,41 @@ export default function Analytics() {
 
   const apiDays = period === 'custom' ? (customDays != null ? customDays + 30 : 9999) : currentPeriod?.days ?? 9999
 
-  const { data: snapData, loading: snapLoading } = useApi(`/api/stats/snapshots?days=${apiDays}`, { pollInterval: 30_000 })
-  const { data: allSnapData, loading: allSnapLoading } = useApi('/api/stats/snapshots?days=9999', { pollInterval: 30_000 })
-  const { data: overview, loading: overviewLoading } = useApi(`/api/stats/overview?days=${apiDays}`, { pollInterval: 30_000 })
-  const { data: accountsData, loading: accountsLoading, refetch: refetchAccounts } = useApi('/api/accounts', { pollInterval: 30_000 })
+  const { data: snapData, isLoading: snapLoading } = useQuery({
+    queryKey: ['snapshots', apiDays],
+    queryFn: () => apiGet(`/api/stats/snapshots?days=${apiDays}`),
+    refetchInterval: 30_000,
+  })
+
+  const { data: allSnapData } = useQuery({
+    queryKey: ['snapshots-all'],
+    queryFn: () => apiGet('/api/stats/snapshots?days=9999'),
+    refetchInterval: 30_000,
+  })
+
+  const { data: overview, isLoading: overviewLoading } = useQuery({
+    queryKey: ['overview', apiDays],
+    queryFn: () => apiGet(`/api/stats/overview?days=${apiDays}`),
+    refetchInterval: 30_000,
+  })
+
+  const { data: accountsData, refetch: refetchAccounts } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: () => apiGet('/api/accounts'),
+    refetchInterval: 30_000,
+  })
 
   const navigate = useNavigate()
   const { isIncognito } = useIncognito()
-  const isInitialLoad = (snapLoading || overviewLoading) && !snapData
 
-  const snapshots = snapData?.snapshots || []
+  // Normalize data — handle both { data: ... } wrapper and direct response
+  const overviewData = overview?.data || overview || {}
+  const rawSnap = snapData?.data || snapData || {}
+  const snapshots = rawSnap.snapshots || (Array.isArray(rawSnap) ? rawSnap : [])
+  const rawAllSnap = allSnapData?.data || allSnapData || {}
+  const allSnapshots = rawAllSnap.snapshots || (Array.isArray(rawAllSnap) ? rawAllSnap : [])
+
+  const isInitialLoad = (snapLoading || overviewLoading) && !snapData
 
   const filteredSnapshots = useMemo(() => {
     if (!snapshots.length) return []
@@ -103,7 +130,7 @@ export default function Analytics() {
   // Period-aware KPIs
   const periodKpis = useMemo(() => {
     if (period === 'alltime') {
-      return { views: overview?.totalViews, followers: overview?.totalFollowers }
+      return { views: overviewData?.totalViews, followers: overviewData?.totalFollowers }
     }
     if (!filteredSnapshots.length) return { views: null, followers: null }
 
@@ -125,11 +152,11 @@ export default function Analytics() {
     }
 
     return { views: totalViewsGain, followers: totalFollowersGain }
-  }, [filteredSnapshots, overview, period])
+  }, [filteredSnapshots, overviewData, period])
 
-  // Map of username -> link from accounts
+  // Account links map
   const accountLinks = useMemo(() => {
-    const accounts = accountsData?.accounts || accountsData || []
+    const accounts = accountsData?.data?.accounts || accountsData?.data || accountsData?.accounts || accountsData || []
     if (!Array.isArray(accounts)) return {}
     const map = {}
     for (const acc of accounts) {
@@ -138,9 +165,8 @@ export default function Analytics() {
     return map
   }, [accountsData])
 
-  // Map of username -> account (for link editing)
   const accountsByUsername = useMemo(() => {
-    const accounts = accountsData?.accounts || accountsData || []
+    const accounts = accountsData?.data?.accounts || accountsData?.data || accountsData?.accounts || accountsData || []
     if (!Array.isArray(accounts)) return {}
     const map = {}
     for (const acc of accounts) {
@@ -151,16 +177,16 @@ export default function Analytics() {
 
   // All-time views per account
   const allTimeViews = useMemo(() => {
-    if (!allSnapData?.snapshots?.length) return {}
-    return computeAllTimeViews(allSnapData.snapshots)
-  }, [allSnapData])
+    if (!allSnapshots.length) return {}
+    return computeAllTimeViews(allSnapshots)
+  }, [allSnapshots])
 
   // Efficiency data (views per post)
   const efficiencyData = useMemo(() => {
-    if (!snapData?.snapshots?.length) return []
+    if (!snapshots.length) return []
 
     const latest = {}
-    for (const snap of snapData.snapshots) {
+    for (const snap of snapshots) {
       if (!latest[snap.username] || snap.snapshotAt > latest[snap.username].snapshotAt) {
         latest[snap.username] = snap
       }
@@ -175,19 +201,19 @@ export default function Analytics() {
         posts: s.postCount,
       }))
       .sort((a, b) => b.ratio - a.ratio)
-  }, [snapData])
+  }, [snapshots])
 
   // Table data (latest snapshot per account)
   const tableData = useMemo(() => {
-    if (!snapData?.snapshots?.length) return []
+    if (!snapshots.length) return []
     const latest = {}
-    for (const snap of snapData.snapshots) {
+    for (const snap of snapshots) {
       if (!latest[snap.username] || snap.snapshotAt > latest[snap.username].snapshotAt) {
         latest[snap.username] = snap
       }
     }
     return Object.values(latest)
-  }, [snapData])
+  }, [snapshots])
 
   // Sorted table data
   const sortedTableData = useMemo(() => {
@@ -247,7 +273,6 @@ export default function Analytics() {
     </th>
   )
 
-  // Custom tick renderers that mask text in incognito mode
   const BlurredXTick = ({ x, y, payload }) => (
     <text x={x} y={y} dy={14} textAnchor="middle" fill="#999" fontSize={11}>
       {isIncognito ? '•••' : payload.value}
@@ -269,7 +294,7 @@ export default function Analytics() {
 
   // Identity performance data
   const identityData = useMemo(() => {
-    const breakdown = overview?.identityBreakdown
+    const breakdown = overviewData?.identityBreakdown
     if (!breakdown?.length) return []
     return breakdown
       .filter(id => id.accountCount > 0)
@@ -282,7 +307,7 @@ export default function Analytics() {
         followersPerAccount: Math.round((id.totalFollowers || 0) / id.accountCount),
       }))
       .sort((a, b) => b.viewsPerAccount - a.viewsPerAccount)
-  }, [overview])
+  }, [overviewData])
 
   if (isInitialLoad) {
     return (
@@ -356,277 +381,282 @@ export default function Analytics() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <Card>
-          <div className="flex items-start justify-between mb-3">
-            <span className="label-upper">{period === 'alltime' ? 'Total Followers' : `Followers +${titleSuffix}`}</span>
-            <div className="w-7 h-7 rounded-md flex items-center justify-center bg-emerald-500/10">
-              <Users size={14} className="text-emerald-400" />
-            </div>
-          </div>
-          <div className="text-3xl font-extrabold text-white tracking-tight">
-            {period !== 'alltime' && periodKpis.followers != null ? '+' : ''}{formatNumber(periodKpis.followers)}
-          </div>
-        </Card>
-
-        <Card>
-          <div className="flex items-start justify-between mb-3">
-            <span className="label-upper">{period === 'alltime' ? 'Total Views' : `Views +${titleSuffix}`}</span>
-            <div className="w-7 h-7 rounded-md flex items-center justify-center bg-blue-500/10">
-              <Eye size={14} className="text-blue-400" />
-            </div>
-          </div>
-          <div className="text-3xl font-extrabold text-white tracking-tight">
-            {period !== 'alltime' && periodKpis.views != null ? '+' : ''}{formatNumber(periodKpis.views)}
-          </div>
-        </Card>
-
-        <Card>
-          <div className="flex items-start justify-between mb-3">
-            <span className="label-upper">Comptes Actifs</span>
-            <div className="w-7 h-7 rounded-md flex items-center justify-center bg-purple-500/10">
-              <UserCheck size={14} className="text-purple-400" />
-            </div>
-          </div>
-          <div className="text-3xl font-extrabold text-white tracking-tight">
-            {overview?.activeAccounts ?? '—'}
-          </div>
-        </Card>
-
-        <Card>
-          <div className="flex items-start justify-between mb-3">
-            <span className="label-upper">Top Performer</span>
-            <div className="w-7 h-7 rounded-md flex items-center justify-center bg-amber-500/10">
-              <Trophy size={14} className="text-amber-400" />
-            </div>
-          </div>
-          {overview?.topPerformer ? (
-            <>
-              <div className="text-lg font-extrabold text-white tracking-tight">
-                <Blur>{overview.topPerformer.username}</Blur>
+        <Card className="bg-[#111] border-[#1a1a1a]">
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between mb-3">
+              <span className="label-upper">{period === 'alltime' ? 'Total Followers' : `Followers +${titleSuffix}`}</span>
+              <div className="w-7 h-7 rounded-md flex items-center justify-center bg-emerald-500/10">
+                <Users size={14} className="text-emerald-400" />
               </div>
-              <p className="text-xs text-[#555] mt-1">
-                {formatNumber(overview.topPerformer.followerCount)} followers · {formatNumber(overview.topPerformer.viewsLast30Days)} views
-              </p>
-            </>
-          ) : (
-            <span className="text-xs text-[#333]">—</span>
-          )}
+            </div>
+            <div className="text-3xl font-extrabold text-white tracking-tight">
+              {period !== 'alltime' && periodKpis.followers != null ? '+' : ''}{formatNumber(periodKpis.followers)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-[#111] border-[#1a1a1a]">
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between mb-3">
+              <span className="label-upper">{period === 'alltime' ? 'Total Views' : `Views +${titleSuffix}`}</span>
+              <div className="w-7 h-7 rounded-md flex items-center justify-center bg-blue-500/10">
+                <Eye size={14} className="text-blue-400" />
+              </div>
+            </div>
+            <div className="text-3xl font-extrabold text-white tracking-tight">
+              {period !== 'alltime' && periodKpis.views != null ? '+' : ''}{formatNumber(periodKpis.views)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-[#111] border-[#1a1a1a]">
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between mb-3">
+              <span className="label-upper">Comptes Actifs</span>
+              <div className="w-7 h-7 rounded-md flex items-center justify-center bg-purple-500/10">
+                <UserCheck size={14} className="text-purple-400" />
+              </div>
+            </div>
+            <div className="text-3xl font-extrabold text-white tracking-tight">
+              {overviewData?.activeAccounts ?? '—'}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-[#111] border-[#1a1a1a]">
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between mb-3">
+              <span className="label-upper">Top Performer</span>
+              <div className="w-7 h-7 rounded-md flex items-center justify-center bg-amber-500/10">
+                <Trophy size={14} className="text-amber-400" />
+              </div>
+            </div>
+            {overviewData?.topPerformer ? (
+              <>
+                <div className="text-lg font-extrabold text-white tracking-tight">
+                  <Blur>{overviewData.topPerformer.username}</Blur>
+                </div>
+                <p className="text-xs text-[#555] mt-1">
+                  {formatNumber(overviewData.topPerformer.followerCount)} followers · {formatNumber(overviewData.topPerformer.viewsLast30Days)} views
+                </p>
+              </>
+            ) : (
+              <span className="text-xs text-[#333]">—</span>
+            )}
+          </CardContent>
         </Card>
       </div>
 
       {/* Interactive Charts */}
-      <Card className="mb-3">
-        <InteractiveLineChart
-          title={`Views Evolution (${titleSuffix})`}
-          snapshots={filteredSnapshots}
-          dataKey="viewsLast30Days"
-          colorMap={colorMap}
-        />
+      <Card className="bg-[#111] border-[#1a1a1a] mb-3">
+        <CardContent className="p-4">
+          <InteractiveLineChart
+            title={`Views Evolution (${titleSuffix})`}
+            snapshots={filteredSnapshots}
+            dataKey="viewsLast30Days"
+            colorMap={colorMap}
+          />
+        </CardContent>
       </Card>
 
-      <Card className="mb-3">
-        <InteractiveLineChart
-          title={`Followers Evolution (${titleSuffix})`}
-          snapshots={filteredSnapshots}
-          dataKey="followerCount"
-          colorMap={colorMap}
-        />
+      <Card className="bg-[#111] border-[#1a1a1a] mb-3">
+        <CardContent className="p-4">
+          <InteractiveLineChart
+            title={`Followers Evolution (${titleSuffix})`}
+            snapshots={filteredSnapshots}
+            dataKey="followerCount"
+            colorMap={colorMap}
+          />
+        </CardContent>
       </Card>
 
-      <Card className="mb-3">
-        <DailyViewsBarChart
-          title="Daily Views"
-          snapshots={snapshots}
-          colorMap={colorMap}
-          displayDays={period === 'custom' ? customDays : (currentPeriod?.key === '30d' ? 30 : currentPeriod?.days)}
-        />
+      <Card className="bg-[#111] border-[#1a1a1a] mb-3">
+        <CardContent className="p-4">
+          <DailyViewsBarChart
+            title="Daily Views"
+            snapshots={snapshots}
+            colorMap={colorMap}
+            displayDays={period === 'custom' ? customDays : (currentPeriod?.key === '30d' ? 30 : currentPeriod?.days)}
+          />
+        </CardContent>
       </Card>
 
       {/* Identity Performance */}
       {identityData.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
-          <Card>
-            <span className="label-upper block mb-4">Identity Performance (per Account)</span>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={identityData} margin={{ left: 10 }}>
-                <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" />
-                <XAxis dataKey="name" tick={<BlurredXTick />} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} />
-                <YAxis tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
-                <Tooltip {...tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.05)' }} formatter={(v, name) => [formatNumber(v), name]} labelFormatter={isIncognito ? () => '•••' : undefined} />
-                <Bar dataKey="viewsPerAccount" name="Views / Account" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="followersPerAccount" name="Followers / Account" fill="#10b981" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <Card className="bg-[#111] border-[#1a1a1a]">
+            <CardContent className="p-4">
+              <span className="label-upper block mb-4">Identity Performance (per Account)</span>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={identityData} margin={{ left: 10 }}>
+                  <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={<BlurredXTick />} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} />
+                  <YAxis tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
+                  <RechartsTooltip {...tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.05)' }} formatter={(v, name) => [formatNumber(v), name]} labelFormatter={isIncognito ? () => '•••' : undefined} />
+                  <Bar dataKey="viewsPerAccount" name="Views / Account" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="followersPerAccount" name="Followers / Account" fill="#10b981" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
           </Card>
 
-          <Card>
-            <span className="label-upper block mb-4">Identity Breakdown</span>
-            <div className="overflow-hidden rounded-md border border-[#1a1a1a]">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-[#1a1a1a]">
-                    <th className="px-3 py-2 text-left label-upper !text-[10px] !mb-0">Identity</th>
-                    <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Accounts</th>
-                    <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Followers</th>
-                    <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Views</th>
-                    <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Fol/Acc</th>
-                    <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Views/Acc</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {identityData.map((row, i) => (
-                    <tr key={row.name || i} className="border-b border-[#141414] last:border-0 hover:bg-[#111] transition-colors">
-                      <td className="px-3 py-2.5 text-white font-medium"><Blur>{row.name}</Blur></td>
-                      <td className="px-3 py-2.5 text-right font-mono text-[#555]">{row.accounts}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(row.totalFollowers)}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(row.totalViews)}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-emerald-400">{formatNumber(row.followersPerAccount)}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-blue-400">{formatNumber(row.viewsPerAccount)}</td>
+          <Card className="bg-[#111] border-[#1a1a1a]">
+            <CardContent className="p-4">
+              <span className="label-upper block mb-4">Identity Breakdown</span>
+              <div className="overflow-hidden rounded-md border border-[#1a1a1a]">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-[#1a1a1a]">
+                      <th className="px-3 py-2 text-left label-upper !text-[10px] !mb-0">Identity</th>
+                      <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Accounts</th>
+                      <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Followers</th>
+                      <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Views</th>
+                      <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Fol/Acc</th>
+                      <th className="px-3 py-2 text-right label-upper !text-[10px] !mb-0">Views/Acc</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {identityData.map((row, i) => (
+                      <tr key={row.name || i} className="border-b border-[#141414] last:border-0 hover:bg-[#111] transition-colors">
+                        <td className="px-3 py-2.5 text-white font-medium"><Blur>{row.name}</Blur></td>
+                        <td className="px-3 py-2.5 text-right font-mono text-[#555]">{row.accounts}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(row.totalFollowers)}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(row.totalViews)}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-emerald-400">{formatNumber(row.followersPerAccount)}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-blue-400">{formatNumber(row.viewsPerAccount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
           </Card>
         </div>
       )}
 
       {/* Efficiency Chart + Account Details */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
-        <Card>
-          <span className="label-upper block mb-4">Efficiency (Views / Post)</span>
-          {efficiencyData.length === 0 ? (
-            <div className="h-64 flex items-center justify-center text-[#333] text-xs">No data</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={Math.max(200, efficiencyData.length * 40)}>
-              <BarChart data={efficiencyData} layout="vertical" margin={{ left: 20 }}>
-                <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
-                <YAxis type="category" dataKey="username" tick={<BlurredYTick />} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} width={100} />
-                <Tooltip {...tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.05)' }} formatter={(v) => formatNumber(v)} labelFormatter={() => ''} />
-                <Bar dataKey="ratio" radius={[0, 4, 4, 0]} barSize={20}>
-                  {efficiencyData.map((entry, i) => (
-                    <Cell key={i} fill={colorMap[entry.username] || CHART_COLORS[i % CHART_COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+        <Card className="bg-[#111] border-[#1a1a1a]">
+          <CardContent className="p-4">
+            <span className="label-upper block mb-4">Efficiency (Views / Post)</span>
+            {efficiencyData.length === 0 ? (
+              <div className="h-64 flex items-center justify-center text-[#333] text-xs">No data</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={Math.max(200, efficiencyData.length * 40)}>
+                <BarChart data={efficiencyData} layout="vertical" margin={{ left: 20 }}>
+                  <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
+                  <YAxis type="category" dataKey="username" tick={<BlurredYTick />} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} width={100} />
+                  <RechartsTooltip {...tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.05)' }} formatter={(v) => formatNumber(v)} labelFormatter={() => ''} />
+                  <Bar dataKey="ratio" radius={[0, 4, 4, 0]} barSize={20}>
+                    {efficiencyData.map((entry, i) => (
+                      <Cell key={i} fill={colorMap[entry.username] || CHART_COLORS[i % CHART_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
         </Card>
 
         {/* Detail Table */}
-        <Card>
-          <span className="label-upper block mb-4">Account Details</span>
-          <div className="overflow-hidden rounded-md border border-[#1a1a1a]">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-[#1a1a1a]">
-                  <th className="px-3 py-2 text-left label-upper !text-[10px] !mb-0">Username</th>
-                  <SortHeader col="followers" className="text-right">Followers</SortHeader>
-                  <SortHeader col="views" className="text-right">Views All Time</SortHeader>
-                  <SortHeader col="posts" className="text-right">Posts</SortHeader>
-                  <SortHeader col="viewsPerPost" className="text-right">Views/Post</SortHeader>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedTableData.length === 0 ? (
-                  <tr><td colSpan={5} className="px-3 py-6 text-center text-[#333]">No data</td></tr>
-                ) : (
-                  sortedTableData.map((row, i) => {
-                    const views = allTimeViews[row.username] || 0
-                    const hasLink = !!accountLinks[row.username]
-                    const showMissing = !hasLink && views >= 10000
-                    return (
-                      <tr
-                        key={row.username || i}
-                        className="border-b border-[#141414] last:border-0 hover:bg-[#111] transition-colors cursor-pointer"
-                        onClick={() => navigate(`/accounts?username=${encodeURIComponent(row.username)}`)}
-                      >
-                        <td className="px-3 py-2.5 text-white font-medium">
-                          <span className="inline-flex items-center gap-1.5">
-                            <Blur>{row.username}</Blur>
-                            {hasLink && (
-                              <button
-                                onClick={e => openLinkEditor(row.username, e)}
-                                className="text-emerald-500 hover:text-emerald-400 transition-colors"
-                                title="Has link"
-                              >
-                                <Link2 size={12} />
-                              </button>
-                            )}
-                            {showMissing && (
-                              <button
-                                onClick={e => openLinkEditor(row.username, e)}
-                                className="text-red-500 hover:text-red-400 transition-colors"
-                                title="No link — click to add"
-                              >
-                                <Link2Off size={12} />
-                              </button>
-                            )}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(row.followerCount)}</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(views)}</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-[#555]">{row.postCount ?? '—'}</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-[#555]">
-                          {row.postCount ? formatNumber(Math.round(views / row.postCount)) : '—'}
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+        <Card className="bg-[#111] border-[#1a1a1a]">
+          <CardContent className="p-4">
+            <span className="label-upper block mb-4">Account Details</span>
+            <div className="overflow-hidden rounded-md border border-[#1a1a1a]">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-[#1a1a1a]">
+                    <th className="px-3 py-2 text-left label-upper !text-[10px] !mb-0">Username</th>
+                    <SortHeader col="followers" className="text-right">Followers</SortHeader>
+                    <SortHeader col="views" className="text-right">Views All Time</SortHeader>
+                    <SortHeader col="posts" className="text-right">Posts</SortHeader>
+                    <SortHeader col="viewsPerPost" className="text-right">Views/Post</SortHeader>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedTableData.length === 0 ? (
+                    <tr><td colSpan={5} className="px-3 py-6 text-center text-[#333]">No data</td></tr>
+                  ) : (
+                    sortedTableData.map((row, i) => {
+                      const views = allTimeViews[row.username] || 0
+                      const hasLink = !!accountLinks[row.username]
+                      const showMissing = !hasLink && views >= 10000
+                      return (
+                        <tr
+                          key={row.username || i}
+                          className="border-b border-[#141414] last:border-0 hover:bg-[#111] transition-colors cursor-pointer"
+                          onClick={() => navigate(`/accounts?username=${encodeURIComponent(row.username)}`)}
+                        >
+                          <td className="px-3 py-2.5 text-white font-medium">
+                            <span className="inline-flex items-center gap-1.5">
+                              <Blur>{row.username}</Blur>
+                              {hasLink && (
+                                <button
+                                  onClick={e => openLinkEditor(row.username, e)}
+                                  className="text-emerald-500 hover:text-emerald-400 transition-colors"
+                                  title="Has link"
+                                >
+                                  <Link2 size={12} />
+                                </button>
+                              )}
+                              {showMissing && (
+                                <button
+                                  onClick={e => openLinkEditor(row.username, e)}
+                                  className="text-red-500 hover:text-red-400 transition-colors"
+                                  title="No link — click to add"
+                                >
+                                  <Link2Off size={12} />
+                                </button>
+                              )}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(row.followerCount)}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-[#555]">{formatNumber(views)}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-[#555]">{row.postCount ?? '—'}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-[#555]">
+                            {row.postCount ? formatNumber(Math.round(views / row.postCount)) : '—'}
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
         </Card>
       </div>
 
-      {/* Link editing modal */}
-      {editingLinkUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setEditingLinkUser(null)}>
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div
-            className="relative bg-[#111] border border-[#222] rounded-xl p-6 w-full max-w-md shadow-2xl"
-            onClick={e => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setEditingLinkUser(null)}
-              className="absolute top-3 right-3 text-[#555] hover:text-white transition-colors"
-            >
-              <X size={16} />
-            </button>
-
-            <h3 className="text-white font-bold text-sm mb-1">Story Link</h3>
-            <p className="text-[#555] text-xs mb-4">
+      {/* Link editing modal — using v2 Dialog component */}
+      <Dialog open={!!editingLinkUser} onOpenChange={(open) => { if (!open) setEditingLinkUser(null) }}>
+        <DialogContent className="sm:max-w-md bg-[#111] border-[#222]">
+          <DialogHeader>
+            <DialogTitle>Story Link</DialogTitle>
+            <DialogDescription>
               <Blur>{editingLinkUser}</Blur>
-            </p>
+            </DialogDescription>
+          </DialogHeader>
 
-            <input
-              type="text"
-              value={linkInputValue}
-              onChange={e => setLinkInputValue(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleSaveLink(editingLinkUser); if (e.key === 'Escape') setEditingLinkUser(null) }}
-              autoFocus
-              className="w-full bg-[#0a0a0a] border border-[#333] rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500 transition-colors"
-            />
+          <input
+            type="text"
+            value={linkInputValue}
+            onChange={e => setLinkInputValue(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleSaveLink(editingLinkUser); if (e.key === 'Escape') setEditingLinkUser(null) }}
+            autoFocus
+            className="w-full bg-[#0a0a0a] border border-[#333] rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-blue-500 transition-colors"
+          />
 
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                onClick={() => setEditingLinkUser(null)}
-                className="px-3 py-1.5 text-xs text-[#555] hover:text-white transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleSaveLink(editingLinkUser)}
-                className="px-4 py-1.5 text-xs bg-white text-black font-semibold rounded-lg hover:bg-white/90 transition-colors"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setEditingLinkUser(null)}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={() => handleSaveLink(editingLinkUser)}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

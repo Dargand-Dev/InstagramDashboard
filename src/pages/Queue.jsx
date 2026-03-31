@@ -1,346 +1,472 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api'
+import { useWebSocket } from '@/hooks/useWebSocket'
+import { Card, CardContent, CardHeader, CardTitle, CardAction } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import {
-  ListOrdered, Play, Pause, X, ArrowUp, ArrowDown, Clock,
-  CheckCircle, XCircle, AlertCircle, Loader, Smartphone, ChevronDown, ChevronUp
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog'
+import StatusBadge from '@/components/shared/StatusBadge'
+import TimeAgo from '@/components/shared/TimeAgo'
+import EmptyState from '@/components/shared/EmptyState'
+import { toast } from 'sonner'
+import {
+  ListOrdered,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  XCircle,
+  RefreshCw,
+  Smartphone,
+  ChevronDown,
+  ChevronUp,
+  Play,
+  Pause,
+  Clock,
+  Users,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react'
-import { useDeviceQueue } from '../hooks/useDeviceQueue'
-import { useApi } from '../hooks/useApi'
 
-function formatElapsed(startedAt) {
-  if (!startedAt) return ''
-  const start = new Date(startedAt)
-  const now = new Date()
-  const secs = Math.floor((now - start) / 1000)
-  if (secs < 60) return `${secs}s`
-  const mins = Math.floor(secs / 60)
-  const remSecs = secs % 60
-  return `${mins}m ${remSecs}s`
+function formatDuration(startStr) {
+  if (!startStr) return null
+  const start = new Date(startStr).getTime()
+  if (isNaN(start)) return null
+  const ms = Date.now() - start
+  const s = Math.floor(ms / 1000)
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  const rem = s % 60
+  if (m < 60) return `${m}m ${rem}s`
+  const h = Math.floor(m / 60)
+  return `${h}h ${m % 60}m`
 }
 
-function formatTime(dateStr) {
-  if (!dateStr) return '-'
-  const d = new Date(dateStr)
-  return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-}
-
-function TaskStatusIcon({ status }) {
-  switch (status) {
-    case 'RUNNING':
-      return <Loader size={16} className="text-blue-400 animate-spin" />
-    case 'COMPLETED':
-      return <CheckCircle size={16} className="text-emerald-400" />
-    case 'FAILED':
-      return <XCircle size={16} className="text-red-400" />
-    case 'CANCELLED':
-      return <AlertCircle size={16} className="text-amber-400" />
-    case 'QUEUED':
-    default:
-      return <Clock size={16} className="text-[#555]" />
-  }
-}
-
-function statusColor(status) {
-  switch (status) {
-    case 'RUNNING': return 'text-blue-400'
-    case 'COMPLETED': return 'text-emerald-400'
-    case 'FAILED': return 'text-red-400'
-    case 'CANCELLED': return 'text-amber-400'
-    case 'QUEUED': return 'text-[#555]'
-    default: return 'text-[#555]'
-  }
-}
-
-function DeviceCard({ deviceUdid, tasks, paused, onPause, onResume, onCancel, onMoveUp, onMoveDown }) {
-  const [showHistory, setShowHistory] = useState(false)
-  const [elapsed, setElapsed] = useState({})
-  const [history, setHistory] = useState([])
-  const [historyLoading, setHistoryLoading] = useState(false)
-
-  const runningTask = tasks.find(t => t.status === 'RUNNING')
-  const queuedTasks = tasks.filter(t => t.status === 'QUEUED')
-
-  // Mettre à jour l'elapsed time toutes les secondes pour les tâches RUNNING
+function ElapsedTime({ startedAt }) {
+  const [, setTick] = useState(0)
   useEffect(() => {
-    if (!runningTask) return
-    const interval = setInterval(() => {
-      setElapsed(prev => ({ ...prev, [runningTask.id]: formatElapsed(runningTask.startedAt) }))
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [runningTask])
+    if (!startedAt) return
+    const id = setInterval(() => setTick(t => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [startedAt])
+  const dur = formatDuration(startedAt)
+  if (!dur) return null
+  return <span className="tabular-nums text-xs text-[#A1A1AA]">{dur}</span>
+}
 
-  const loadHistory = async () => {
-    if (showHistory) {
-      setShowHistory(false)
-      return
-    }
-    setHistoryLoading(true)
-    try {
-      const res = await fetch(`/api/queue/${encodeURIComponent(deviceUdid)}`)
-      if (res.ok) {
-        const data = await res.json()
-        setHistory(data.history || [])
-      }
-    } catch { /* ignore */ }
-    finally {
-      setHistoryLoading(false)
-      setShowHistory(true)
-    }
-  }
-
-  const deviceLabel = deviceUdid.length > 20 ? deviceUdid.slice(0, 8) + '...' + deviceUdid.slice(-8) : deviceUdid
+function BatchProgressBar({ summary }) {
+  if (!summary || !summary.total) return null
+  const { total, completed, failed, running, skipped } = summary
+  const processed = (completed || 0) + (failed || 0) + (skipped || 0)
+  const pct = Math.round((processed / total) * 100)
 
   return (
-    <div className="border border-[#1a1a1a] rounded-lg bg-[#0a0a0a] overflow-hidden">
-      {/* Device header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a1a1a]">
-        <div className="flex items-center gap-3">
-          <Smartphone size={18} className="text-[#555]" />
-          <span className="text-sm font-semibold text-white">{deviceLabel}</span>
-          <div className={`w-2 h-2 rounded-full ${
-            paused ? 'bg-amber-400' : runningTask ? 'bg-blue-400 animate-pulse' : 'bg-emerald-400'
-          }`} />
-          <span className="text-xs text-[#555]">
-            {paused ? 'En pause' : runningTask ? 'En cours' : 'Libre'}
-          </span>
-          {queuedTasks.length > 0 && (
-            <span className="text-xs bg-white/[0.06] text-[#999] px-2 py-0.5 rounded-full">
-              {queuedTasks.length} en attente
-            </span>
-          )}
+    <div className="w-full mt-2">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] text-[#52525B]">
+          {processed}/{total} accounts ({pct}%)
+        </span>
+        <div className="flex items-center gap-2 text-[10px]">
+          {completed > 0 && <span className="text-[#22C55E]">{completed} done</span>}
+          {failed > 0 && <span className="text-[#EF4444]">{failed} failed</span>}
+          {running > 0 && <span className="text-[#3B82F6]">{running} active</span>}
         </div>
-        <button
-          onClick={() => paused ? onResume(deviceUdid) : onPause(deviceUdid)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-            paused
-              ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-              : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
-          }`}
-        >
-          {paused ? <Play size={14} /> : <Pause size={14} />}
-          {paused ? 'Reprendre' : 'Pause'}
-        </button>
       </div>
-
-      {/* Running task */}
-      {runningTask && (
-        <div className="px-4 py-3 bg-blue-500/[0.04] border-b border-[#1a1a1a]">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <Loader size={16} className="text-blue-400 animate-spin" />
-              <span className="text-sm font-medium text-white">{runningTask.actionName}</span>
-              <span className="text-xs text-[#555]">{runningTask.type}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-blue-400 font-mono">
-                {elapsed[runningTask.id] || formatElapsed(runningTask.startedAt)}
-              </span>
-              {runningTask.runId && (
-                <span className="text-xs text-[#333] font-mono">{runningTask.runId}</span>
-              )}
-              <button
-                onClick={() => onCancel(runningTask.id)}
-                className="p-1 rounded hover:bg-red-500/10 text-[#555] hover:text-red-400 transition-colors"
-                title="Arrêter"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          </div>
-          {runningTask.parameters?.containerNames && (
-            <div className="mt-1.5 text-xs text-[#555]">
-              {runningTask.parameters.containerNames.length} containers
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Queued tasks */}
-      {queuedTasks.length > 0 ? (
-        <div className="divide-y divide-[#141414]">
-          {queuedTasks.map((task, idx) => (
-            <div key={task.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.02] transition-colors">
-              <div className="flex items-center gap-2.5">
-                <span className="text-xs text-[#333] font-mono w-6 text-center">{idx + 1}</span>
-                <Clock size={14} className="text-[#555]" />
-                <span className="text-sm text-[#999]">{task.actionName}</span>
-                <span className="text-xs text-[#333]">{task.type}</span>
-                {task.parameters?.containerNames && (
-                  <span className="text-xs text-[#555]">
-                    ({task.parameters.containerNames.length} containers)
-                  </span>
-                )}
-                <span className="text-xs text-[#333]">P{task.priority}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-[#333] mr-2">{formatTime(task.createdAt)}</span>
-                <button
-                  onClick={() => onMoveUp(task.id, queuedTasks)}
-                  disabled={idx === 0}
-                  className="p-1 rounded hover:bg-white/[0.06] text-[#555] hover:text-white disabled:opacity-20 disabled:hover:bg-transparent transition-colors"
-                  title="Monter"
-                >
-                  <ArrowUp size={14} />
-                </button>
-                <button
-                  onClick={() => onMoveDown(task.id, queuedTasks)}
-                  disabled={idx === queuedTasks.length - 1}
-                  className="p-1 rounded hover:bg-white/[0.06] text-[#555] hover:text-white disabled:opacity-20 disabled:hover:bg-transparent transition-colors"
-                  title="Descendre"
-                >
-                  <ArrowDown size={14} />
-                </button>
-                <button
-                  onClick={() => onCancel(task.id)}
-                  className="p-1 rounded hover:bg-red-500/10 text-[#555] hover:text-red-400 transition-colors"
-                  title="Annuler"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : !runningTask ? (
-        <div className="px-4 py-6 text-center text-xs text-[#333]">
-          Aucune tache en attente
-        </div>
-      ) : null}
-
-      {/* History toggle */}
-      <div className="border-t border-[#1a1a1a]">
-        <button
-          onClick={loadHistory}
-          className="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-xs text-[#555] hover:text-[#999] hover:bg-white/[0.02] transition-colors"
-        >
-          {showHistory ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          {historyLoading ? 'Chargement...' : showHistory ? 'Masquer historique' : 'Historique recent'}
-        </button>
-        {showHistory && history.length > 0 && (
-          <div className="divide-y divide-[#141414]">
-            {history.map(task => (
-              <div key={task.id} className="flex items-center justify-between px-4 py-2 opacity-60">
-                <div className="flex items-center gap-2.5">
-                  <TaskStatusIcon status={task.status} />
-                  <span className="text-xs text-[#999]">{task.actionName}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs font-medium ${statusColor(task.status)}`}>
-                    {task.status}
-                  </span>
-                  <span className="text-xs text-[#333]">{formatTime(task.completedAt)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+      <div className="h-1.5 bg-[#0A0A0A] rounded-full overflow-hidden flex">
+        {completed > 0 && (
+          <div className="h-full bg-[#22C55E]" style={{ width: `${(completed / total) * 100}%` }} />
         )}
-        {showHistory && history.length === 0 && (
-          <div className="px-4 py-3 text-center text-xs text-[#333]">Aucun historique</div>
+        {failed > 0 && (
+          <div className="h-full bg-[#EF4444]" style={{ width: `${(failed / total) * 100}%` }} />
+        )}
+        {running > 0 && (
+          <div className="h-full bg-[#3B82F6] animate-pulse" style={{ width: `${(running / total) * 100}%` }} />
+        )}
+        {skipped > 0 && (
+          <div className="h-full bg-[#52525B]" style={{ width: `${(skipped / total) * 100}%` }} />
         )}
       </div>
     </div>
   )
 }
 
-export default function Queue() {
-  const {
-    queues, loading, connected,
-    cancelTask, pauseDevice, resumeDevice, moveUp, moveDown
-  } = useDeviceQueue()
-
-  const { data: devicesData } = useApi('/api/devices')
-
-  // Fusionner les devices connus avec les queues
-  const allDevices = useMemo(() => {
-    const deviceSet = new Set()
-
-    // Devices depuis la config
-    if (devicesData?.devices) {
-      for (const d of devicesData.devices) {
-        deviceSet.add(d.udid || d.deviceUdid)
-      }
-    }
-
-    // Devices ayant des tâches en queue
-    for (const udid of Object.keys(queues)) {
-      deviceSet.add(udid)
-    }
-
-    return Array.from(deviceSet)
-  }, [devicesData, queues])
-
-  // Déterminer quels devices sont en pause (on le déduit des appels SSE; pour l'instant on fetch)
-  const [pausedMap, setPausedMap] = useState({})
-
-  useEffect(() => {
-    // Charger l'état de pause pour chaque device ayant une queue
-    const loadPauseStates = async () => {
-      const map = {}
-      for (const udid of allDevices) {
-        try {
-          const res = await fetch(`/api/queue/${encodeURIComponent(udid)}`)
-          if (res.ok) {
-            const data = await res.json()
-            map[udid] = data.paused || false
-          }
-        } catch { /* ignore */ }
-      }
-      setPausedMap(map)
-    }
-    if (allDevices.length > 0) loadPauseStates()
-  }, [allDevices, queues])
-
-  const totalQueued = Object.values(queues).flat().filter(t => t.status === 'QUEUED').length
-  const totalRunning = Object.values(queues).flat().filter(t => t.status === 'RUNNING').length
+function TaskCard({ task, onCancel, onReprioritize }) {
+  const [expanded, setExpanded] = useState(false)
+  const isRunning = task.status === 'RUNNING'
+  const isPaused = task.status === 'PAUSED'
+  const summary = task.accountSummary
+  const entries = task.accountEntries || []
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-3">
-            <ListOrdered size={22} className="text-primary" />
-            <h1 className="text-xl font-bold text-white">File d'attente</h1>
+    <div className={`rounded-lg border ${
+      isRunning ? 'border-[#3B82F6]/30 bg-[#3B82F6]/5' :
+      isPaused ? 'border-[#F59E0B]/30 bg-[#F59E0B]/5' :
+      'border-[#1a1a1a] bg-[#111111]'
+    }`}>
+      {/* Task Header */}
+      <div className="p-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+              isRunning ? 'bg-[#3B82F6]/10' :
+              isPaused ? 'bg-[#F59E0B]/10' :
+              'bg-[#8B5CF6]/10'
+            }`}>
+              {isRunning ? <Play className="w-3.5 h-3.5 text-[#3B82F6]" /> :
+               isPaused ? <Pause className="w-3.5 h-3.5 text-[#F59E0B]" /> :
+               <Clock className="w-3.5 h-3.5 text-[#8B5CF6]" />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-[#FAFAFA] truncate">
+                  {task.actionName}
+                </span>
+                <StatusBadge status={task.status || 'QUEUED'} />
+                {isRunning && task.startedAt && <ElapsedTime startedAt={task.startedAt} />}
+              </div>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <span className="text-xs text-[#52525B]">{task.deviceName}</span>
+                {task.currentAccount && (
+                  <>
+                    <span className="text-xs text-[#3f3f46]">·</span>
+                    <span className="text-xs text-[#3B82F6]">@ {task.currentAccount}</span>
+                  </>
+                )}
+                {summary && summary.total > 0 && (
+                  <>
+                    <span className="text-xs text-[#3f3f46]">·</span>
+                    <span className="text-xs text-[#52525B]">
+                      <Users className="w-3 h-3 inline mr-0.5" />
+                      {summary.total} accounts
+                    </span>
+                  </>
+                )}
+                {!summary && (
+                  <>
+                    <span className="text-xs text-[#3f3f46]">·</span>
+                    <TimeAgo date={task.createdAt} className="text-xs text-[#3f3f46]" />
+                  </>
+                )}
+              </div>
+            </div>
           </div>
-          <p className="text-sm text-[#555] mt-1">
-            {totalRunning > 0 && <span className="text-blue-400">{totalRunning} en cours</span>}
-            {totalRunning > 0 && totalQueued > 0 && <span className="mx-1.5">·</span>}
-            {totalQueued > 0 && <span>{totalQueued} en attente</span>}
-            {totalRunning === 0 && totalQueued === 0 && 'Aucune tache active'}
-          </p>
+
+          <div className="flex items-center gap-1 shrink-0">
+            {task.status === 'QUEUED' && (
+              <>
+                <div className="flex items-center gap-0.5 mr-1">
+                  <span className="text-[10px] text-[#52525B] tabular-nums w-4 text-center">{task.priority}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-[#52525B] hover:text-[#22C55E]"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onReprioritize(task.id, task.priority + 1)
+                    }}
+                  >
+                    <ArrowUp className="w-3 h-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-[#52525B] hover:text-[#F59E0B]"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onReprioritize(task.id, Math.max(0, task.priority - 1))
+                    }}
+                  >
+                    <ArrowDown className="w-3 h-3" />
+                  </Button>
+                </div>
+              </>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-[#52525B] hover:text-[#EF4444] hover:bg-[#EF4444]/10"
+              onClick={(e) => {
+                e.stopPropagation()
+                onCancel(task.id)
+              }}
+            >
+              <XCircle className="w-3.5 h-3.5" />
+            </Button>
+            {entries.length > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-[#52525B]"
+                onClick={() => setExpanded(!expanded)}
+              >
+                {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </Button>
+            )}
+          </div>
         </div>
+
+        {summary && <BatchProgressBar summary={summary} />}
+      </div>
+
+      {/* Expanded Account List */}
+      {expanded && entries.length > 0 && (
+        <div className="border-t border-[#1a1a1a] px-3 py-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1 max-h-48 overflow-y-auto">
+            {entries.map((entry, i) => (
+              <div
+                key={entry.containerName || i}
+                className="flex items-center gap-1.5 px-2 py-1 rounded text-xs hover:bg-[#0A0A0A]"
+              >
+                {entry.status === 'COMPLETED' && <CheckCircle2 className="w-3 h-3 text-[#22C55E] shrink-0" />}
+                {entry.status === 'FAILED' && <AlertCircle className="w-3 h-3 text-[#EF4444] shrink-0" />}
+                {entry.status === 'RUNNING' && <Loader2 className="w-3 h-3 text-[#3B82F6] animate-spin shrink-0" />}
+                {entry.status === 'PENDING' && <Clock className="w-3 h-3 text-[#52525B] shrink-0" />}
+                {entry.status === 'SKIPPED' && <XCircle className="w-3 h-3 text-[#52525B] shrink-0" />}
+                <span className={`truncate ${
+                  entry.status === 'RUNNING' ? 'text-[#3B82F6]' :
+                  entry.status === 'COMPLETED' ? 'text-[#22C55E]' :
+                  entry.status === 'FAILED' ? 'text-[#EF4444]' :
+                  'text-[#A1A1AA]'
+                }`}>
+                  {entry.containerName}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function Queue() {
+  const queryClient = useQueryClient()
+  const { subscribe, isConnected } = useWebSocket()
+  const [clearAllOpen, setClearAllOpen] = useState(false)
+
+  const { data: queueData, isLoading } = useQuery({
+    queryKey: ['queue'],
+    queryFn: () => apiGet('/api/queue'),
+    refetchInterval: isConnected ? 5000 : 15000,
+  })
+
+  // WebSocket: refresh queue on task/device events
+  useEffect(() => {
+    if (!isConnected) return
+    const unsubs = [
+      subscribe('/topic/executions/status', () => {
+        queryClient.invalidateQueries({ queryKey: ['queue'] })
+      }),
+      subscribe('/topic/devices/status', () => {
+        queryClient.invalidateQueries({ queryKey: ['queue'] })
+      }),
+    ]
+    return () => unsubs.forEach(fn => fn && fn())
+  }, [isConnected, subscribe, queryClient])
+
+  const cancelTask = useMutation({
+    mutationFn: (taskId) => apiDelete(`/api/queue/tasks/${taskId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue'] })
+      toast.success('Task cancelled')
+    },
+    onError: () => {
+      toast.error('Cannot cancel this task (may be running or already completed)')
+    },
+  })
+
+  const reprioritize = useMutation({
+    mutationFn: ({ taskId, priority }) => apiPut(`/api/queue/tasks/${taskId}/priority`, { priority }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue'] })
+      toast.success('Priority updated')
+    },
+  })
+
+  const clearAll = useMutation({
+    mutationFn: () => apiDelete('/api/queue'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue'] })
+      setClearAllOpen(false)
+      toast.success('Queue cleared')
+    },
+  })
+
+  // Parse enriched backend response
+  const raw = queueData?.data || queueData || {}
+  const queues = raw.queues || {}
+  const deviceNames = raw.deviceNames || {}
+  const totalQueued = raw.totalQueued || 0
+  const totalRunning = raw.totalRunning || 0
+  const totalPaused = raw.totalPaused || 0
+  const totalTasks = totalQueued + totalRunning + totalPaused
+
+  // Group tasks by device
+  const deviceGroups = Object.entries(queues).map(([udid, tasks]) => ({
+    udid,
+    name: (tasks[0] && tasks[0].deviceName) || deviceNames[udid] || udid,
+    tasks: Array.isArray(tasks) ? tasks : [],
+    runningCount: Array.isArray(tasks) ? tasks.filter(t => t.status === 'RUNNING').length : 0,
+    queuedCount: Array.isArray(tasks) ? tasks.filter(t => t.status === 'QUEUED').length : 0,
+    pausedCount: Array.isArray(tasks) ? tasks.filter(t => t.status === 'PAUSED').length : 0,
+  }))
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold text-[#FAFAFA]">Queue</h1>
         <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-400' : 'bg-red-400'}`} />
-          <span className="text-xs text-[#555]">{connected ? 'Connecte' : 'Deconnecte'}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs text-[#52525B] hover:text-[#A1A1AA]"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['queue'] })}
+          >
+            <RefreshCw className="w-3 h-3 mr-1.5" />
+            Refresh
+          </Button>
+          {totalTasks > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-[#EF4444] hover:text-[#EF4444] hover:bg-[#EF4444]/10"
+              onClick={() => setClearAllOpen(true)}
+            >
+              <Trash2 className="w-3 h-3 mr-1.5" />
+              Clear All
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Device cards */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader size={20} className="text-[#555] animate-spin" />
-        </div>
-      ) : allDevices.length === 0 ? (
-        <div className="border border-[#1a1a1a] rounded-lg bg-[#0a0a0a] px-6 py-16 text-center">
-          <Smartphone size={32} className="text-[#333] mx-auto mb-3" />
-          <p className="text-sm text-[#555]">Aucun device configure</p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {allDevices.map(udid => (
-            <DeviceCard
-              key={udid}
-              deviceUdid={udid}
-              tasks={queues[udid] || []}
-              paused={pausedMap[udid] || false}
-              onPause={async (d) => { await pauseDevice(d); setPausedMap(p => ({...p, [d]: true})) }}
-              onResume={async (d) => { await resumeDevice(d); setPausedMap(p => ({...p, [d]: false})) }}
-              onCancel={cancelTask}
-              onMoveUp={moveUp}
-              onMoveDown={moveDown}
-            />
-          ))}
+      {/* Summary Stats */}
+      {totalTasks > 0 && (
+        <div className="flex items-center gap-3 flex-wrap">
+          {totalRunning > 0 && (
+            <Badge variant="outline" className="bg-[#3B82F6]/10 text-[#3B82F6] border-[#3B82F6]/20 text-xs">
+              <Play className="w-3 h-3 mr-1" />
+              {totalRunning} running
+            </Badge>
+          )}
+          {totalQueued > 0 && (
+            <Badge variant="outline" className="bg-[#8B5CF6]/10 text-[#8B5CF6] border-[#8B5CF6]/20 text-xs">
+              <Clock className="w-3 h-3 mr-1" />
+              {totalQueued} queued
+            </Badge>
+          )}
+          {totalPaused > 0 && (
+            <Badge variant="outline" className="bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20 text-xs">
+              <Pause className="w-3 h-3 mr-1" />
+              {totalPaused} paused
+            </Badge>
+          )}
+          <Badge variant="outline" className="bg-[#111111] text-[#52525B] border-[#1a1a1a] text-xs">
+            <Smartphone className="w-3 h-3 mr-1" />
+            {deviceGroups.length} devices
+          </Badge>
+          <span className="text-xs text-[#3f3f46]">
+            {isConnected ? 'Live updates' : 'Auto-refreshing every 15s'}
+          </span>
         </div>
       )}
+
+      {/* Device Groups */}
+      {deviceGroups.length > 0 ? (
+        <div className="space-y-4">
+          {deviceGroups.map((group) => (
+            <Card key={group.udid} className="bg-[#111111] border-[#1a1a1a]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-[#A1A1AA] flex items-center gap-2">
+                  <Smartphone className="w-4 h-4" />
+                  {group.name}
+                  <span className="text-[10px] text-[#3f3f46] font-normal">{group.udid}</span>
+                </CardTitle>
+                <CardAction>
+                  <div className="flex items-center gap-1.5">
+                    {group.runningCount > 0 && (
+                      <Badge variant="outline" className="bg-[#3B82F6]/10 text-[#3B82F6] border-[#3B82F6]/20 text-[10px] h-5">
+                        {group.runningCount} running
+                      </Badge>
+                    )}
+                    {group.queuedCount > 0 && (
+                      <Badge variant="outline" className="bg-[#8B5CF6]/10 text-[#8B5CF6] border-[#8B5CF6]/20 text-[10px] h-5">
+                        {group.queuedCount} queued
+                      </Badge>
+                    )}
+                    {group.pausedCount > 0 && (
+                      <Badge variant="outline" className="bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20 text-[10px] h-5">
+                        {group.pausedCount} paused
+                      </Badge>
+                    )}
+                  </div>
+                </CardAction>
+              </CardHeader>
+              <CardContent className="space-y-2 pt-0">
+                {group.tasks.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onCancel={(id) => cancelTask.mutate(id)}
+                    onReprioritize={(id, priority) => reprioritize.mutate({ taskId: id, priority })}
+                  />
+                ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : isLoading ? (
+        <Card className="bg-[#111111] border-[#1a1a1a]">
+          <CardContent className="p-8">
+            <div className="flex items-center justify-center gap-3">
+              <Loader2 className="w-5 h-5 text-[#52525B] animate-spin" />
+              <span className="text-sm text-[#52525B]">Loading queue...</span>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="bg-[#111111] border-[#1a1a1a]">
+          <CardContent className="p-0">
+            <EmptyState
+              icon={ListOrdered}
+              title="Queue is empty"
+              description="No tasks are currently queued for execution"
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Clear All Confirmation */}
+      <Dialog open={clearAllOpen} onOpenChange={setClearAllOpen}>
+        <DialogContent className="bg-[#111111] border-[#1a1a1a] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-[#FAFAFA]">Clear Entire Queue?</DialogTitle>
+            <DialogDescription className="text-[#52525B]">
+              This will cancel all {totalQueued} queued tasks across {deviceGroups.length} devices. Running and paused tasks will not be affected. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="ghost" className="text-[#A1A1AA]" />}>
+              Cancel
+            </DialogClose>
+            <Button
+              className="bg-[#EF4444] hover:bg-[#DC2626] text-white"
+              onClick={() => clearAll.mutate()}
+              disabled={clearAll.isPending}
+            >
+              Clear All
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

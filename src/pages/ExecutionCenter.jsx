@@ -35,6 +35,8 @@ import {
   ArrowRight,
   Timer,
   ListOrdered,
+  Unplug,
+  RefreshCw,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -77,6 +79,7 @@ const STATUS_COLORS = {
   FAILED: '#EF4444',
   ERROR: '#EF4444',
   QUEUED: '#8B5CF6',
+  DISCONNECTED: '#F59E0B',
 }
 
 function formatTimeLabel(ms) {
@@ -165,6 +168,42 @@ function ExecutionTimeline({ runs }) {
   )
 }
 
+function ProgressBar({ progress }) {
+  if (!progress || !progress.total) return null
+  const { total, completed, failed, running, skipped } = progress
+  const processed = (completed || 0) + (failed || 0) + (skipped || 0)
+  const pct = Math.round((processed / total) * 100)
+
+  return (
+    <div className="w-full">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] text-[#52525B]">
+          {processed}/{total} accounts ({pct}%)
+        </span>
+        <div className="flex items-center gap-2 text-[10px]">
+          {completed > 0 && <span className="text-[#22C55E]">{completed} done</span>}
+          {failed > 0 && <span className="text-[#EF4444]">{failed} failed</span>}
+          {running > 0 && <span className="text-[#3B82F6]">{running} running</span>}
+        </div>
+      </div>
+      <div className="h-1.5 bg-[#0A0A0A] rounded-full overflow-hidden flex">
+        {completed > 0 && (
+          <div className="h-full bg-[#22C55E]" style={{ width: `${(completed / total) * 100}%` }} />
+        )}
+        {failed > 0 && (
+          <div className="h-full bg-[#EF4444]" style={{ width: `${(failed / total) * 100}%` }} />
+        )}
+        {running > 0 && (
+          <div className="h-full bg-[#3B82F6] animate-pulse" style={{ width: `${(running / total) * 100}%` }} />
+        )}
+        {skipped > 0 && (
+          <div className="h-full bg-[#52525B]" style={{ width: `${(skipped / total) * 100}%` }} />
+        )}
+      </div>
+    </div>
+  )
+}
+
 function ExecutionCard({ run, onStopGraceful, onKill, wsSubscribe, wsConnected }) {
   const [expanded, setExpanded] = useState(false)
   const [showLogs, setShowLogs] = useState(false)
@@ -174,6 +213,7 @@ function ExecutionCard({ run, onStopGraceful, onKill, wsSubscribe, wsConnected }
 
   const runId = run.runId || run.id
   const accounts = run.accounts || run.accountList || []
+  const progress = run.progress
   const filteredAccounts = accounts.filter(a =>
     !accountSearch || (a.name || a.username || '').toLowerCase().includes(accountSearch.toLowerCase())
   )
@@ -221,13 +261,13 @@ function ExecutionCard({ run, onStopGraceful, onKill, wsSubscribe, wsConnected }
             <div className="w-9 h-9 rounded-lg bg-[#3B82F6]/10 flex items-center justify-center shrink-0">
               <Play className="w-4 h-4 text-[#3B82F6]" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-[#FAFAFA]">{run.workflowName || run.workflow}</span>
                 <StatusBadge status={run.status || 'RUNNING'} />
               </div>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-xs text-[#52525B]">{run.deviceName || run.device}</span>
+                <span className="text-xs text-[#52525B]">{run.deviceName || run.deviceUdid || run.device}</span>
                 <span className="text-xs text-[#3f3f46]">·</span>
                 <span className="text-xs text-[#A1A1AA]"><ElapsedTime startedAt={run.startedAt} /></span>
                 {accounts.length > 0 && (
@@ -236,7 +276,14 @@ function ExecutionCard({ run, onStopGraceful, onKill, wsSubscribe, wsConnected }
                     <span className="text-xs text-[#52525B]">{accounts.length} accounts</span>
                   </>
                 )}
+                {run.currentAccount && (
+                  <>
+                    <span className="text-xs text-[#3f3f46]">·</span>
+                    <span className="text-xs text-[#3B82F6]">@ {run.currentAccount}</span>
+                  </>
+                )}
               </div>
+              {progress && <div className="mt-2"><ProgressBar progress={progress} /></div>}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -354,7 +401,7 @@ export default function ExecutionCenter() {
   const { data: activeRuns, isLoading } = useQuery({
     queryKey: ['active-runs'],
     queryFn: () => apiGet('/api/automation/runs/active'),
-    refetchInterval: isConnected ? false : 10000,
+    refetchInterval: isConnected ? 5000 : 10000,
   })
 
   const { data: recentRuns } = useQuery({
@@ -368,13 +415,32 @@ export default function ExecutionCenter() {
     queryFn: () => apiGet('/api/queue'),
   })
 
+  const { data: liveStatuses = [] } = useQuery({
+    queryKey: ['devices-live'],
+    queryFn: () => apiGet('/api/devices/live-status'),
+    select: (res) => {
+      const raw = res.data || res || []
+      return Array.isArray(raw) ? raw : []
+    },
+    refetchInterval: 5000,
+  })
+
+  const disconnectedDevices = liveStatuses.filter(d => d.status === 'DISCONNECTED')
+
   // WebSocket
   useEffect(() => {
     if (!isConnected) return
-    return subscribe('/topic/executions/status', () => {
-      queryClient.invalidateQueries({ queryKey: ['active-runs'] })
-      queryClient.invalidateQueries({ queryKey: ['recent-runs-timeline'] })
-    })
+    const unsubs = [
+      subscribe('/topic/executions/status', () => {
+        queryClient.invalidateQueries({ queryKey: ['active-runs'] })
+        queryClient.invalidateQueries({ queryKey: ['recent-runs-timeline'] })
+      }),
+      subscribe('/topic/devices/status', () => {
+        queryClient.invalidateQueries({ queryKey: ['devices-live'] })
+        queryClient.invalidateQueries({ queryKey: ['active-runs'] })
+      }),
+    ]
+    return () => unsubs.forEach(fn => fn && fn())
   }, [isConnected, subscribe, queryClient])
 
   const stopGraceful = useMutation({
@@ -420,6 +486,29 @@ export default function ExecutionCenter() {
           <ExecutionTimeline runs={timelineRuns} />
         </CardContent>
       </Card>
+
+      {/* Device Disconnection Alerts */}
+      {disconnectedDevices.length > 0 && (
+        <div className="space-y-2">
+          {disconnectedDevices.map((device) => (
+            <div
+              key={device.deviceUdid || device.udid}
+              className="flex items-center gap-3 p-3 rounded-lg bg-[#F59E0B]/5 border border-[#F59E0B]/20 animate-subtle-pulse"
+            >
+              <Unplug className="w-5 h-5 text-[#F59E0B] shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-[#F59E0B]">
+                  USB cable disconnected — {device.deviceName || device.deviceUdid}
+                </p>
+                <p className="text-xs text-[#A1A1AA] mt-0.5">
+                  Waiting for reconnection (max 5 min). Replug the cable to resume pending accounts.
+                </p>
+              </div>
+              <RefreshCw className="w-4 h-4 text-[#F59E0B] animate-spin shrink-0" />
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {/* Active Executions */}
@@ -491,9 +580,19 @@ export default function ExecutionCenter() {
                 <div className="space-y-2">
                   {queue.slice(0, 8).map((item, i) => (
                     <div key={item.id || i} className="flex items-center justify-between py-1.5">
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <span className="text-xs text-[#A1A1AA] truncate block">{item.actionName || item.action || item.workflow}</span>
-                        <span className="text-[10px] text-[#3f3f46]">{item.accountName || item.account || ''}</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] text-[#3f3f46]">{item.deviceName || item.deviceUdid || ''}</span>
+                          {item.accountSummary && (
+                            <span className="text-[10px] text-[#52525B]">
+                              {(item.accountSummary.completed || 0) + (item.accountSummary.failed || 0)}/{item.accountSummary.total}
+                            </span>
+                          )}
+                          {item.currentAccount && (
+                            <span className="text-[10px] text-[#3B82F6]">@ {item.currentAccount}</span>
+                          )}
+                        </div>
                       </div>
                       <StatusBadge status={item.status || 'QUEUED'} />
                     </div>

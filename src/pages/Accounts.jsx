@@ -1,657 +1,854 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPut, apiDelete } from '@/lib/api'
-import { Button, buttonVariants } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { Input } from '@/components/ui/input'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Skeleton } from '@/components/ui/skeleton'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '@/components/ui/select'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog'
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from '@/components/ui/dropdown-menu'
-import StatusBadge from '@/components/shared/StatusBadge'
-import HealthScoreBadge from '@/components/shared/HealthScoreBadge'
-import TimeAgo from '@/components/shared/TimeAgo'
-import EmptyState from '@/components/shared/EmptyState'
-import {
-  Users,
-  Search,
-  Trash2,
-  ChevronDown,
-  TrendingUp,
-  TrendingDown,
-  Eye,
-  Heart,
-  Image,
-  Calendar,
-  Activity,
-  AlertTriangle,
-  BarChart3,
-  ArrowUpDown,
-  X,
-  Link2,
-  CheckCircle,
-} from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { toast } from 'sonner'
+import { Trash2, Search, Users, Link, Pencil, X, ExternalLink, Smartphone, Check, Calendar, LayoutList, LayoutGrid, ChevronRight, ChevronDown } from 'lucide-react'
+import StatusBadge from '../components/StatusBadge'
+import { useApi, apiPut, apiDelete } from '../hooks/useApi'
+import AccountDailyViewsChart from '../components/AccountDailyViewsChart'
+import { Blur } from '../contexts/IncognitoContext'
 
-const STATUS_FILTERS = ['ALL', 'ACTIVE', 'SUSPENDED', 'BANNED', 'ERROR']
+const STATUSES = ['ALL', 'ACTIVE', 'SUSPENDED', 'BANNED', 'ERROR']
 
-const STATUS_COLORS = {
-  ACTIVE: '#22C55E',
-  SUSPENDED: '#F59E0B',
-  BANNED: '#EF4444',
-  ERROR: '#EF4444',
-  DISABLED: '#52525B',
-}
-
-const SORT_OPTIONS = [
-  { value: 'health', label: 'Health Score' },
-  { value: 'followers', label: 'Followers' },
-  { value: 'views', label: 'Views' },
-  { value: 'username', label: 'Username' },
-]
-
-function AccountRow({ account, selected, onSelect, onClick, isActive }) {
-  const statusColor = STATUS_COLORS[account.status] || '#52525B'
-
-  return (
-    <div
-      className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors border-l-2 ${
-        isActive
-          ? 'bg-[#111111] border-l-[#3B82F6]'
-          : 'border-l-transparent hover:bg-[#111111]/50'
-      }`}
-      onClick={onClick}
-    >
-      <div onClick={(e) => e.stopPropagation()}>
-        <Checkbox checked={selected} onCheckedChange={onSelect} />
-      </div>
-      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium" style={{ backgroundColor: `${statusColor}15`, color: statusColor }}>
-        {(account.username || '?')[0].toUpperCase()}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-[#FAFAFA] truncate">{account.username || 'Unknown'}</p>
-        <div className="flex items-center gap-2 text-xs text-[#52525B]">
-          <span>{(account.followers || account.followerCount || 0).toLocaleString()} followers</span>
-          <span>·</span>
-          <span>{(account.views || account.viewsLast30Days || 0).toLocaleString()} views</span>
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <HealthScoreBadge score={account.healthScore ?? account.score ?? 0} size={28} />
-        <span className={`w-2 h-2 rounded-full`} style={{ backgroundColor: statusColor }} />
-      </div>
-    </div>
-  )
-}
-
-function HealthBreakdown({ health }) {
-  if (!health) return null
-  const components = [
-    { label: 'Views Trend', value: health.breakdown?.viewsTrendScore ?? health.viewsTrend ?? 0, color: '#3B82F6' },
-    { label: 'Posting Success', value: health.breakdown?.postingFailuresScore ?? health.postingSuccessRate ?? 0, color: '#22C55E' },
-    { label: 'Recency', value: health.breakdown?.daysSinceLastPostScore ?? health.recency ?? 0, color: '#F59E0B' },
-    { label: 'Account Age', value: health.breakdown?.accountAgeScore ?? health.accountAge ?? 0, color: '#8B5CF6' },
-  ]
-
-  return (
-    <div className="space-y-3">
-      {components.map((c) => (
-        <div key={c.label} className="space-y-1">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-[#52525B]">{c.label}</span>
-            <span className="text-[#A1A1AA] font-medium">{c.value}</span>
-          </div>
-          <div className="h-1.5 rounded-full bg-[#1a1a1a] overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-500"
-              style={{ width: `${c.value}%`, backgroundColor: c.color }}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function ViewsChart({ data }) {
-  if (!data || data.length === 0) return null
-  const avg = data.reduce((s, d) => s + (d.views || 0), 0) / data.length
-
-  return (
-    <ResponsiveContainer width="100%" height={140}>
-      <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-        <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#52525B' }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fontSize: 10, fill: '#52525B' }} axisLine={false} tickLine={false} />
-        <Tooltip
-          contentStyle={{ backgroundColor: '#111111', border: '1px solid #1a1a1a', borderRadius: 8, fontSize: 12 }}
-          labelStyle={{ color: '#A1A1AA' }}
-        />
-        <Bar dataKey="views" radius={[3, 3, 0, 0]}>
-          {data.map((entry, i) => (
-            <Cell key={i} fill={(entry.views || 0) < avg ? '#EF4444' : '#3B82F6'} fillOpacity={0.8} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  )
-}
-
-function AccountDetail({ account }) {
-  const queryClient = useQueryClient()
-
-  const { data: health } = useQuery({
-    queryKey: ['account-health', account?.id],
-    queryFn: () => apiGet(`/api/accounts/${account.id}/health`),
-    enabled: !!account?.id,
-    select: (res) => res.data || res,
-  })
-
-  const statusMutation = useMutation({
-    mutationFn: ({ id, status }) => apiPut(`/api/accounts/${id}/status`, { status }),
-    onSuccess: () => {
-      toast.success('Status updated')
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-    },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (id) => apiDelete(`/api/accounts/${id}`),
-    onSuccess: () => {
-      toast.success('Account deleted')
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-    },
-  })
-
-  const [deleteConfirm, setDeleteConfirm] = useState(false)
-
-  if (!account) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <EmptyState icon={Users} title="Select an account" description="Choose an account from the list to view details." />
-      </div>
-    )
+function statusDotColor(status) {
+  switch (status) {
+    case 'ACTIVE': return 'bg-emerald-500'
+    case 'BANNED': return 'bg-red-500'
+    case 'SUSPENDED': return 'bg-amber-500'
+    case 'ERROR': return 'bg-orange-500'
+    default: return 'bg-gray-500'
   }
+}
 
-  const statusColor = STATUS_COLORS[account.status] || '#52525B'
-  const viewsData = health?.viewsHistory || health?.dailyViews || []
-  const alerts = health?.alerts || []
-
+function DetailRow({ label, value, mono = false, blur = false }) {
   return (
-    <ScrollArea className="flex-1">
-      <div className="p-5 space-y-5">
-        {/* Header */}
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center text-base font-semibold"
-              style={{ backgroundColor: `${statusColor}15`, color: statusColor }}
-            >
-              {(account.username || '?')[0].toUpperCase()}
-            </div>
-            <div>
-              <h2 className="text-base font-semibold text-[#FAFAFA]">{account.username}</h2>
-              <StatusBadge status={account.status} />
-            </div>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger className={cn(buttonVariants({ variant: "outline", size: "sm" }), "border-[#1a1a1a] text-[#A1A1AA] h-8")}>
-                Change Status <ChevronDown className="w-3 h-3 ml-1" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="bg-[#111111] border-[#1a1a1a]">
-              {['ACTIVE', 'SUSPENDED', 'DISABLED'].map((s) => (
-                <DropdownMenuItem
-                  key={s}
-                  className="text-xs text-[#A1A1AA] focus:bg-[#1a1a1a] focus:text-[#FAFAFA]"
-                  onClick={() => statusMutation.mutate({ id: account.id, status: s })}
-                >
-                  {s}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+    <div className="flex justify-between items-center py-3 border-b border-[#141414] last:border-0">
+      <span className="text-[#555] text-sm">{label}</span>
+      {value || value === 0 ? (
+        <span className={`text-sm text-white ${mono ? 'font-mono' : ''}`}>
+          {blur ? <Blur>{value}</Blur> : value}
+        </span>
+      ) : (
+        <span className="text-sm text-[#333] italic">---</span>
+      )}
+    </div>
+  )
+}
 
-        {/* Stats bar */}
-        <div className="grid grid-cols-4 gap-3">
-          {[
-            { label: 'Posts', value: account.posts || account.postCount || 0, icon: Image },
-            { label: 'Followers', value: (account.followers || account.followerCount || 0).toLocaleString(), icon: Users },
-            { label: 'Views (30d)', value: (account.views || account.viewsLast30Days || 0).toLocaleString(), icon: Eye },
-            { label: 'Health', value: health?.score ?? account.healthScore ?? 0, icon: Activity, isHealth: true },
-          ].map((stat) => (
-            <div key={stat.label} className="bg-[#111111] border border-[#1a1a1a] rounded-lg p-3 text-center">
-              <stat.icon className="w-3.5 h-3.5 text-[#52525B] mx-auto mb-1" />
-              <p className={`text-sm font-semibold ${stat.isHealth ? '' : 'text-[#FAFAFA]'}`}
-                style={stat.isHealth ? { color: stat.value >= 80 ? '#22C55E' : stat.value >= 50 ? '#F59E0B' : '#EF4444' } : undefined}
-              >
-                {stat.value}
-              </p>
-              <p className="text-[10px] text-[#52525B]">{stat.label}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Health Score Section */}
-        <div className="bg-[#111111] border border-[#1a1a1a] rounded-lg p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-[#FAFAFA]">Health Score</h3>
-            <HealthScoreBadge score={health?.score ?? account.healthScore ?? 0} size={32} />
-          </div>
-
-          {viewsData.length > 0 && (
-            <div>
-              <p className="text-xs text-[#52525B] mb-2">Views — Last 14 days</p>
-              <ViewsChart data={viewsData} />
-            </div>
-          )}
-
-          {alerts.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs text-[#52525B]">Alerts</p>
-              {alerts.map((alert, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs p-2 rounded-md bg-[#EF4444]/5 border border-[#EF4444]/10 text-[#EF4444]">
-                  <AlertTriangle className="w-3 h-3 shrink-0" />
-                  <span>{alert.message || alert}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <HealthBreakdown health={health} />
-        </div>
-
-        {/* Follower Growth */}
-        {(health?.followerGrowth || []).length > 0 && (
-          <div className="bg-[#111111] border border-[#1a1a1a] rounded-lg p-4">
-            <h3 className="text-sm font-medium text-[#FAFAFA] mb-3">Follower Growth</h3>
-            <ResponsiveContainer width="100%" height={120}>
-              <BarChart data={health.followerGrowth} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#52525B' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#52525B' }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ backgroundColor: '#111111', border: '1px solid #1a1a1a', borderRadius: 8, fontSize: 12 }} />
-                <Bar dataKey="followers" fill="#8B5CF6" radius={[3, 3, 0, 0]} fillOpacity={0.8} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-
-        {/* Story Link */}
-        {account.storyLink && (
-          <div className="bg-[#111111] border border-[#1a1a1a] rounded-lg p-4">
-            <h3 className="text-sm font-medium text-[#FAFAFA] mb-2 flex items-center gap-1.5">
-              <Link2 className="w-3.5 h-3.5 text-[#52525B]" /> Story Link
-            </h3>
-            <p className="text-xs text-[#3B82F6] break-all">{account.storyLink}</p>
-          </div>
-        )}
-
-        {/* Account Details */}
-        <div className="bg-[#111111] border border-[#1a1a1a] rounded-lg p-4 space-y-2">
-          <h3 className="text-sm font-medium text-[#FAFAFA] mb-1">Account Details</h3>
-          {[
-            ['Username', account.username],
-            ['Email', account.email],
-            ['Phone', account.phone],
-            ['Proxy', account.proxy],
-            ['Created', account.createdAt ? new Date(account.createdAt).toLocaleDateString() : null],
-            ['Scheduling', account.schedulingEnabled ? 'Enabled' : 'Disabled'],
-          ].map(([label, value]) => (
-            <div key={label} className="flex items-center justify-between py-1 border-b border-[#1a1a1a] last:border-0">
-              <span className="text-xs text-[#52525B]">{label}</span>
-              <span className="text-xs text-[#A1A1AA]">{value || '—'}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Delete */}
-        <div className="pt-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-[#EF4444] hover:text-[#EF4444] hover:bg-[#EF4444]/10 w-full"
-            onClick={() => setDeleteConfirm(true)}
-          >
-            <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Delete Account
-          </Button>
-        </div>
-
-        <Dialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
-          <DialogContent className="bg-[#0A0A0A] border-[#1a1a1a] sm:max-w-sm">
-            <DialogHeader>
-              <DialogTitle className="text-[#FAFAFA]">Delete Account</DialogTitle>
-              <DialogDescription className="text-[#52525B]">
-                Are you sure you want to delete <span className="text-[#FAFAFA]">{account.username}</span>? This cannot be undone.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" size="sm" className="border-[#1a1a1a] text-[#A1A1AA]" onClick={() => setDeleteConfirm(false)}>
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                disabled={deleteMutation.isPending}
-                onClick={() => {
-                  deleteMutation.mutate(account.id)
-                  setDeleteConfirm(false)
-                }}
-              >
-                {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </ScrollArea>
+function EditableDetailRow({ label, value, onChange, mono = false, type = 'text', options, placeholder }) {
+  const inputCls = `bg-[#111] border border-[#1a1a1a] rounded-md px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-[#333] text-right ${mono ? 'font-mono' : ''}`
+  return (
+    <div className="flex justify-between items-center py-3 border-b border-[#141414] last:border-0">
+      <span className="text-[#555] text-sm">{label}</span>
+      {type === 'select' ? (
+        <select value={value || ''} onChange={e => onChange(e.target.value)} className={`${inputCls} max-w-[220px]`}>
+          <option value="">— None —</option>
+          {options?.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      ) : (
+        <input
+          type={type === 'password' ? 'password' : 'text'}
+          value={value || ''}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder || ''}
+          className={`${inputCls} w-[220px]`}
+        />
+      )}
+    </div>
   )
 }
 
 export default function Accounts() {
-  const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
+  const [filter, setFilter] = useState('ALL')
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('ALL')
-  const [sortBy, setSortBy] = useState('health')
   const [selectedId, setSelectedId] = useState(null)
-  const [selectedIds, setSelectedIds] = useState(new Set())
-  const [bulkAction, setBulkAction] = useState(null)
+  const { data: accounts, loading, refetch } = useApi('/api/accounts')
 
-  const { data: accounts = [], isLoading } = useQuery({
-    queryKey: ['accounts'],
-    queryFn: () => apiGet('/api/accounts'),
-    select: (res) => {
-      const list = res.data || res || []
-      return Array.isArray(list) ? list : []
-    },
-  })
-
-  const filtered = useMemo(() => {
-    let list = accounts
-    if (statusFilter !== 'ALL') {
-      list = list.filter((a) => a.status === statusFilter)
-    }
-    if (search) {
-      const q = search.toLowerCase()
-      list = list.filter((a) => (a.username || '').toLowerCase().includes(q))
-    }
-    list = [...list].sort((a, b) => {
-      switch (sortBy) {
-        case 'health': return (b.healthScore ?? b.score ?? 0) - (a.healthScore ?? a.score ?? 0)
-        case 'followers': return (b.followers || b.followerCount || 0) - (a.followers || a.followerCount || 0)
-        case 'views': return (b.views || b.viewsLast30Days || 0) - (a.views || a.viewsLast30Days || 0)
-        case 'username': return (a.username || '').localeCompare(b.username || '')
-        default: return 0
+  // Auto-select account from URL query param
+  useEffect(() => {
+    const usernameParam = searchParams.get('username')
+    if (usernameParam && accounts?.length) {
+      const match = accounts.find(a => a.username === usernameParam)
+      if (match) {
+        setSelectedId(match.id)
+        setEditing(false)
+        setEditValues({})
       }
-    })
-    return list
-  }, [accounts, statusFilter, search, sortBy])
-
-  const selectedAccount = useMemo(() => accounts.find((a) => a.id === selectedId), [accounts, selectedId])
-
-  useEffect(() => {
-    const idFromUrl = searchParams.get('id')
-    if (idFromUrl && accounts.length > 0) {
-      const match = accounts.find((a) => a.id === idFromUrl)
-      if (match) setSelectedId(match.id)
     }
-  }, [accounts, searchParams])
+  }, [searchParams, accounts])
+  const { data: historyData } = useApi('/api/automation/posting-history?limit=5000')
+  const { data: snapData } = useApi('/api/stats/snapshots?days=60')
+  const { data: contentData } = useApi('/api/automation/content-status')
+  const { data: devicesData } = useApi('/api/devices')
 
-  useEffect(() => {
-    const idFromUrl = searchParams.get('id')
-    if (idFromUrl) return
-    if (selectedId && filtered.length > 0 && !filtered.find((a) => a.id === selectedId)) {
-      setSelectedId(null)
+  // Build identity map from content-status
+  const { identityNames, usernameToIdentity } = useMemo(() => {
+    const identities = contentData
+      ? Array.isArray(contentData) ? contentData : contentData.identities || []
+      : []
+    const names = []
+    const map = {}
+    for (const identity of identities) {
+      const name = identity.identityId || identity.identityName || identity.identity || identity.name || `Identity ${names.length + 1}`
+      names.push(name)
+      const accs = identity.accounts || []
+      for (const acc of accs) {
+        const username = typeof acc === 'string' ? acc : acc.username
+        if (username) map[username] = name
+      }
     }
-  }, [filtered, selectedId, searchParams])
+    return { identityNames: names, usernameToIdentity: map }
+  }, [contentData])
 
-  const toggleSelect = useCallback((id) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }, [])
-
-  const toggleSelectAll = useCallback(() => {
-    if (selectedIds.size === filtered.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(filtered.map((a) => a.id)))
+  const deviceMap = useMemo(() => {
+    const map = {}
+    if (Array.isArray(devicesData)) {
+      devicesData.forEach(d => { map[d.udid] = d.name })
     }
-  }, [filtered, selectedIds.size])
+    return map
+  }, [devicesData])
 
-  const bulkStatusMutation = useMutation({
-    mutationFn: async ({ ids, status }) => {
-      await Promise.all(ids.map((id) => apiPut(`/api/accounts/${id}/status`, { status })))
-    },
-    onSuccess: () => {
-      toast.success('Accounts updated')
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      setSelectedIds(new Set())
-      setBulkAction(null)
-    },
-  })
+  const [identityFilter, setIdentityFilter] = useState('ALL')
+  const [deviceFilter, setDeviceFilter] = useState('ALL')
 
-  const bulkSchedulingMutation = useMutation({
-    mutationFn: async ({ ids, enabled }) => {
-      await Promise.all(ids.map((id) => apiPut(`/api/accounts/${id}/scheduling`, { enabled })))
-    },
-    onSuccess: () => {
-      toast.success('Scheduling updated')
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      setSelectedIds(new Set())
-    },
-  })
-
-  const bulkDeleteMutation = useMutation({
-    mutationFn: async (ids) => {
-      await Promise.all(ids.map((id) => apiDelete(`/api/accounts/${id}`)))
-    },
-    onSuccess: () => {
-      toast.success('Accounts deleted')
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      setSelectedIds(new Set())
-      setBulkAction(null)
-    },
-  })
+  // Build post count per username from posting history
+  const postCounts = useMemo(() => {
+    const counts = {}
+    if (historyData?.entries) {
+      for (const entry of historyData.entries) {
+        if (entry.username) {
+          counts[entry.username] = (counts[entry.username] || 0) + 1
+        }
+      }
+    }
+    return counts
+  }, [historyData])
 
   const statusCounts = useMemo(() => {
-    const counts = { ALL: accounts.length }
-    accounts.forEach((a) => {
-      counts[a.status] = (counts[a.status] || 0) + 1
-    })
-    return counts
+    if (!accounts) return {}
+    return STATUSES.reduce((acc, s) => {
+      acc[s] = s === 'ALL' ? accounts.length : accounts.filter(a => a.status === s).length
+      return acc
+    }, {})
   }, [accounts])
 
+  const identityCounts = useMemo(() => {
+    if (!accounts) return {}
+    const counts = { ALL: accounts.length }
+    for (const name of identityNames) {
+      counts[name] = accounts.filter(a => usernameToIdentity[a.username] === name).length
+    }
+    return counts
+  }, [accounts, identityNames, usernameToIdentity])
+
+  const accountDeviceMap = useMemo(() => {
+    const map = {}
+    if (accounts) {
+      for (const a of accounts) {
+        map[a.id] = a.deviceUdid ? (deviceMap[a.deviceUdid] || a.deviceUdid.slice(-8)) : null
+      }
+    }
+    return map
+  }, [accounts, deviceMap])
+
+  const { deviceNames, deviceCounts } = useMemo(() => {
+    if (!accounts) return { deviceNames: [], deviceCounts: {} }
+    const nameSet = new Set()
+    let noDevice = 0
+    for (const a of accounts) {
+      const name = accountDeviceMap[a.id]
+      if (name) nameSet.add(name)
+      else noDevice++
+    }
+    const names = [...nameSet].sort()
+    const counts = { ALL: accounts.length }
+    for (const name of names) {
+      counts[name] = accounts.filter(a => accountDeviceMap[a.id] === name).length
+    }
+    if (noDevice > 0) counts['No Device'] = noDevice
+    return { deviceNames: noDevice > 0 ? [...names, 'No Device'] : names, deviceCounts: counts }
+  }, [accounts, accountDeviceMap])
+
+  // Build device groups with KPIs for device view
+  const deviceGroups = useMemo(() => {
+    if (!accounts) return []
+    const groups = {}
+    for (const a of accounts) {
+      const deviceName = a.deviceUdid ? (deviceMap[a.deviceUdid] || a.deviceUdid.slice(-8)) : null
+      const key = deviceName || '__no_device'
+      if (!groups[key]) {
+        groups[key] = {
+          name: deviceName || 'No Device',
+          udid: a.deviceUdid || null,
+          accounts: [],
+          kpis: { total: 0, active: 0, suspended: 0, banned: 0, error: 0, schedulingEnabled: 0, totalViews: 0, totalFollowers: 0, totalPosts: 0 },
+        }
+      }
+      groups[key].accounts.push(a)
+      groups[key].kpis.total++
+      const s = a.status?.toLowerCase()
+      if (s === 'active') groups[key].kpis.active++
+      else if (s === 'suspended') groups[key].kpis.suspended++
+      else if (s === 'banned') groups[key].kpis.banned++
+      else if (s === 'error') groups[key].kpis.error++
+      if (a.schedulingEnabled) groups[key].kpis.schedulingEnabled++
+      groups[key].kpis.totalViews += (a.viewsLast30Days ?? 0)
+      groups[key].kpis.totalFollowers += (a.followerCount ?? 0)
+      groups[key].kpis.totalPosts += (postCounts[a.username] || a.postCount || 0)
+    }
+    return Object.values(groups).sort((a, b) => b.kpis.total - a.kpis.total)
+  }, [accounts, deviceMap, postCounts])
+
+  function toggleDeviceExpanded(name) {
+    setExpandedDevices(prev => {
+      const next = new Set(prev)
+      next.has(name) ? next.delete(name) : next.add(name)
+      return next
+    })
+  }
+
+  const filtered = accounts
+    ? (filter === 'ALL' ? accounts : accounts.filter(a => a.status === filter))
+        .filter(a => identityFilter === 'ALL' || usernameToIdentity[a.username] === identityFilter)
+        .filter(a => {
+          if (deviceFilter === 'ALL') return true
+          if (deviceFilter === 'No Device') return !a.deviceUdid
+          return accountDeviceMap[a.id] === deviceFilter
+        })
+        .filter(a => a.username?.toLowerCase().includes(search.toLowerCase()))
+    : []
+
+  const selectedAccount = filtered.find(a => a.id === selectedId)
+
+  const [viewMode, setViewMode] = useState('list') // 'list' | 'device'
+  const [expandedDevices, setExpandedDevices] = useState(new Set())
+
+  const [editingLink, setEditingLink] = useState(false)
+  const [linkValue, setLinkValue] = useState('')
+  const [editing, setEditing] = useState(false)
+  const [editValues, setEditValues] = useState({})
+
+  function openLinkEditor(currentUrl) {
+    setLinkValue(currentUrl || '')
+    setEditingLink(true)
+  }
+
+  async function handleSaveLink(id) {
+    try {
+      const account = accounts.find(a => a.id === id)
+      if (!account) return
+      await apiPut(`/api/accounts/${id}`, { ...account, storyLinkUrl: linkValue || null })
+      setEditingLink(false)
+      refetch()
+    } catch (err) {
+      alert('Failed to update link: ' + err.message)
+    }
+  }
+
+  async function handleDeleteLink(id) {
+    try {
+      const account = accounts.find(a => a.id === id)
+      if (!account) return
+      await apiPut(`/api/accounts/${id}`, { ...account, storyLinkUrl: null })
+      setEditingLink(false)
+      refetch()
+    } catch (err) {
+      alert('Failed to remove link: ' + err.message)
+    }
+  }
+
+  function startEditing() {
+    if (!selectedAccount) return
+    setEditValues({
+      password: selectedAccount.password || '',
+      email: selectedAccount.email || '',
+      phone: selectedAccount.phone || '',
+      totpSecret: selectedAccount.totpSecret || '',
+      craneContainer: selectedAccount.craneContainer || '',
+      deviceUdid: selectedAccount.deviceUdid || '',
+      proxySession: selectedAccount.proxySession || '',
+    })
+    setEditing(true)
+  }
+
+  async function saveEdits() {
+    if (!selectedAccount) return
+    try {
+      await apiPut(`/api/accounts/${selectedAccount.id}`, { ...selectedAccount, ...editValues })
+      setEditing(false)
+      refetch()
+    } catch (err) {
+      alert('Failed to save: ' + err.message)
+    }
+  }
+
+  async function handleToggleScheduling(id, current) {
+    try {
+      await apiPut(`/api/accounts/${id}/scheduling`, { schedulingEnabled: !current })
+      refetch()
+    } catch (err) {
+      alert('Failed to toggle scheduling: ' + err.message)
+    }
+  }
+
+  async function handleStatusChange(id, newStatus) {
+    try {
+      await apiPut(`/api/accounts/${id}/status`, { status: newStatus })
+      refetch()
+    } catch (err) {
+      alert('Failed to update status: ' + err.message)
+    }
+  }
+
+  async function handleDelete(id, username) {
+    if (!confirm(`Delete account ${username}?`)) return
+    try {
+      await apiDelete(`/api/accounts/${id}`)
+      setSelectedId(null)
+      refetch()
+    } catch (err) {
+      alert('Failed to delete: ' + err.message)
+    }
+  }
+
+  function handleFilterChange(s) {
+    setFilter(s)
+    setSelectedId(null)
+    setEditingLink(false)
+  }
+
+  function handleIdentityFilterChange(name) {
+    setIdentityFilter(name)
+    setSelectedId(null)
+    setEditingLink(false)
+  }
+
+  function handleDeviceFilterChange(name) {
+    setDeviceFilter(name)
+    setSelectedId(null)
+    setEditingLink(false)
+  }
+
+  function handleSelectAccount(id) {
+    setSelectedId(id)
+    setEditingLink(false)
+    setEditing(false)
+    setEditValues({})
+  }
+
   return (
-    <div className="space-y-0 h-[calc(100vh-4rem)]">
+    <div>
       {/* Header */}
-      <div className="px-5 py-4 border-b border-[#1a1a1a]">
-        <h1 className="text-xl font-semibold text-[#FAFAFA]">Accounts</h1>
-        <p className="text-sm text-[#52525B] mt-0.5">{accounts.length} account{accounts.length !== 1 ? 's' : ''}</p>
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-extrabold text-white tracking-tight">Accounts</h1>
+          <p className="text-xs text-[#333] mt-0.5">
+            {accounts ? `${accounts.length} total accounts` : 'Loading...'}
+          </p>
+        </div>
+        <div className="flex items-center gap-1 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg p-0.5">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              viewMode === 'list' ? 'bg-white/10 text-white' : 'text-[#555] hover:text-white'
+            }`}
+          >
+            <LayoutList size={14} />
+            List
+          </button>
+          <button
+            onClick={() => setViewMode('device')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              viewMode === 'device' ? 'bg-white/10 text-white' : 'text-[#555] hover:text-white'
+            }`}
+          >
+            <Smartphone size={14} />
+            By Device
+          </button>
+        </div>
       </div>
 
-      <div className="flex h-[calc(100%-4.5rem)]">
-        {/* Left panel - account list */}
-        <div className="w-[380px] border-r border-[#1a1a1a] flex flex-col shrink-0">
-          {/* Search + filters */}
-          <div className="p-3 space-y-3 border-b border-[#1a1a1a]">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#52525B]" />
-              <Input
-                placeholder="Search accounts..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 bg-[#0A0A0A] border-[#1a1a1a] text-[#FAFAFA] placeholder:text-[#52525B] h-8 text-sm"
-              />
-            </div>
-            <div className="flex items-center gap-2 overflow-x-auto">
-              {STATUS_FILTERS.map((s) => (
+      {/* Device View */}
+      {viewMode === 'device' && (
+        <div className="space-y-3" style={{ height: 'calc(100vh - 120px)', overflowY: 'auto' }}>
+          {/* Device KPI summary row */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {deviceGroups.map(group => {
+              const k = group.kpis
+              const healthPct = k.total > 0 ? Math.round((k.active / k.total) * 100) : 0
+              return (
                 <button
-                  key={s}
-                  onClick={() => setStatusFilter(s)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
-                    statusFilter === s
-                      ? 'bg-[#3B82F6]/10 text-[#3B82F6]'
-                      : 'text-[#52525B] hover:text-[#A1A1AA] hover:bg-[#111111]'
+                  key={group.name}
+                  onClick={() => toggleDeviceExpanded(group.name)}
+                  className={`text-left bg-[#0a0a0a] border rounded-[10px] p-4 transition-colors ${
+                    expandedDevices.has(group.name)
+                      ? 'border-blue-500/30 bg-blue-500/5'
+                      : 'border-[#1a1a1a] hover:border-[#333]'
                   }`}
                 >
-                  {s} {statusCounts[s] != null ? `(${statusCounts[s]})` : ''}
+                  <div className="flex items-center gap-2 mb-3">
+                    <Smartphone size={14} className="text-[#555]" />
+                    <span className="text-sm font-semibold text-white truncate">{group.name}</span>
+                  </div>
+                  {/* Health bar */}
+                  <div className="w-full h-1.5 bg-[#1a1a1a] rounded-full mb-3 overflow-hidden">
+                    <div className="h-full flex">
+                      {k.active > 0 && <div className="bg-emerald-500 h-full" style={{ width: `${(k.active / k.total) * 100}%` }} />}
+                      {k.suspended > 0 && <div className="bg-amber-500 h-full" style={{ width: `${(k.suspended / k.total) * 100}%` }} />}
+                      {k.error > 0 && <div className="bg-orange-500 h-full" style={{ width: `${(k.error / k.total) * 100}%` }} />}
+                      {k.banned > 0 && <div className="bg-red-500 h-full" style={{ width: `${(k.banned / k.total) * 100}%` }} />}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                    <div className="flex justify-between">
+                      <span className="text-[10px] text-[#555]">Total</span>
+                      <span className="text-xs font-bold text-white">{k.total}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[10px] text-[#555]">Active</span>
+                      <span className="text-xs font-bold text-emerald-400">{k.active}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[10px] text-[#555]">Banned</span>
+                      <span className="text-xs font-bold text-red-400">{k.banned}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[10px] text-[#555]">Error</span>
+                      <span className="text-xs font-bold text-orange-400">{k.error}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[10px] text-[#555]">Sched</span>
+                      <span className="text-xs font-bold text-blue-400">{k.schedulingEnabled}/{k.total}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[10px] text-[#555]">Health</span>
+                      <span className={`text-xs font-bold ${healthPct >= 80 ? 'text-emerald-400' : healthPct >= 50 ? 'text-amber-400' : 'text-red-400'}`}>{healthPct}%</span>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-[#1a1a1a] grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <p className="text-xs font-bold text-white">{k.totalViews.toLocaleString()}</p>
+                      <p className="text-[9px] text-[#555] uppercase">Views</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-white">{k.totalFollowers.toLocaleString()}</p>
+                      <p className="text-[9px] text-[#555] uppercase">Followers</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-white">{k.totalPosts}</p>
+                      <p className="text-[9px] text-[#555] uppercase">Posts</p>
+                    </div>
+                  </div>
                 </button>
-              ))}
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <ArrowUpDown className="w-3 h-3 text-[#52525B]" />
-                <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="h-7 text-xs border-[#1a1a1a] bg-transparent text-[#A1A1AA] w-auto">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#111111] border-[#1a1a1a]">
-                    {SORT_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value} className="text-xs text-[#A1A1AA] focus:bg-[#1a1a1a] focus:text-[#FAFAFA]">
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              )
+            })}
+          </div>
+
+          {/* Expanded device account lists */}
+          {deviceGroups.filter(g => expandedDevices.has(g.name)).map(group => (
+            <div key={group.name} className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-[10px] overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-[#1a1a1a]">
+                <Smartphone size={14} className="text-[#555]" />
+                <span className="text-sm font-semibold text-white">{group.name}</span>
+                <span className="text-xs text-[#333] ml-auto">{group.kpis.total} accounts</span>
               </div>
-              <Checkbox
-                checked={filtered.length > 0 && selectedIds.size === filtered.length}
-                onCheckedChange={toggleSelectAll}
+              <div className="divide-y divide-[#141414]">
+                {group.accounts.map(account => (
+                  <button
+                    key={account.id}
+                    onClick={() => { setViewMode('list'); handleSelectAccount(account.id) }}
+                    className="w-full text-left px-4 py-3 hover:bg-[#111] transition-colors flex items-center gap-3"
+                  >
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDotColor(account.status)}`} />
+                    <span className="text-sm font-semibold text-white truncate min-w-[120px]"><Blur>{account.username}</Blur></span>
+                    <span className="text-xs text-[#444]">{(account.viewsLast30Days ?? 0).toLocaleString()} views</span>
+                    <span className="text-xs text-[#444]">{account.followerCount ?? 0} followers</span>
+                    <span className="text-xs text-[#444]">{postCounts[account.username] || account.postCount || 0} posts</span>
+                    <div className="ml-auto flex items-center gap-2">
+                      {account.schedulingEnabled && (
+                        <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded">Sched</span>
+                      )}
+                      <StatusBadge status={account.status} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {deviceGroups.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16">
+              <Smartphone size={48} className="text-[#1a1a1a] mb-4" />
+              <p className="text-base text-[#333]">No devices found</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Main layout */}
+      {viewMode === 'list' && <div className="flex flex-col lg:flex-row gap-3" style={{ height: 'calc(100vh - 120px)' }}>
+        {/* Left Panel — Account List */}
+        <div className="w-full lg:w-[380px] flex flex-col bg-[#0a0a0a] border border-[#1a1a1a] rounded-[10px] overflow-hidden max-h-[400px] lg:max-h-none">
+          {/* Search */}
+          <div className="p-3 border-b border-[#1a1a1a]">
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#333]" />
+              <input
+                type="text"
+                placeholder="Search accounts..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full bg-[#111] border border-[#1a1a1a] rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-[#333] focus:outline-none focus:border-[#333]"
               />
             </div>
           </div>
 
-          {/* Bulk actions bar */}
-          {selectedIds.size > 0 && (
-            <div className="px-3 py-2 bg-[#3B82F6]/5 border-b border-[#3B82F6]/10 flex items-center gap-2">
-              <span className="text-xs text-[#3B82F6] font-medium">{selectedIds.size} selected</span>
-              <div className="ml-auto flex items-center gap-1">
-                <DropdownMenu>
-                  <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-6 text-xs text-[#A1A1AA]")}>
-                    Status
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="bg-[#111111] border-[#1a1a1a]">
-                    {['ACTIVE', 'SUSPENDED', 'DISABLED'].map((s) => (
-                      <DropdownMenuItem
-                        key={s}
-                        className="text-xs text-[#A1A1AA] focus:bg-[#1a1a1a]"
-                        onClick={() => bulkStatusMutation.mutate({ ids: [...selectedIds], status: s })}
-                      >
-                        {s}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <DropdownMenu>
-                  <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-6 text-xs text-[#A1A1AA]")}>
-                    Scheduling
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="bg-[#111111] border-[#1a1a1a]">
-                    <DropdownMenuItem className="text-xs text-[#A1A1AA] focus:bg-[#1a1a1a]" onClick={() => bulkSchedulingMutation.mutate({ ids: [...selectedIds], enabled: true })}>
-                      Enable
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="text-xs text-[#A1A1AA] focus:bg-[#1a1a1a]" onClick={() => bulkSchedulingMutation.mutate({ ids: [...selectedIds], enabled: false })}>
-                      Disable
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 text-xs text-[#EF4444] hover:text-[#EF4444] hover:bg-[#EF4444]/10"
-                  onClick={() => setBulkAction('delete')}
+          {/* Filter pills */}
+          <div className="flex gap-1.5 px-3 py-2.5 border-b border-[#1a1a1a] flex-wrap">
+            {STATUSES.map(s => (
+              <button
+                key={s}
+                onClick={() => handleFilterChange(s)}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide transition-colors border ${
+                  filter === s
+                    ? 'bg-white/10 text-white border-[#333]'
+                    : 'bg-transparent text-[#555] border-[#1a1a1a] hover:text-white hover:border-[#333]'
+                }`}
+              >
+                {s} {statusCounts[s] !== undefined ? statusCounts[s] : ''}
+              </button>
+            ))}
+          </div>
+
+          {/* Identity filter pills */}
+          {identityNames.length > 0 && (
+            <div className="flex gap-1.5 px-3 py-2.5 border-b border-[#1a1a1a] flex-wrap">
+              {['ALL', ...identityNames].map(name => (
+                <button
+                  key={name}
+                  onClick={() => handleIdentityFilterChange(name)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide transition-colors border ${
+                    identityFilter === name
+                      ? 'bg-white/10 text-white border-[#333]'
+                      : 'bg-transparent text-[#555] border-[#1a1a1a] hover:text-white hover:border-[#333]'
+                  }`}
                 >
-                  Delete
-                </Button>
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-[#52525B]" onClick={() => setSelectedIds(new Set())}>
-                  <X className="w-3 h-3" />
-                </Button>
-              </div>
+                  {name} {identityCounts[name] !== undefined ? identityCounts[name] : ''}
+                </button>
+              ))}
             </div>
           )}
 
-          {/* Account list */}
-          <ScrollArea className="flex-1">
-            {isLoading ? (
-              <div className="p-3 space-y-2">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <Skeleton key={i} className="h-14 w-full bg-[#111111]" />
-                ))}
-              </div>
+          {/* Device filter pills */}
+          {deviceNames.length > 0 && (
+            <div className="flex gap-1.5 px-3 py-2.5 border-b border-[#1a1a1a] flex-wrap">
+              {['ALL', ...deviceNames].map(name => (
+                <button
+                  key={name}
+                  onClick={() => handleDeviceFilterChange(name)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide transition-colors border flex items-center gap-1 ${
+                    deviceFilter === name
+                      ? 'bg-white/10 text-white border-[#333]'
+                      : 'bg-transparent text-[#555] border-[#1a1a1a] hover:text-white hover:border-[#333]'
+                  }`}
+                >
+                  <Smartphone size={10} />
+                  {name} {deviceCounts[name] !== undefined ? deviceCounts[name] : ''}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Account rows */}
+          <div className="flex-1 overflow-y-auto">
+            {loading ? (
+              <p className="text-xs text-[#333] text-center py-8">Loading...</p>
             ) : filtered.length === 0 ? (
-              <EmptyState
-                icon={Users}
-                title={search ? 'No accounts match' : 'No accounts'}
-                description={search ? 'Try a different search term.' : 'No accounts found in this category.'}
-              />
+              <p className="text-xs text-[#333] text-center py-8">No accounts found</p>
             ) : (
-              filtered.map((account) => (
-                <AccountRow
+              filtered.map(account => (
+                <button
                   key={account.id}
-                  account={account}
-                  selected={selectedIds.has(account.id)}
-                  onSelect={() => toggleSelect(account.id)}
-                  onClick={() => setSelectedId(account.id)}
-                  isActive={selectedId === account.id}
-                />
+                  onClick={() => handleSelectAccount(account.id)}
+                  className={`w-full text-left px-4 py-3 transition-colors border-l-2 ${
+                    selectedId === account.id
+                      ? 'bg-blue-500/5 border-l-blue-500'
+                      : 'hover:bg-[#111] border-l-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDotColor(account.status)}`} />
+                    <span className="text-sm font-semibold text-white truncate"><Blur>{account.username}</Blur></span>
+                  </div>
+                  <p className="text-xs text-[#444] mt-0.5 ml-[18px] truncate">
+                    {usernameToIdentity[account.username] && <span className="text-[#555] font-medium"><Blur>{usernameToIdentity[account.username]}</Blur> · </span>}
+                    {accountDeviceMap[account.id] && <span className="text-[#555] font-medium">{accountDeviceMap[account.id]} · </span>}
+                    {postCounts[account.username] || account.postCount || 0} posts · {account.followerCount ?? 0} followers · {(account.viewsLast30Days ?? 0).toLocaleString()} views
+                  </p>
+                </button>
               ))
             )}
-          </ScrollArea>
+          </div>
+
+          {/* Footer count */}
+          {!loading && (
+            <div className="px-3 py-2 border-t border-[#1a1a1a]">
+              <p className="text-[10px] text-[#333]">{filtered.length} account{filtered.length !== 1 ? 's' : ''}</p>
+            </div>
+          )}
         </div>
 
-        {/* Right panel - account detail */}
-        <AccountDetail account={selectedAccount} />
-      </div>
+        {/* Right Panel — Detail */}
+        <div className="flex-1 bg-[#0a0a0a] border border-[#1a1a1a] rounded-[10px] overflow-hidden">
+          {selectedAccount ? (
+            <div className="h-full overflow-y-auto">
+              {/* Header */}
+              <div className="flex items-center justify-between px-8 py-6 border-b border-[#1a1a1a]">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl">
+                    {selectedAccount.username?.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white"><Blur>{selectedAccount.username}</Blur></h2>
+                    <div className="mt-1 flex items-center gap-2">
+                      <StatusBadge status={selectedAccount.status} />
+                      {usernameToIdentity[selectedAccount.username] && (
+                        <span className="text-[11px] bg-[#111] border border-[#1a1a1a] px-2 py-0.5 rounded-md text-[#888]">
+                          <Blur>{usernameToIdentity[selectedAccount.username]}</Blur>
+                        </span>
+                      )}
+                      {accountDeviceMap[selectedAccount.id] && (
+                        <span className="text-[11px] bg-[#111] border border-[#1a1a1a] px-2 py-0.5 rounded-md text-[#888] flex items-center gap-1">
+                          <Smartphone size={10} />
+                          {accountDeviceMap[selectedAccount.id]}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => handleToggleScheduling(selectedAccount.id, selectedAccount.schedulingEnabled)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-colors border ${
+                      selectedAccount.schedulingEnabled
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                        : 'bg-transparent text-[#555] border-[#1a1a1a] hover:text-white hover:border-[#333]'
+                    }`}
+                    title={selectedAccount.schedulingEnabled ? 'Scheduling enabled' : 'Scheduling disabled'}
+                  >
+                    <Calendar size={12} />
+                    {selectedAccount.schedulingEnabled ? 'Sched ON' : 'Sched OFF'}
+                  </button>
+                  <a
+                    href={`https://instagram.com/${selectedAccount.username}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 rounded-md hover:bg-blue-500/10 text-[#333] hover:text-blue-400 transition-colors"
+                    title="Open on Instagram"
+                  >
+                    <ExternalLink size={16} />
+                  </a>
+                  <select
+                    value={selectedAccount.status}
+                    onChange={e => handleStatusChange(selectedAccount.id, e.target.value)}
+                    className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-md px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#333]"
+                  >
+                    {STATUSES.filter(s => s !== 'ALL').map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => handleDelete(selectedAccount.id, selectedAccount.username)}
+                    className="p-2 rounded-md hover:bg-red-500/10 text-[#333] hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
 
-      {/* Bulk delete confirm */}
-      <Dialog open={bulkAction === 'delete'} onOpenChange={() => setBulkAction(null)}>
-        <DialogContent className="bg-[#0A0A0A] border-[#1a1a1a] sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-[#FAFAFA]">Delete {selectedIds.size} Accounts</DialogTitle>
-            <DialogDescription className="text-[#52525B]">This action cannot be undone.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" size="sm" className="border-[#1a1a1a] text-[#A1A1AA]" onClick={() => setBulkAction(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={bulkDeleteMutation.isPending}
-              onClick={() => bulkDeleteMutation.mutate([...selectedIds])}
-            >
-              {bulkDeleteMutation.isPending ? 'Deleting...' : 'Delete All'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              {/* Stats bar */}
+              <div className="grid grid-cols-3 border-b border-[#1a1a1a]">
+                {[
+                  { label: 'Posts', value: postCounts[selectedAccount.username] || selectedAccount.postCount },
+                  { label: 'Followers', value: selectedAccount.followerCount },
+                  { label: 'Views (30d)', value: selectedAccount.viewsLast30Days },
+                ].map(stat => (
+                  <div key={stat.label} className="px-6 py-5 text-center">
+                    <p className="text-3xl font-bold text-white">{(stat.value ?? 0).toLocaleString()}</p>
+                    <p className="text-xs text-[#555] uppercase tracking-wide mt-1">{stat.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Daily Views Chart */}
+              <div className="px-8 py-5 border-b border-[#1a1a1a]">
+                <span className="label-upper block mb-3">Daily Views</span>
+                <AccountDailyViewsChart
+                  account={selectedAccount}
+                  snapshots={snapData?.snapshots || []}
+                />
+              </div>
+
+              {/* Story Link */}
+              <div className="px-8 py-5 border-b border-[#1a1a1a]">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="label-upper !mb-0">Story Link</span>
+                </div>
+                {editingLink ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="url"
+                      placeholder="https://..."
+                      value={linkValue}
+                      onChange={e => setLinkValue(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSaveLink(selectedAccount.id)}
+                      autoFocus
+                      className="flex-1 bg-[#111] border border-[#1a1a1a] rounded-lg px-3 py-2 text-sm text-white placeholder-[#333] focus:outline-none focus:border-[#333] font-mono"
+                    />
+                    <button
+                      onClick={() => handleSaveLink(selectedAccount.id)}
+                      className="px-3 py-2 rounded-md bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-semibold transition-colors"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setEditingLink(false)}
+                      className="p-2 rounded-md hover:bg-[#1a1a1a] text-[#555] hover:text-white transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : selectedAccount.storyLinkUrl ? (
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={selectedAccount.storyLinkUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 font-mono truncate max-w-[300px] transition-colors"
+                    >
+                      <ExternalLink size={12} className="flex-shrink-0" />
+                      <Blur>{selectedAccount.storyLinkUrl}</Blur>
+                    </a>
+                    <button
+                      onClick={() => openLinkEditor(selectedAccount.storyLinkUrl)}
+                      className="p-1.5 rounded-md hover:bg-[#1a1a1a] text-[#555] hover:text-white transition-colors"
+                      title="Edit link"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteLink(selectedAccount.id)}
+                      className="p-1.5 rounded-md hover:bg-red-500/10 text-[#555] hover:text-red-400 transition-colors"
+                      title="Remove link"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => openLinkEditor('')}
+                    className="flex items-center gap-2 px-3 py-2 rounded-md border border-dashed border-[#1a1a1a] hover:border-[#333] text-[#555] hover:text-white transition-colors text-xs"
+                  >
+                    <Link size={12} />
+                    Add link
+                  </button>
+                )}
+              </div>
+
+              {/* Key-value details */}
+              <div className="px-8 py-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="label-upper !mb-0">Account Details</h3>
+                  {!editing ? (
+                    <button
+                      onClick={startEditing}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] text-[#555] hover:text-white hover:bg-white/5 transition-colors font-medium"
+                    >
+                      <Pencil size={11} />
+                      Edit
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={saveEdits}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors font-semibold"
+                      >
+                        <Check size={11} />
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setEditing(false)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] text-[#555] hover:text-white hover:bg-white/5 transition-colors font-medium"
+                      >
+                        <X size={11} />
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {editing ? (
+                  <>
+                    <EditableDetailRow label="Password" value={editValues.password} onChange={v => setEditValues(p => ({ ...p, password: v }))} mono type="password" placeholder="password" />
+                    <DetailRow label="Identity" value={usernameToIdentity[selectedAccount.username]} blur />
+                    <EditableDetailRow label="Email" value={editValues.email} onChange={v => setEditValues(p => ({ ...p, email: v }))} placeholder="email@example.com" />
+                    <EditableDetailRow label="Phone" value={editValues.phone} onChange={v => setEditValues(p => ({ ...p, phone: v }))} mono placeholder="+1234567890" />
+                    <EditableDetailRow label="2FA Secret" value={editValues.totpSecret} onChange={v => setEditValues(p => ({ ...p, totpSecret: v }))} mono placeholder="TOTP secret" />
+                    <EditableDetailRow label="Container" value={editValues.craneContainer} onChange={v => setEditValues(p => ({ ...p, craneContainer: v }))} mono placeholder="container name" />
+                    <EditableDetailRow
+                      label="Device"
+                      value={editValues.deviceUdid}
+                      onChange={v => setEditValues(p => ({ ...p, deviceUdid: v }))}
+                      type="select"
+                      options={(Array.isArray(devicesData) ? devicesData : []).map(d => ({ value: d.udid, label: `${d.name} — ${d.udid.slice(-8)}` }))}
+                    />
+                    <EditableDetailRow label="Proxy Session" value={editValues.proxySession} onChange={v => setEditValues(p => ({ ...p, proxySession: v }))} mono placeholder="proxy session" />
+                    <DetailRow label="Created" value={selectedAccount.createdAt ? new Date(selectedAccount.createdAt).toLocaleDateString() : null} />
+                    <DetailRow label="Last Login" value={selectedAccount.lastLoginAt ? new Date(selectedAccount.lastLoginAt).toLocaleString() : null} />
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-center py-3 border-b border-[#141414]">
+                      <span className="text-[#555] text-sm">Password</span>
+                      {selectedAccount.password ? (
+                        <span className="text-sm text-white font-mono"><Blur>{selectedAccount.password}</Blur></span>
+                      ) : (
+                        <span className="text-sm text-[#333] italic">no password</span>
+                      )}
+                    </div>
+                    <DetailRow label="Identity" value={usernameToIdentity[selectedAccount.username]} blur />
+                    <DetailRow label="Email" value={selectedAccount.email} blur />
+                    <DetailRow label="Phone" value={selectedAccount.phone} mono blur />
+                    <DetailRow
+                      label="2FA Secret"
+                      value={selectedAccount.totpSecret ? '••••••' + selectedAccount.totpSecret.slice(-4) : null}
+                      mono
+                      blur
+                    />
+                    <DetailRow label="Container" value={selectedAccount.craneContainer} mono blur />
+                    <DetailRow label="Device" value={selectedAccount.deviceUdid ? `${deviceMap[selectedAccount.deviceUdid] || 'Unknown'} (${selectedAccount.deviceUdid})` : null} mono blur />
+                    <DetailRow label="Proxy Session" value={selectedAccount.proxySession} mono blur />
+                    <DetailRow
+                      label="Created"
+                      value={selectedAccount.createdAt ? new Date(selectedAccount.createdAt).toLocaleDateString() : null}
+                    />
+                    <DetailRow
+                      label="Last Login"
+                      value={selectedAccount.lastLoginAt ? new Date(selectedAccount.lastLoginAt).toLocaleString() : null}
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Empty state */
+            <div className="h-full flex flex-col items-center justify-center">
+              <Users size={48} className="text-[#1a1a1a] mb-4" />
+              <p className="text-base text-[#333]">No account selected</p>
+              <p className="text-xs text-[#222] mt-1">Click an account from the list to view details</p>
+            </div>
+          )}
+        </div>
+      </div>}
     </div>
   )
 }

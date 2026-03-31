@@ -16,6 +16,7 @@ const STATUS_STYLES = {
   QUEUED: 'bg-[#8B5CF6]/10 text-[#8B5CF6] border-[#8B5CF6]/20',
   IDLE: 'bg-[#52525B]/10 text-[#52525B] border-[#52525B]/20',
   DISABLED: 'bg-[#52525B]/10 text-[#52525B] border-[#52525B]/20',
+  DISCONNECTED: 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20 animate-subtle-pulse',
 }
 
 export default function StatusBadge({ status, className }) {

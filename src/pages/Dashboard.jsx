@@ -230,6 +230,14 @@ export default function Dashboard() {
   const activeCount = Array.isArray(activeAccounts) ? activeAccounts.length : (activeAccounts?.count ?? 0)
   const totalCount = Array.isArray(allAccounts) ? allAccounts.length : (allAccounts?.total ?? 0)
 
+  // Posted in last 24h
+  const postedLast24h = useMemo(() => {
+    const list = Array.isArray(activeAccounts) ? activeAccounts : []
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000
+    return list.filter(a => a.lastPost && new Date(a.lastPost).getTime() > cutoff).length
+  }, [activeAccounts])
+  const postedPct = activeCount > 0 ? Math.round((postedLast24h / activeCount) * 100) : 0
+
   const lock = lockStatus?.data || lockStatus || {}
   const isRunning = lock.locked || lock.status === 'RUNNING'
 
@@ -308,15 +316,15 @@ export default function Dashboard() {
           icon={Users}
           label="Active Accounts"
           value={activeCount}
-          subtitle={totalCount > 0 ? `${Math.round((activeCount / totalCount) * 100)}% of ${totalCount} total` : undefined}
+          subtitle={`${postedLast24h}/${activeCount} posted last 24h (${postedPct}%)`}
           loading={accountsLoading}
           color="#22C55E"
         >
-          {totalCount > 0 && (
+          {activeCount > 0 && (
             <div className="mt-2 h-1.5 rounded-full bg-[#1a1a1a] overflow-hidden">
               <div
                 className="h-full rounded-full bg-[#22C55E] transition-all duration-500"
-                style={{ width: `${Math.round((activeCount / totalCount) * 100)}%` }}
+                style={{ width: `${postedPct}%` }}
               />
             </div>
           )}

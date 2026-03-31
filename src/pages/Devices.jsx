@@ -48,12 +48,14 @@ const STATUS_DOT = {
   RUNNING: 'bg-[#3B82F6] animate-subtle-pulse',
   ERROR: 'bg-[#EF4444]',
   OFFLINE: 'bg-[#52525B]',
+  DISCONNECTED: 'bg-[#F59E0B] animate-subtle-pulse',
 }
 
 function DeviceCard({ device, onSelect, onToggle }) {
   const statusColor = STATUS_DOT[device.status] || STATUS_DOT.OFFLINE
   const isRunning = device.status === 'RUNNING'
   const isError = device.status === 'ERROR'
+  const isDisconnected = device.status === 'DISCONNECTED'
 
   return (
     <div
@@ -94,6 +96,18 @@ function DeviceCard({ device, onSelect, onToggle }) {
               <span>{device.elapsedTime}</span>
             </div>
           )}
+        </div>
+      )}
+
+      {isDisconnected && (
+        <div className="mb-3 p-2 rounded-md bg-[#F59E0B]/5 border border-[#F59E0B]/10">
+          <div className="flex items-center gap-1.5 text-xs text-[#F59E0B] mb-1">
+            <AlertTriangle className="w-3 h-3 shrink-0 animate-pulse" />
+            <span className="font-medium">USB cable disconnected</span>
+          </div>
+          <p className="text-xs text-[#A1A1AA]">
+            {device.currentAction || 'Waiting for reconnection (max 5 min)'}
+          </p>
         </div>
       )}
 
@@ -452,7 +466,7 @@ export default function Devices() {
   }, [devices, search])
 
   const statusCounts = useMemo(() => {
-    const counts = { IDLE: 0, RUNNING: 0, ERROR: 0, OFFLINE: 0 }
+    const counts = { IDLE: 0, RUNNING: 0, ERROR: 0, OFFLINE: 0, DISCONNECTED: 0 }
     devices.forEach((d) => {
       const s = d.status || 'OFFLINE'
       counts[s] = (counts[s] || 0) + 1
@@ -472,10 +486,11 @@ export default function Devices() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
           { label: 'Idle', count: statusCounts.IDLE, color: '#22C55E', dot: 'bg-[#22C55E]' },
           { label: 'Running', count: statusCounts.RUNNING, color: '#3B82F6', dot: 'bg-[#3B82F6]' },
+          { label: 'Disconnected', count: statusCounts.DISCONNECTED, color: '#F59E0B', dot: 'bg-[#F59E0B]' },
           { label: 'Error', count: statusCounts.ERROR, color: '#EF4444', dot: 'bg-[#EF4444]' },
           { label: 'Offline', count: statusCounts.OFFLINE, color: '#52525B', dot: 'bg-[#52525B]' },
         ].map((s) => (

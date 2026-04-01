@@ -5,14 +5,15 @@ import { useIncognito } from '@/contexts/IncognitoContext'
 import StatusBadge from '@/components/StatusBadge'
 
 function formatTimeAgo(dateStr) {
-  if (!dateStr) return 'Never'
+  if (!dateStr) return { text: 'Never', color: 'text-red-400' }
   const diff = Date.now() - new Date(dateStr).getTime()
   const mins = Math.floor(diff / 60000)
-  if (mins < 60) return `${mins}m ago`
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
+  const color = hrs >= 24 ? 'text-red-400' : hrs >= 12 ? 'text-orange-400' : ''
+  if (mins < 60) return { text: `${mins}m ago`, color }
+  if (hrs < 24) return { text: `${hrs}h ago`, color }
   const days = Math.floor(hrs / 24)
-  return `${days}d ago`
+  return { text: `${days}d ago`, color }
 }
 
 const COLUMNS = [
@@ -108,7 +109,9 @@ export default function AccountTable({ accounts, devices, selectedUsernames, onT
                 </td>
               </tr>
             ) : (
-              sorted.map(a => (
+              sorted.map(a => {
+                const lastRun = formatTimeAgo(a.lastPostingRun)
+                return (
                 <tr
                   key={a.id}
                   className="border-b border-border/50 hover:bg-accent/30 transition-colors cursor-pointer"
@@ -127,10 +130,11 @@ export default function AccountTable({ accounts, devices, selectedUsernames, onT
                   <td className="px-3 py-2 text-right text-muted-foreground">{a.totalViews?.toLocaleString() ?? '—'}</td>
                   <td className="px-3 py-2 text-right text-muted-foreground">{a.followersCount?.toLocaleString() ?? '—'}</td>
                   <td className="px-3 py-2 text-right text-muted-foreground">{a.postsCount ?? '—'}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{formatTimeAgo(a.lastPostingRun)}</td>
+                  <td className={`px-3 py-2 ${lastRun.color || 'text-muted-foreground'}`}>{lastRun.text}</td>
                   <td className="px-3 py-2"><StatusBadge status={a.status} /></td>
                 </tr>
-              ))
+                )
+              }))
             )}
           </tbody>
         </table>

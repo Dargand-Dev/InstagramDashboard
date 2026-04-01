@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Rocket, Loader2, CheckCircle, XCircle, ExternalLink, Users, LayoutGrid, Table2 } from 'lucide-react'
+import { Search, Rocket, Loader2, CheckCircle, XCircle, ExternalLink, Users, LayoutGrid, Table2, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -65,6 +65,20 @@ export default function PostingRunTab({ devices, accounts, lockStatus, onRefresh
 
     return list
   }, [accounts, search, filters, identityFilter])
+
+  // Accounts with no post in 12h+
+  const staleAccounts = useMemo(() => {
+    const twelveHours = 12 * 60 * 60 * 1000
+    return filteredAccounts.filter(a => {
+      if (!a.lastPostingRun) return true
+      return Date.now() - new Date(a.lastPostingRun).getTime() >= twelveHours
+    })
+  }, [filteredAccounts])
+
+  const selectStale = useCallback(() => {
+    setSelectiveMode(true)
+    setSelectedUsernames(new Set(staleAccounts.map(a => a.username)))
+  }, [staleAccounts])
 
   function toggleFilter(key) {
     setFilters(prev => {
@@ -171,6 +185,15 @@ export default function PostingRunTab({ devices, accounts, lockStatus, onRefresh
           <span className="text-[10px] text-muted-foreground font-mono">
             {selectedUsernames.size}/{filteredAccounts.length} selected
           </span>
+          {staleAccounts.length > 0 && (
+            <button
+              onClick={selectStale}
+              className="flex items-center gap-1 text-[10px] text-orange-400 hover:text-orange-300 font-semibold uppercase tracking-wider transition-colors"
+            >
+              <Clock size={10} />
+              Stale 12h+ ({staleAccounts.length})
+            </button>
+          )}
           <button
             onClick={() => toggleAllUsernames(filteredAccounts.map(a => a.username))}
             className="text-[10px] text-muted-foreground hover:text-foreground font-semibold uppercase tracking-wider transition-colors"

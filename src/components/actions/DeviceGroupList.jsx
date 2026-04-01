@@ -7,18 +7,20 @@ import { useIncognito } from '@/contexts/IncognitoContext'
 import StatusBadge from '@/components/StatusBadge'
 
 function formatTimeAgo(dateStr) {
-  if (!dateStr) return 'Never'
+  if (!dateStr) return { text: 'Never', color: 'text-red-400' }
   const diff = Date.now() - new Date(dateStr).getTime()
   const mins = Math.floor(diff / 60000)
-  if (mins < 60) return `${mins}m ago`
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
+  const color = hrs >= 24 ? 'text-red-400' : hrs >= 12 ? 'text-orange-400' : ''
+  if (mins < 60) return { text: `${mins}m ago`, color }
+  if (hrs < 24) return { text: `${hrs}h ago`, color }
   const days = Math.floor(hrs / 24)
-  return `${days}d ago`
+  return { text: `${days}d ago`, color }
 }
 
 function AccountRow({ account, selected, onToggle }) {
   const { isIncognito } = useIncognito()
+  const lastRun = formatTimeAgo(account.lastPostingRun)
 
   return (
     <div
@@ -36,7 +38,7 @@ function AccountRow({ account, selected, onToggle }) {
         <span title="Views">{account.totalViews?.toLocaleString() ?? '—'}</span>
         <span title="Followers">{account.followersCount?.toLocaleString() ?? '—'}</span>
         <span title="Posts">{account.postsCount ?? '—'}</span>
-        <span title="Last run" className="ml-auto">{formatTimeAgo(account.lastPostingRun)}</span>
+        <span title="Last run" className={`ml-auto ${lastRun.color || 'text-muted-foreground'}`}>{lastRun.text}</span>
       </div>
       <StatusBadge status={account.status} />
     </div>

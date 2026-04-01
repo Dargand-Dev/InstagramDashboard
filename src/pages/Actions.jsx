@@ -57,6 +57,7 @@ import {
   ChevronRight,
   MoreHorizontal,
   ChevronDown,
+  Clock,
 } from 'lucide-react'
 
 // ── Action metadata ──────────────────────────────────────────────
@@ -253,13 +254,14 @@ function ActionParamsDialog({ actionName, open, onOpenChange, onSubmit }) {
 
 // ── Posting Run: account row ────────────────────────────────────
 function formatLastPost(dateStr) {
-  if (!dateStr) return { text: 'Never', stale: true }
+  if (!dateStr) return { text: 'Never', color: 'text-[#EF4444]' }
   const diff = Date.now() - new Date(dateStr).getTime()
   const hrs = Math.floor(diff / 3600000)
-  if (hrs < 1) return { text: `${Math.floor(diff / 60000)}m ago`, stale: false }
-  if (hrs < 24) return { text: `${hrs}h ago`, stale: false }
+  const color = hrs >= 24 ? 'text-[#EF4444]' : hrs >= 12 ? 'text-[#F59E0B]' : 'text-[#22C55E]'
+  if (hrs < 1) return { text: `${Math.floor(diff / 60000)}m ago`, color }
+  if (hrs < 24) return { text: `${hrs}h ago`, color }
   const days = Math.floor(hrs / 24)
-  return { text: `${days}d ago`, stale: true }
+  return { text: `${days}d ago`, color }
 }
 
 function AccountRow({ account, selected, onToggle }) {
@@ -282,7 +284,7 @@ function AccountRow({ account, selected, onToggle }) {
         <span title="Posts">{account.postsCount ?? '—'}</span>
         <span
           title="Last post"
-          className={`ml-auto ${lastPost.stale ? 'text-[#F59E0B]' : 'text-[#22C55E]'}`}
+          className={`ml-auto ${lastPost.color}`}
         >
           {lastPost.text}
         </span>
@@ -430,6 +432,14 @@ export default function Actions() {
     }
     return list
   }, [activeAccounts, postingDevice, usernameSearch])
+
+  const stalePostingAccounts = useMemo(() => {
+    const twelveHours = 12 * 60 * 60 * 1000
+    return filteredPostingAccounts.filter(a => {
+      if (!a.lastPost) return true
+      return Date.now() - new Date(a.lastPost).getTime() >= twelveHours
+    })
+  }, [filteredPostingAccounts])
 
   // Group accounts by device for the device view
   const deviceGroups = useMemo(() => {
@@ -620,6 +630,15 @@ export default function Actions() {
                 <span className="text-[10px] text-[#3f3f46] font-mono tabular-nums">
                   {selectedUsernames.size}/{filteredPostingAccounts.length}
                 </span>
+                {stalePostingAccounts.length > 0 && (
+                  <button
+                    className="flex items-center gap-1 text-[10px] text-[#F59E0B] hover:text-[#FBBF24] font-semibold uppercase tracking-wider"
+                    onClick={() => setSelectedUsernames(new Set(stalePostingAccounts.map(a => a.username)))}
+                  >
+                    <Clock className="w-2.5 h-2.5" />
+                    Stale 12h+ ({stalePostingAccounts.length})
+                  </button>
+                )}
                 <button
                   className="text-[10px] text-[#3B82F6] hover:text-[#60A5FA] font-semibold uppercase tracking-wider"
                   onClick={() => toggleAllUsernames(filteredPostingAccounts.map(a => a.username))}

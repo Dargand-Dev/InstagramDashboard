@@ -236,7 +236,7 @@ export default function Accounts() {
     try {
       const account = accounts.find(a => a.id === id)
       if (!account) return
-      await apiPut(`/api/accounts/${id}`, { ...account, storyLinkUrl: linkValue || null, necessaryLink: !!linkValue })
+      await apiPut(`/api/accounts/${id}`, { ...account, storyLinkUrl: linkValue || null, necessaryLink: linkValue ? (['LINK_ACTIVE', 'LINK_REQUIRED'].includes(account.necessaryLink) ? account.necessaryLink : 'LINK_PENDING') : null })
       setEditingLink(false)
       refetch()
     } catch (err) {
@@ -248,11 +248,22 @@ export default function Accounts() {
     try {
       const account = accounts.find(a => a.id === id)
       if (!account) return
-      await apiPut(`/api/accounts/${id}`, { ...account, storyLinkUrl: null, necessaryLink: false })
+      await apiPut(`/api/accounts/${id}`, { ...account, storyLinkUrl: null, necessaryLink: null })
       setEditingLink(false)
       refetch()
     } catch (err) {
       alert('Failed to remove link: ' + err.message)
+    }
+  }
+
+  async function handleActivateLink(id) {
+    try {
+      const account = accounts.find(a => a.id === id)
+      if (!account || !account.storyLinkUrl || account.necessaryLink === 'LINK_ACTIVE') return
+      await apiPut(`/api/accounts/${id}`, { ...account, necessaryLink: 'LINK_REQUIRED' })
+      refetch()
+    } catch (err) {
+      alert('Failed to activate link: ' + err.message)
     }
   }
 
@@ -718,30 +729,57 @@ export default function Accounts() {
                     </button>
                   </div>
                 ) : selectedAccount.storyLinkUrl ? (
-                  <div className="flex items-center gap-2">
-                    <a
-                      href={selectedAccount.storyLinkUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 font-mono truncate max-w-[300px] transition-colors"
-                    >
-                      <ExternalLink size={12} className="flex-shrink-0" />
-                      <Blur>{selectedAccount.storyLinkUrl}</Blur>
-                    </a>
-                    <button
-                      onClick={() => openLinkEditor(selectedAccount.storyLinkUrl)}
-                      className="p-1.5 rounded-md hover:bg-[#1a1a1a] text-[#555] hover:text-white transition-colors"
-                      title="Edit link"
-                    >
-                      <Pencil size={12} />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteLink(selectedAccount.id)}
-                      className="p-1.5 rounded-md hover:bg-red-500/10 text-[#555] hover:text-red-400 transition-colors"
-                      title="Remove link"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={selectedAccount.storyLinkUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 font-mono truncate max-w-[300px] transition-colors"
+                      >
+                        <ExternalLink size={12} className="flex-shrink-0" />
+                        <Blur>{selectedAccount.storyLinkUrl}</Blur>
+                      </a>
+                      <button
+                        onClick={() => openLinkEditor(selectedAccount.storyLinkUrl)}
+                        className="p-1.5 rounded-md hover:bg-[#1a1a1a] text-[#555] hover:text-white transition-colors"
+                        title="Edit link"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteLink(selectedAccount.id)}
+                        className="p-1.5 rounded-md hover:bg-red-500/10 text-[#555] hover:text-red-400 transition-colors"
+                        title="Remove link"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {selectedAccount.necessaryLink === 'LINK_PENDING' && (
+                        <>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-amber-500/10 text-amber-400 border-amber-500/20">
+                            En attente
+                          </span>
+                          <button
+                            onClick={() => handleActivateLink(selectedAccount.id)}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
+                          >
+                            Mettre en bio
+                          </button>
+                        </>
+                      )}
+                      {selectedAccount.necessaryLink === 'LINK_REQUIRED' && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-blue-500/10 text-blue-400 border-blue-500/20">
+                          À mettre en bio
+                        </span>
+                      )}
+                      {selectedAccount.necessaryLink === 'LINK_ACTIVE' && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                          Lien en bio
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <button

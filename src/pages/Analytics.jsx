@@ -253,7 +253,7 @@ export default function Analytics() {
     const acc = accountsByUsername[username]
     if (!acc) return
     try {
-      await apiPut(`/api/accounts/${acc.id}`, { ...acc, storyLinkUrl: linkInputValue || null, necessaryLink: !!linkInputValue })
+      await apiPut(`/api/accounts/${acc.id}`, { ...acc, storyLinkUrl: linkInputValue || null, necessaryLink: linkInputValue ? (['LINK_ACTIVE', 'LINK_REQUIRED'].includes(acc.necessaryLink) ? acc.necessaryLink : 'LINK_PENDING') : null })
       setEditingLinkUser(null)
       refetchAccounts()
     } catch (err) {

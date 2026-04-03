@@ -20,6 +20,7 @@ const Accounts = lazy(() => import('@/pages/Accounts'))
 const ErrorCenter = lazy(() => import('@/pages/ErrorCenter'))
 const Notifications = lazy(() => import('@/pages/Notifications'))
 const ActivityLog = lazy(() => import('@/pages/ActivityLog'))
+const RunLogs = lazy(() => import('@/pages/RunLogs'))
 const Analytics = lazy(() => import('@/pages/Analytics'))
 const PostingHistory = lazy(() => import('@/pages/PostingHistory'))
 const Schedule = lazy(() => import('@/pages/Schedule'))
@@ -55,6 +56,7 @@ export default function App() {
                 <Route path="/error-center" element={<LazyPage><ErrorCenter /></LazyPage>} />
                 <Route path="/notifications" element={<LazyPage><Notifications /></LazyPage>} />
                 <Route path="/activity-log" element={<LazyPage><ActivityLog /></LazyPage>} />
+                <Route path="/activity-log/run/:runId/logs" element={<LazyPage><RunLogs /></LazyPage>} />
                 <Route path="/analytics" element={<LazyPage><Analytics /></LazyPage>} />
                 <Route path="/posting-history" element={<LazyPage><PostingHistory /></LazyPage>} />
                 <Route path="/schedule" element={<LazyPage><Schedule /></LazyPage>} />

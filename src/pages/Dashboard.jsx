@@ -11,6 +11,7 @@ import { Collapsible } from '@/components/ui/collapsible'
 import StatusBadge from '@/components/shared/StatusBadge'
 import TimeAgo from '@/components/shared/TimeAgo'
 import EmptyState from '@/components/shared/EmptyState'
+import HealthScoreBadge from '@/components/shared/HealthScoreBadge'
 import {
   Users,
   Activity,
@@ -25,6 +26,7 @@ import {
   Timer,
   Zap,
   Gauge,
+  ChevronDown,
 } from 'lucide-react'
 
 function formatDuration(ms) {
@@ -165,6 +167,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { subscribe, isConnected } = useWebSocket()
+  const [showLowHealth, setShowLowHealth] = useState(false)
 
   // Data queries
   const { data: accountsData, isLoading: accountsLoading } = useQuery({
@@ -289,7 +292,8 @@ export default function Dashboard() {
   const lowStockIdentities = Object.entries(contentIdentities).filter(
     ([, v]) => v.status === 'LOW_STOCK' || v.status === 'EMPTY' || (v.reelCount || v.count || 0) < 3
   )
-  const lowHealthAccounts = healthList.filter(a => (a.score ?? a.healthScore ?? 100) < 50).length
+  const lowHealthAccountsList = healthList.filter(a => (a.score ?? a.healthScore ?? 100) < 50)
+  const lowHealthAccounts = lowHealthAccountsList.length
 
   const avgData = workflowAverages?.data || workflowAverages || {}
   const avgPostReel = avgData.postreel || null
@@ -312,9 +316,35 @@ export default function Dashboard() {
               </p>
             )}
             {lowHealthAccounts > 0 && (
-              <p className="text-sm text-[#F59E0B]">
-                {lowHealthAccounts} account{lowHealthAccounts > 1 ? 's' : ''} with health score below 50
-              </p>
+              <div>
+                <button
+                  className="flex items-center gap-2 text-sm text-[#F59E0B] hover:text-[#FBBF24] transition-colors"
+                  onClick={() => setShowLowHealth(prev => !prev)}
+                >
+                  <span>{lowHealthAccounts} account{lowHealthAccounts > 1 ? 's' : ''} with health score below 50</span>
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showLowHealth ? 'rotate-180' : ''}`} />
+                </button>
+                {showLowHealth && (
+                  <div className="mt-2 rounded-lg border border-[#F59E0B]/10 bg-[#0A0A0A] divide-y divide-[#1a1a1a]">
+                    {lowHealthAccountsList.map(a => {
+                      const username = a.username || `Account ${a.accountId || a.id}`
+                      return (
+                        <button
+                          key={a.accountId || a.id}
+                          className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[#111111] transition-colors cursor-pointer"
+                          onClick={() => navigate(`/accounts?username=${encodeURIComponent(username)}`)}
+                        >
+                          <span className="text-sm text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors">{username}</span>
+                          <div className="flex items-center gap-2">
+                            <HealthScoreBadge score={a.score ?? a.healthScore ?? 0} size={28} />
+                            <ChevronRight className="w-3.5 h-3.5 text-[#3f3f46]" />
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

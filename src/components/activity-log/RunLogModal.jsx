@@ -1,11 +1,19 @@
+import { useNavigate } from 'react-router-dom'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import LogViewer from '@/components/shared/LogViewer'
 import { useRunLogs } from '@/hooks/useRunLogs'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Terminal } from 'lucide-react'
+import { Terminal, Maximize2 } from 'lucide-react'
 
 export default function RunLogModal({ runId, open, onClose }) {
+  const navigate = useNavigate()
   const { data: logText, isLoading, isError } = useRunLogs(open ? runId : null)
+
+  const openFullPage = () => {
+    onClose()
+    navigate(`/activity-log/run/${encodeURIComponent(runId)}/logs`)
+  }
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -14,10 +22,21 @@ export default function RunLogModal({ runId, open, onClose }) {
         showCloseButton
       >
         <DialogHeader className="border-b border-[#1a1a1a] pb-3">
-          <DialogTitle className="text-[#FAFAFA] flex items-center gap-2 text-sm">
-            <Terminal className="w-4 h-4 text-[#A1A1AA]" />
-            Logs — {runId}
-          </DialogTitle>
+          <div className="flex items-center justify-between pr-8">
+            <DialogTitle className="text-[#FAFAFA] flex items-center gap-2 text-sm">
+              <Terminal className="w-4 h-4 text-[#A1A1AA]" />
+              Logs — {runId}
+            </DialogTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-[10px] px-2 text-[#52525B] hover:text-[#FAFAFA]"
+              onClick={openFullPage}
+            >
+              <Maximize2 className="w-3 h-3 mr-1" />
+              Full Page
+            </Button>
+          </div>
         </DialogHeader>
         <div className="flex-1 min-h-0 pt-3">
           {isLoading ? (

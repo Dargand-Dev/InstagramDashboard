@@ -1,3 +1,12 @@
+const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000
+
+export function toBangkokISO(utcString) {
+  if (!utcString) return utcString
+  const d = new Date(utcString)
+  const bangkokMs = d.getTime() + BANGKOK_OFFSET_MS
+  return new Date(bangkokMs).toISOString()
+}
+
 export function formatDuration(ms) {
   if (!ms) return '—'
   const s = Math.floor(ms / 1000)

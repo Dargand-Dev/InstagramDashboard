@@ -3,6 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer
 } from 'recharts'
+import { toBangkokISO } from '../utils/format'
 
 function formatNumber(n) {
   if (n == null) return '—'
@@ -37,7 +38,8 @@ export default function AccountDailyViewsChart({ account, snapshots }) {
     const dayMap = {}
     for (const snap of snapshots) {
       if (!snap.snapshotAt || snap.username !== username) continue
-      const day = snap.snapshotAt.slice(0, 10)
+      const local = toBangkokISO(snap.snapshotAt)
+      const day = local.slice(0, 10)
       if (!dayMap[day] || snap.snapshotAt > dayMap[day].at) {
         dayMap[day] = { at: snap.snapshotAt, val: snap.viewsLast30Days || 0 }
       }

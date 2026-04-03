@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 
 import { CHART_COLORS } from '../utils/chartColors'
+import { toBangkokISO } from '../utils/format'
 import { Blur, useIncognito } from '../contexts/IncognitoContext'
 
 function formatNumber(n) {
@@ -85,7 +86,8 @@ export default function DailyViewsBarChart({ title, snapshots, colorMap, display
     const allUsernames = new Set()
     for (const snap of snapshots) {
       if (!snap.snapshotAt) continue
-      const day = snap.snapshotAt.slice(0, 10)
+      const local = toBangkokISO(snap.snapshotAt)
+      const day = local.slice(0, 10)
       const username = snap.username
       allUsernames.add(username)
       if (!R[username]) R[username] = {}

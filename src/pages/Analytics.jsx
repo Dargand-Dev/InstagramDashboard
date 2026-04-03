@@ -14,6 +14,7 @@ import InteractiveLineChart from '@/components/charts/InteractiveLineChart'
 import DailyViewsBarChart from '@/components/charts/DailyViewsBarChart'
 import DateRangePicker from '@/components/shared/DateRangePicker'
 import { CHART_COLORS, buildColorMap } from '@/utils/chartColors'
+import { toBangkokISO } from '@/utils/format'
 import { Blur, useIncognito } from '@/contexts/IncognitoContext'
 
 const PERIODS = [
@@ -40,7 +41,7 @@ function computeAllTimeViews(snapshots) {
   const byAccount = {}
   for (const snap of snapshots) {
     if (!byAccount[snap.username]) byAccount[snap.username] = {}
-    const month = snap.snapshotAt?.slice(0, 7)
+    const month = toBangkokISO(snap.snapshotAt)?.slice(0, 7)
     if (!month) continue
     const views = snap.viewsLast30Days || 0
     if (!byAccount[snap.username][month] || views > byAccount[snap.username][month]) {
@@ -114,7 +115,10 @@ export default function Analytics() {
       if (customRange.start && customRange.end) {
         const startISO = new Date(customRange.start + 'T00:00:00').toISOString()
         const endISO = new Date(customRange.end + 'T23:59:59').toISOString()
-        return snapshots.filter(s => s.snapshotAt >= startISO && s.snapshotAt <= endISO)
+        return snapshots.filter(s => {
+          const local = toBangkokISO(s.snapshotAt)
+          return local >= startISO && local <= endISO
+        })
       }
       return snapshots
     }

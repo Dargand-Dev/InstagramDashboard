@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 
 import { CHART_COLORS } from '../utils/chartColors'
+import { toBangkokISO } from '../utils/format'
 import { Blur, useIncognito } from '../contexts/IncognitoContext'
 
 const tooltipStyle = {
@@ -79,8 +80,9 @@ export default function InteractiveLineChart({ title, snapshots, dataKey, colorM
     // Use date + half-day bucket (AM/PM) so 2 snapshots per day get 2 points
     const getSlot = (snapshotAt) => {
       if (!snapshotAt) return null
-      const date = snapshotAt.slice(0, 10)
-      const hour = parseInt(snapshotAt.slice(11, 13) || '0', 10)
+      const local = toBangkokISO(snapshotAt)
+      const date = local.slice(0, 10)
+      const hour = parseInt(local.slice(11, 13) || '0', 10)
       return `${date}T${hour < 12 ? '0' : '1'}` // 0 = AM, 1 = PM
     }
 

@@ -62,6 +62,7 @@ export default function Analytics() {
   const [sortAsc, setSortAsc] = useState(false)
   const [editingLinkUser, setEditingLinkUser] = useState(null)
   const [linkInputValue, setLinkInputValue] = useState('')
+  const [showAllAccounts, setShowAllAccounts] = useState(false)
 
   const currentPeriod = PERIODS.find(p => p.key === period)
 
@@ -232,6 +233,14 @@ export default function Analytics() {
       return sortAsc ? diff : -diff
     })
   }, [tableData, sortCol, sortAsc, allTimeViews])
+
+  const displayTableData = useMemo(() => {
+    if (showAllAccounts) return sortedTableData
+    return sortedTableData.filter(row => {
+      const acc = accountsByUsername[row.username]
+      return acc?.status === 'ACTIVE'
+    })
+  }, [sortedTableData, showAllAccounts, accountsByUsername])
 
   const handleSort = (col) => {
     if (sortCol === col) {
@@ -562,7 +571,19 @@ export default function Analytics() {
         {/* Detail Table */}
         <Card className="bg-[#111] border-[#1a1a1a]">
           <CardContent className="p-4">
-            <span className="label-upper block mb-4">Account Details</span>
+            <div className="flex items-center justify-between mb-4">
+              <span className="label-upper !mb-0">Account Details</span>
+              <button
+                onClick={() => setShowAllAccounts(!showAllAccounts)}
+                className={`px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide transition-colors border ${
+                  showAllAccounts
+                    ? 'bg-white/10 text-white border-[#333]'
+                    : 'bg-transparent text-[#555] border-[#1a1a1a] hover:text-white hover:border-[#333]'
+                }`}
+              >
+                {showAllAccounts ? 'All' : 'Active only'}
+              </button>
+            </div>
             <div className="overflow-hidden rounded-md border border-[#1a1a1a]">
               <table className="w-full text-xs">
                 <thead>
@@ -575,10 +596,10 @@ export default function Analytics() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedTableData.length === 0 ? (
+                  {displayTableData.length === 0 ? (
                     <tr><td colSpan={5} className="px-3 py-6 text-center text-[#333]">No data</td></tr>
                   ) : (
-                    sortedTableData.map((row, i) => {
+                    displayTableData.map((row, i) => {
                       const views = allTimeViews[row.username] || 0
                       const hasLink = !!accountLinks[row.username]
                       const showMissing = !hasLink && views >= 10000

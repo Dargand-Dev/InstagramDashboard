@@ -756,7 +756,15 @@ export default function Accounts() {
                       </button>
                     </div>
                     <div className="flex items-center gap-2">
-                      {selectedAccount.necessaryLink === 'LINK_PENDING' && (
+                      {selectedAccount.necessaryLink === 'LINK_REQUIRED' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-blue-500/10 text-blue-400 border-blue-500/20">
+                          À mettre en bio
+                        </span>
+                      ) : selectedAccount.necessaryLink === 'LINK_ACTIVE' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                          Lien en bio
+                        </span>
+                      ) : (
                         <>
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-amber-500/10 text-amber-400 border-amber-500/20">
                             En attente
@@ -768,16 +776,6 @@ export default function Accounts() {
                             Mettre en bio
                           </button>
                         </>
-                      )}
-                      {selectedAccount.necessaryLink === 'LINK_REQUIRED' && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-blue-500/10 text-blue-400 border-blue-500/20">
-                          À mettre en bio
-                        </span>
-                      )}
-                      {selectedAccount.necessaryLink === 'LINK_ACTIVE' && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
-                          Lien en bio
-                        </span>
                       )}
                     </div>
                   </div>

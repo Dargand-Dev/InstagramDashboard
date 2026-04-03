@@ -24,6 +24,7 @@ import {
   ArrowRight,
   Timer,
   Zap,
+  Gauge,
 } from 'lucide-react'
 
 function formatDuration(ms) {
@@ -208,6 +209,11 @@ export default function Dashboard() {
     queryFn: () => apiGet('/api/accounts/health/overview'),
   })
 
+  const { data: workflowAverages, isLoading: avgLoading } = useQuery({
+    queryKey: ['workflow-averages'],
+    queryFn: () => apiGet('/api/stats/workflow-averages'),
+  })
+
   // WebSocket live updates for active runs
   useEffect(() => {
     if (!isConnected) return
@@ -285,6 +291,10 @@ export default function Dashboard() {
   )
   const lowHealthAccounts = healthList.filter(a => (a.score ?? a.healthScore ?? 100) < 50).length
 
+  const avgData = workflowAverages?.data || workflowAverages || {}
+  const avgPostReel = avgData.postreel || null
+  const avgCreateAccount = avgData.createaccount || avgData.createaccountfromexistingcontainer || null
+
   const showAlert = lowStockIdentities.length > 0 || lowHealthAccounts > 0
 
   return (
@@ -311,7 +321,7 @@ export default function Dashboard() {
       )}
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <MetricCard
           icon={Users}
           label="Active Accounts"
@@ -355,6 +365,24 @@ export default function Dashboard() {
           subtitle={sched.enabled === false ? 'Schedule disabled' : nextRunTime ? 'Scheduled' : 'No upcoming runs'}
           loading={scheduleLoading}
           color="#F59E0B"
+        />
+
+        <MetricCard
+          icon={Gauge}
+          label="Avg Post Reel"
+          value={avgPostReel ? formatDuration(avgPostReel) : '—'}
+          subtitle="Per account"
+          loading={avgLoading}
+          color="#3B82F6"
+        />
+
+        <MetricCard
+          icon={Gauge}
+          label="Avg Create Account"
+          value={avgCreateAccount ? formatDuration(avgCreateAccount) : '—'}
+          subtitle="Per account"
+          loading={avgLoading}
+          color="#F97316"
         />
       </div>
 

@@ -49,7 +49,11 @@ export default function DeviceLogsTab({ device, currentRunId }) {
   // Auto-scroll to bottom
   useEffect(() => {
     if (autoFollow && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      requestAnimationFrame(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+        }
+      })
     }
   }, [filtered.length, autoFollow])
 
@@ -99,7 +103,6 @@ export default function DeviceLogsTab({ device, currentRunId }) {
       <div
         ref={scrollRef}
         className="flex-1 min-h-0 overflow-y-auto rounded-lg border border-[#1a1a1a] bg-[#0A0A0A]"
-        style={{ maxHeight: 'calc(100vh - 300px)' }}
       >
         {filtered.length > 0 ? (
           <div className="divide-y divide-[#1a1a1a]/50">

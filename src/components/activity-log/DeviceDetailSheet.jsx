@@ -30,9 +30,9 @@ export default function DeviceDetailSheet({ device, open, onOpenChange }) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          <Tabs defaultValue="runs">
-            <TabsList variant="line" className="w-full justify-start mb-4 sticky top-0 bg-[#0A0A0A] z-10">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+          <Tabs defaultValue="runs" className="flex flex-col flex-1 min-h-0">
+            <TabsList variant="line" className="w-full justify-start mb-4 shrink-0">
               <TabsTrigger value="runs" className="text-xs">
                 <ScrollText className="w-3 h-3 mr-1" />
                 Runs
@@ -51,16 +51,16 @@ export default function DeviceDetailSheet({ device, open, onOpenChange }) {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="runs">
+            <TabsContent value="runs" className="flex-1 min-h-0 overflow-y-auto">
               <DeviceRunsTab device={device} />
             </TabsContent>
-            <TabsContent value="logs">
+            <TabsContent value="logs" className="flex-1 min-h-0 overflow-hidden">
               <DeviceLogsTab device={device} currentRunId={device.currentRunId} />
             </TabsContent>
-            <TabsContent value="stats">
+            <TabsContent value="stats" className="flex-1 min-h-0 overflow-y-auto">
               <DeviceStatsTab device={device} />
             </TabsContent>
-            <TabsContent value="queue">
+            <TabsContent value="queue" className="flex-1 min-h-0 overflow-y-auto">
               <DeviceQueueTab device={device} />
             </TabsContent>
           </Tabs>

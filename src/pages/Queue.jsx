@@ -35,6 +35,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Timer,
 } from 'lucide-react'
 
 function formatDuration(startStr) {
@@ -61,6 +62,17 @@ function ElapsedTime({ startedAt }) {
   const dur = formatDuration(startedAt)
   if (!dur) return null
   return <span className="tabular-nums text-xs text-[#A1A1AA]">{dur}</span>
+}
+
+function formatEta(ms) {
+  if (!ms || ms <= 0) return null
+  const s = Math.floor(ms / 1000)
+  if (s < 60) return `~${s}s`
+  const m = Math.floor(s / 60)
+  const rem = s % 60
+  if (m < 60) return rem > 0 ? `~${m}m ${rem}s` : `~${m}m`
+  const h = Math.floor(m / 60)
+  return `~${h}h ${m % 60}m`
 }
 
 function BatchProgressBar({ summary }) {
@@ -132,6 +144,18 @@ function TaskCard({ task, onCancel, onReprioritize }) {
                 </span>
                 <StatusBadge status={task.status || 'QUEUED'} />
                 {isRunning && task.startedAt && <ElapsedTime startedAt={task.startedAt} />}
+                {isRunning && task.estimatedRemainingMs > 0 && (
+                  <span className="text-xs text-[#A1A1AA] flex items-center gap-0.5">
+                    <Timer className="w-3 h-3" />
+                    {formatEta(task.estimatedRemainingMs)} left
+                  </span>
+                )}
+                {task.status === 'QUEUED' && task.estimatedDurationMs > 0 && (
+                  <span className="text-xs text-[#52525B] flex items-center gap-0.5">
+                    <Timer className="w-3 h-3" />
+                    {formatEta(task.estimatedDurationMs)}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                 <span className="text-xs text-[#52525B]">{task.deviceName}</span>

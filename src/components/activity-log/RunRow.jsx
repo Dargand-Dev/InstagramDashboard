@@ -3,9 +3,10 @@ import { formatDuration } from '@/utils/format'
 import StatusBadge from '@/components/shared/StatusBadge'
 import TimeAgo from '@/components/shared/TimeAgo'
 import {
-  ChevronRight, ChevronDown, RotateCw, Loader2, Image, CheckCircle, XCircle, Clock,
+  ChevronRight, ChevronDown, RotateCw, Loader2, Image, CheckCircle, XCircle, Clock, Terminal,
 } from 'lucide-react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import RunLogModal from './RunLogModal'
 
 const CREATION_TYPES = ['CreateAccount', 'CreateAccountFromExistingContainer']
 
@@ -19,6 +20,7 @@ function getAccountDisplayName(detail, run, index) {
 export default function RunRow({ run, onRetry, retryingId }) {
   const [expanded, setExpanded] = useState(false)
   const [screenshotOpen, setScreenshotOpen] = useState(null)
+  const [showLogs, setShowLogs] = useState(false)
   const results = run.results || run.accountResults || []
   const successCount = results.filter(r => r.status === 'SUCCESS' || r.success).length
   const failCount = results.filter(r => ['FAILED', 'ERROR', 'ABORTED'].includes(r.status) || r.failed).length
@@ -64,6 +66,14 @@ export default function RunRow({ run, onRetry, retryingId }) {
               {successCount > 0 && <span className="text-[#22C55E]">{successCount} ok</span>}
               {failCount > 0 && <span className="text-[#EF4444]">{failCount} fail</span>}
             </div>
+          )}
+          {run.workflowRunId && (
+            <button
+              onClick={e => { e.stopPropagation(); setShowLogs(true) }}
+              className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-md border bg-[#3B82F6]/8 text-[#3B82F6] border-[#3B82F6]/15 hover:bg-[#3B82F6]/15 transition-colors"
+            >
+              <Terminal className="w-3 h-3" /> Logs
+            </button>
           )}
           {canRetry && (
             <button
@@ -153,6 +163,15 @@ export default function RunRow({ run, onRetry, retryingId }) {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Run logs modal */}
+      {showLogs && (
+        <RunLogModal
+          runId={run.workflowRunId}
+          open={showLogs}
+          onClose={() => setShowLogs(false)}
+        />
+      )}
     </div>
   )
 }

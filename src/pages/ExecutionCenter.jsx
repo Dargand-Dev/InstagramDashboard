@@ -168,11 +168,23 @@ function ExecutionTimeline({ runs }) {
   )
 }
 
-function ProgressBar({ progress }) {
+function formatEta(ms) {
+  if (!ms || ms <= 0) return null
+  const s = Math.floor(ms / 1000)
+  if (s < 60) return `~${s}s`
+  const m = Math.floor(s / 60)
+  const rem = s % 60
+  if (m < 60) return rem > 0 ? `~${m}m ${rem}s` : `~${m}m`
+  const h = Math.floor(m / 60)
+  return `~${h}h ${m % 60}m`
+}
+
+function ProgressBar({ progress, estimatedRemainingMs }) {
   if (!progress || !progress.total) return null
   const { total, completed, failed, running, skipped } = progress
   const processed = (completed || 0) + (failed || 0) + (skipped || 0)
   const pct = Math.round((processed / total) * 100)
+  const eta = formatEta(estimatedRemainingMs)
 
   return (
     <div className="w-full">
@@ -181,6 +193,12 @@ function ProgressBar({ progress }) {
           {processed}/{total} accounts ({pct}%)
         </span>
         <div className="flex items-center gap-2 text-[10px]">
+          {eta && (
+            <span className="text-[#A1A1AA] flex items-center gap-0.5">
+              <Timer className="w-3 h-3" />
+              {eta} left
+            </span>
+          )}
           {completed > 0 && <span className="text-[#22C55E]">{completed} done</span>}
           {failed > 0 && <span className="text-[#EF4444]">{failed} failed</span>}
           {running > 0 && <span className="text-[#3B82F6]">{running} running</span>}
@@ -283,7 +301,7 @@ function ExecutionCard({ run, onStopGraceful, onKill, wsSubscribe, wsConnected }
                   </>
                 )}
               </div>
-              {progress && <div className="mt-2"><ProgressBar progress={progress} /></div>}
+              {progress && <div className="mt-2"><ProgressBar progress={progress} estimatedRemainingMs={run.estimatedRemainingMs} /></div>}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -591,6 +609,18 @@ export default function ExecutionCenter() {
                           )}
                           {item.currentAccount && (
                             <span className="text-[10px] text-[#3B82F6]">@ {item.currentAccount}</span>
+                          )}
+                          {item.status === 'QUEUED' && item.estimatedDurationMs && (
+                            <span className="text-[10px] text-[#52525B] flex items-center gap-0.5">
+                              <Timer className="w-2.5 h-2.5" />
+                              {formatEta(item.estimatedDurationMs)}
+                            </span>
+                          )}
+                          {item.status === 'RUNNING' && item.estimatedRemainingMs && (
+                            <span className="text-[10px] text-[#A1A1AA] flex items-center gap-0.5">
+                              <Timer className="w-2.5 h-2.5" />
+                              {formatEta(item.estimatedRemainingMs)} left
+                            </span>
                           )}
                         </div>
                       </div>

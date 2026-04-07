@@ -24,6 +24,7 @@ const RunLogs = lazy(() => import('@/pages/RunLogs'))
 const Analytics = lazy(() => import('@/pages/Analytics'))
 const PostingHistory = lazy(() => import('@/pages/PostingHistory'))
 const Schedule = lazy(() => import('@/pages/Schedule'))
+const AutoCreation = lazy(() => import('@/pages/AutoCreation'))
 const Settings = lazy(() => import('@/pages/Settings'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
@@ -60,6 +61,7 @@ export default function App() {
                 <Route path="/analytics" element={<LazyPage><Analytics /></LazyPage>} />
                 <Route path="/posting-history" element={<LazyPage><PostingHistory /></LazyPage>} />
                 <Route path="/schedule" element={<LazyPage><Schedule /></LazyPage>} />
+                <Route path="/auto-creation" element={<LazyPage><AutoCreation /></LazyPage>} />
                 <Route path="/settings" element={<LazyPage><Settings /></LazyPage>} />
                 <Route path="*" element={<LazyPage><NotFound /></LazyPage>} />
               </Route>

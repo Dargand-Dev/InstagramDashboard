@@ -20,6 +20,7 @@ import {
   LogOut,
   Instagram,
   Menu,
+  UserPlus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -54,6 +55,7 @@ const NAV_SECTIONS = [
       { path: '/execution-center', label: 'Execution Center', icon: Zap },
       { path: '/queue', label: 'Queue', icon: ListOrdered },
       { path: '/actions', label: 'Actions', icon: Clapperboard },
+      { path: '/auto-creation', label: 'Auto-Creation', icon: UserPlus },
     ],
   },
   {

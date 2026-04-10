@@ -3,7 +3,7 @@ import { formatDuration } from '@/utils/format'
 import StatusBadge from '@/components/shared/StatusBadge'
 import TimeAgo from '@/components/shared/TimeAgo'
 import {
-  ChevronRight, ChevronDown, RotateCw, Loader2, Image, CheckCircle, XCircle, Clock, Terminal,
+  ChevronRight, ChevronDown, RotateCw, Loader2, Image, CheckCircle, XCircle, Clock, Terminal, Download,
 } from 'lucide-react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import RunLogModal from './RunLogModal'
@@ -118,6 +118,16 @@ export default function RunRow({ run, onRetry, retryingId }) {
                       >
                         <Image className="w-3 h-3" /> Screenshot
                       </button>
+                    )}
+                    {r.errorDomPath && (
+                      <a
+                        href={`${baseUrl}/api/screenshots/${r.errorDomPath}`}
+                        download
+                        onClick={e => e.stopPropagation()}
+                        className="text-[#8B5CF6] hover:text-[#A78BFA] inline-flex items-center gap-1"
+                      >
+                        <Download className="w-3 h-3" /> DOM
+                      </a>
                     )}
                     {r.failureReason && (
                       <span className="text-[#EF4444] truncate max-w-[300px]">{r.failureReason}</span>

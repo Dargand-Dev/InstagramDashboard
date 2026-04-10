@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Camera, ChevronDown, ChevronRight, AlertTriangle, Clock, Layers } from 'lucide-react'
+import { X, Camera, ChevronDown, ChevronRight, AlertTriangle, Clock, Layers, Download } from 'lucide-react'
 import StatusBadge from './StatusBadge'
 import { formatDuration } from './LogStreamCard'
 import { Blur } from '../contexts/IncognitoContext'
@@ -83,6 +83,22 @@ export default function ErrorDetailModal({ detail, onClose }) {
                   Screenshot unavailable
                 </div>
               )}
+            </div>
+          )}
+
+          {/* DOM Source Download */}
+          {detail.errorDomPath && (
+            <div>
+              <p className="text-[10px] text-[#555] font-medium uppercase tracking-wider mb-2">Page Source</p>
+              <a
+                href={`/api/screenshots/${detail.errorDomPath}`}
+                download
+                className="inline-flex items-center gap-2 px-3 py-2 bg-[#111] border border-[#1a1a1a] rounded-md text-xs text-[#3B82F6] hover:bg-[#161616] hover:text-[#60A5FA] transition-colors"
+                onClick={e => e.stopPropagation()}
+              >
+                <Download size={12} />
+                Download DOM (XML)
+              </a>
             </div>
           )}
 

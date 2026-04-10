@@ -50,14 +50,55 @@ export function useDeleteConfig() {
   })
 }
 
-export function useToggleDevice() {
+export function useUpdateMode() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ deviceUdid, enabled }) =>
-      apiPost(`${BASE}/configs/${encodeURIComponent(deviceUdid)}/${enabled ? 'enable' : 'disable'}`),
+    mutationFn: ({ deviceUdid, mode }) =>
+      apiPut(`${BASE}/configs/${encodeURIComponent(deviceUdid)}/mode`, { mode }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['auto-creation-status'] })
       queryClient.invalidateQueries({ queryKey: ['auto-creation-configs'] })
+    },
+  })
+}
+
+export function useUpdateContainers() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ deviceUdid, identityId, containers }) =>
+      apiPut(
+        `${BASE}/configs/${encodeURIComponent(deviceUdid)}/containers/${encodeURIComponent(identityId)}`,
+        containers,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auto-creation-status'] })
+      queryClient.invalidateQueries({ queryKey: ['auto-creation-configs'] })
+    },
+  })
+}
+
+/**
+ * Crée en série N containers Crane via CLI sur le device cible.
+ * Le backend fait crane-cli -c + ghost-cli -a + ghost-cli -s pour chaque container,
+ * nomme automatiquement `<identityId>_<n>` et persiste dans la config.
+ *
+ * La mutation est synchrone et peut prendre plusieurs dizaines de secondes (30s × count).
+ *
+ * La réponse est toujours 200 OK — inspecter {error, failed, created, successCount}
+ * pour décider du feedback utilisateur.
+ */
+export function useBatchCreateContainers() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ deviceUdid, identityId, count, presetId }) =>
+      apiPost(
+        `${BASE}/configs/${encodeURIComponent(deviceUdid)}/containers/${encodeURIComponent(identityId)}/batch-create`,
+        { count, presetId },
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auto-creation-status'] })
+      queryClient.invalidateQueries({ queryKey: ['auto-creation-configs'] })
+      queryClient.invalidateQueries({ queryKey: ['auto-creation-config'] })
     },
   })
 }

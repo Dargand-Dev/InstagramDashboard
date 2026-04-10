@@ -5,6 +5,7 @@ import StatusBadge from '../components/StatusBadge'
 import { useApi, apiPut, apiDelete } from '../hooks/useApi'
 import AccountDailyViewsChart from '../components/AccountDailyViewsChart'
 import { Blur } from '../contexts/IncognitoContext'
+import AccountsTableView from '../components/accounts/AccountsTableView'
 
 const STATUSES = ['ALL', 'ACTIVE', 'SUSPENDED', 'BANNED', 'ERROR']
 
@@ -374,6 +375,15 @@ export default function Accounts() {
           >
             <Smartphone size={14} />
             By Device
+          </button>
+          <button
+            onClick={() => setViewMode('table')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              viewMode === 'table' ? 'bg-white/10 text-white' : 'text-[#555] hover:text-white'
+            }`}
+          >
+            <LayoutGrid size={14} />
+            Table
           </button>
         </div>
       </div>
@@ -885,6 +895,20 @@ export default function Accounts() {
           )}
         </div>
       </div>}
+
+      {/* Table View */}
+      {viewMode === 'table' && (
+        <AccountsTableView
+          accounts={accounts}
+          loading={loading}
+          postCounts={postCounts}
+          usernameToIdentity={usernameToIdentity}
+          accountDeviceMap={accountDeviceMap}
+          identityNames={identityNames}
+          deviceNames={deviceNames}
+          onSelectAccount={(id) => { setViewMode('list'); handleSelectAccount(id) }}
+        />
+      )}
     </div>
   )
 }

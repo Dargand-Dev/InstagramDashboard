@@ -7,11 +7,17 @@ import { Card, CardContent, CardHeader, CardTitle, CardAction } from '@/componen
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
-import { Collapsible } from '@/components/ui/collapsible'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import StatusBadge from '@/components/shared/StatusBadge'
 import TimeAgo from '@/components/shared/TimeAgo'
 import EmptyState from '@/components/shared/EmptyState'
 import HealthScoreBadge from '@/components/shared/HealthScoreBadge'
+import {
+  LineChart, Line, AreaChart, Area, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid,
+  Tooltip as RechartsTooltip, ResponsiveContainer,
+  Cell, Legend,
+} from 'recharts'
 import {
   Users,
   Activity,
@@ -217,6 +223,12 @@ export default function Dashboard() {
     queryFn: () => apiGet('/api/stats/workflow-averages'),
   })
 
+  const { data: operationsData, isLoading: opsLoading } = useQuery({
+    queryKey: ['operations-stats'],
+    queryFn: () => apiGet('/api/stats/operations?days=30'),
+    refetchInterval: 60_000,
+  })
+
   // WebSocket live updates for active runs
   useEffect(() => {
     if (!isConnected) return
@@ -300,6 +312,34 @@ export default function Dashboard() {
   const avgCreateAccount = avgData.createaccount || avgData.createaccountfromexistingcontainer || null
 
   const showAlert = lowStockIdentities.length > 0 || lowHealthAccounts > 0
+
+  // Operations chart data
+  const opsRaw = operationsData?.data || operationsData || {}
+
+  const workflowRateData = useMemo(() => {
+    const raw = opsRaw.workflowSuccessRate || []
+    const byDate = {}
+    for (const item of raw) {
+      if (!byDate[item.date]) byDate[item.date] = { date: item.date }
+      const rate = item.total > 0 ? Math.round((item.success / item.total) * 100) : null
+      const wf = (item.workflow || '').toLowerCase().replace(/\s+/g, '')
+      if (wf.includes('postreel')) byDate[item.date].PostReel = rate
+      else if (wf.includes('createaccount')) byDate[item.date].CreateAccount = rate
+    }
+    return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date))
+  }, [opsRaw.workflowSuccessRate])
+
+  const errorsByDayData = useMemo(() => {
+    return (opsRaw.errorsByDay || []).sort((a, b) => a.date.localeCompare(b.date))
+  }, [opsRaw.errorsByDay])
+
+  const autoCreationData = useMemo(() => {
+    return (opsRaw.autoCreationByDay || []).sort((a, b) => a.date.localeCompare(b.date))
+  }, [opsRaw.autoCreationByDay])
+
+  const devicePerfData = useMemo(() => {
+    return (opsRaw.devicePerformance || []).sort((a, b) => b.totalRuns - a.totalRuns)
+  }, [opsRaw.devicePerformance])
 
   return (
     <div className="space-y-6">
@@ -563,6 +603,144 @@ export default function Dashboard() {
           </Card>
         </div>
       </div>
+
+      {/* Operations Charts — 30 days */}
+      <Collapsible defaultOpen>
+        <CollapsibleTrigger className="flex items-center gap-2 w-full text-left group">
+          <ChevronDown className="w-4 h-4 text-[#52525B] transition-transform group-data-[state=closed]:-rotate-90" />
+          <span className="text-sm font-medium text-[#A1A1AA]">Operations</span>
+          <span className="text-xs text-[#3f3f46]">30 days</span>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-4">
+          {opsLoading ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-[320px] bg-[#111111] rounded-lg" />)}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+              {/* 1. Workflow Success Rate */}
+              <Card className="bg-[#111111] border-[#1a1a1a]">
+                <CardContent className="p-4">
+                  <span className="text-xs text-[#52525B] uppercase tracking-wider font-medium block mb-4">
+                    Workflow Success Rate
+                  </span>
+                  {workflowRateData.length === 0 ? (
+                    <div className="h-[240px] flex items-center justify-center text-[#3f3f46] text-xs">No data</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={240}>
+                      <LineChart data={workflowRateData}>
+                        <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" />
+                        <XAxis dataKey="date" tick={{ fill: '#52525B', fontSize: 10 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={v => v.slice(5)} />
+                        <YAxis domain={[0, 100]} tick={{ fill: '#52525B', fontSize: 10 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={v => `${v}%`} />
+                        <RechartsTooltip
+                          contentStyle={{ backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: 8, fontSize: 12 }}
+                          labelStyle={{ color: '#999' }}
+                          formatter={(v) => v != null ? `${v}%` : '—'}
+                        />
+                        <Line type="monotone" dataKey="PostReel" stroke="#3B82F6" strokeWidth={2} dot={false} connectNulls />
+                        <Line type="monotone" dataKey="CreateAccount" stroke="#F97316" strokeWidth={2} dot={false} connectNulls />
+                        <Legend iconType="line" wrapperStyle={{ fontSize: 11, color: '#A1A1AA' }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* 2. Errors by Day */}
+              <Card className="bg-[#111111] border-[#1a1a1a]">
+                <CardContent className="p-4">
+                  <span className="text-xs text-[#52525B] uppercase tracking-wider font-medium block mb-4">
+                    Errors by Day
+                  </span>
+                  {errorsByDayData.length === 0 ? (
+                    <div className="h-[240px] flex items-center justify-center text-[#3f3f46] text-xs">No errors</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={240}>
+                      <AreaChart data={errorsByDayData}>
+                        <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" />
+                        <XAxis dataKey="date" tick={{ fill: '#52525B', fontSize: 10 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={v => v.slice(5)} />
+                        <YAxis allowDecimals={false} tick={{ fill: '#52525B', fontSize: 10 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} />
+                        <RechartsTooltip
+                          contentStyle={{ backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: 8, fontSize: 12 }}
+                          labelStyle={{ color: '#999' }}
+                        />
+                        <Area type="monotone" dataKey="REGISTRATION" stackId="1" fill="#EF4444" stroke="#EF4444" fillOpacity={0.6} />
+                        <Area type="monotone" dataKey="POSTING" stackId="1" fill="#F59E0B" stroke="#F59E0B" fillOpacity={0.6} />
+                        <Area type="monotone" dataKey="DEVICE" stackId="1" fill="#8B5CF6" stroke="#8B5CF6" fillOpacity={0.6} />
+                        <Area type="monotone" dataKey="CONTENT" stackId="1" fill="#3B82F6" stroke="#3B82F6" fillOpacity={0.6} />
+                        <Area type="monotone" dataKey="AUTHENTICATION" stackId="1" fill="#EC4899" stroke="#EC4899" fillOpacity={0.6} />
+                        <Legend iconType="square" wrapperStyle={{ fontSize: 10, color: '#A1A1AA' }} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* 3. Auto-Creation */}
+              <Card className="bg-[#111111] border-[#1a1a1a]">
+                <CardContent className="p-4">
+                  <span className="text-xs text-[#52525B] uppercase tracking-wider font-medium block mb-4">
+                    Auto-Creation
+                  </span>
+                  {autoCreationData.length === 0 ? (
+                    <div className="h-[240px] flex items-center justify-center text-[#3f3f46] text-xs">No data</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={autoCreationData}>
+                        <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" />
+                        <XAxis dataKey="date" tick={{ fill: '#52525B', fontSize: 10 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={v => v.slice(5)} />
+                        <YAxis allowDecimals={false} tick={{ fill: '#52525B', fontSize: 10 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} />
+                        <RechartsTooltip
+                          contentStyle={{ backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: 8, fontSize: 12 }}
+                          labelStyle={{ color: '#999' }}
+                        />
+                        <Bar dataKey="success" stackId="1" fill="#22C55E" radius={[0, 0, 0, 0]} name="Success" />
+                        <Bar dataKey="failure" stackId="1" fill="#EF4444" radius={[4, 4, 0, 0]} name="Failure" />
+                        <Legend iconType="square" wrapperStyle={{ fontSize: 11, color: '#A1A1AA' }} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* 4. Device Performance */}
+              <Card className="bg-[#111111] border-[#1a1a1a]">
+                <CardContent className="p-4">
+                  <span className="text-xs text-[#52525B] uppercase tracking-wider font-medium block mb-4">
+                    Device Performance
+                  </span>
+                  {devicePerfData.length === 0 ? (
+                    <div className="h-[240px] flex items-center justify-center text-[#3f3f46] text-xs">No data</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={devicePerfData} layout="vertical" margin={{ left: 10 }}>
+                        <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" horizontal={false} />
+                        <XAxis type="number" allowDecimals={false} tick={{ fill: '#52525B', fontSize: 10 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} />
+                        <YAxis type="category" dataKey="deviceName" tick={{ fill: '#A1A1AA', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} width={100} />
+                        <RechartsTooltip
+                          contentStyle={{ backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: 8, fontSize: 12 }}
+                          labelStyle={{ color: '#999' }}
+                          formatter={(value, name) => {
+                            if (name === 'Avg Duration') return `${Math.round(value / 1000 / 60)}m`
+                            return value
+                          }}
+                        />
+                        <Bar dataKey="errorCount" name="Errors" radius={[0, 4, 4, 0]} barSize={16}>
+                          {devicePerfData.map((entry, i) => (
+                            <Cell key={i} fill={entry.errorCount > 10 ? '#EF4444' : entry.errorCount > 3 ? '#F59E0B' : '#22C55E'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+            </div>
+          )}
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   )
 }

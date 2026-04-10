@@ -4,7 +4,7 @@ import { useRunLogs } from '@/hooks/useRunLogs'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import LogViewer from '@/components/shared/LogViewer'
-import { ArrowLeft, Terminal } from 'lucide-react'
+import { ArrowLeft, Terminal, Copy, Check } from 'lucide-react'
 
 export default function RunLogs() {
   const { runId } = useParams()
@@ -12,6 +12,15 @@ export default function RunLogs() {
   const { data: logText, isLoading, isError } = useRunLogs(runId)
   const containerRef = useRef(null)
   const [viewerHeight, setViewerHeight] = useState(600)
+  const [copied, setCopied] = useState(false)
+
+  const handleCopyLogs = () => {
+    if (!logText) return
+    navigator.clipboard.writeText(logText).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   useEffect(() => {
     function measure() {
@@ -40,6 +49,17 @@ export default function RunLogs() {
           <h1 className="text-lg font-semibold text-[#FAFAFA]">Logs</h1>
           <span className="text-xs text-[#52525B] font-mono">{runId}</span>
         </div>
+        {logText && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-3 text-xs text-[#A1A1AA] hover:text-[#FAFAFA] gap-1.5"
+            onClick={handleCopyLogs}
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? 'Copié' : 'Copier les logs'}
+          </Button>
+        )}
       </div>
       <div ref={containerRef} className="flex-1 min-h-0">
         {isLoading ? (

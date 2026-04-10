@@ -418,8 +418,15 @@ export default function Actions() {
     }
   }, [identities])
 
-  // ── Posting run: only ACTIVE accounts, filter by device ──
-  const activeAccounts = useMemo(() => accounts.filter(a => a.status === 'ACTIVE'), [accounts])
+  // ── Posting run: only ACTIVE accounts created more than 6h ago, filter by device ──
+  const activeAccounts = useMemo(() => {
+    const sixHours = 6 * 60 * 60 * 1000
+    return accounts.filter(a => {
+      if (a.status !== 'ACTIVE') return false
+      if (a.createdAt && Date.now() - new Date(a.createdAt).getTime() < sixHours) return false
+      return true
+    })
+  }, [accounts])
 
   const filteredPostingAccounts = useMemo(() => {
     let list = activeAccounts

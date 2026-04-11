@@ -7,7 +7,7 @@ import { TrendingUp, TrendingDown, Minus, ScrollText, CheckCircle, Clock, Users 
 
 export default function DeviceStatsTab({ device }) {
   const { data: runs = [], isLoading } = useQuery({
-    queryKey: ['device-runs', device.udid],
+    queryKey: ['device-stats', device.udid],
     queryFn: () => apiGet(`/api/automation/runs?deviceUdid=${encodeURIComponent(device.udid)}&limit=50`),
     select: res => {
       const raw = res.data || res || {}

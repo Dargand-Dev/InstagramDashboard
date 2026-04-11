@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Trash2, Search, Users, Link, Pencil, X, ExternalLink, Smartphone, Check, Calendar, LayoutList, LayoutGrid, ChevronRight, ChevronDown } from 'lucide-react'
+import { Trash2, Search, Users, Link, Pencil, X, ExternalLink, Smartphone, Check, Calendar, LayoutList, LayoutGrid, ChevronRight, ChevronDown, Container, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import StatusBadge from '../components/StatusBadge'
-import { useApi, apiPut, apiDelete } from '../hooks/useApi'
+import { useApi, apiPost, apiPut, apiDelete } from '../hooks/useApi'
 import AccountDailyViewsChart from '../components/AccountDailyViewsChart'
 import { Blur } from '../contexts/IncognitoContext'
 import AccountsTableView from '../components/accounts/AccountsTableView'
@@ -227,9 +228,10 @@ export default function Accounts() {
   const [linkValue, setLinkValue] = useState('')
   const [editing, setEditing] = useState(false)
   const [editValues, setEditValues] = useState({})
+  const [containerLoading, setContainerLoading] = useState(false)
 
   function openLinkEditor(currentUrl) {
-    setLinkValue(currentUrl || '')
+    setLinkValue(currentUrl || 'https://getmysocial.com/')
     setEditingLink(true)
   }
 
@@ -265,6 +267,31 @@ export default function Accounts() {
       refetch()
     } catch (err) {
       alert('Failed to activate link: ' + err.message)
+    }
+  }
+
+  async function handleOpenContainer(account) {
+    if (!account.deviceUdid || !account.containerId) {
+      toast.error('Account has no device or container assigned')
+      return
+    }
+    const device = (Array.isArray(devicesData) ? devicesData : []).find(d => d.udid === account.deviceUdid)
+    setContainerLoading(true)
+    try {
+      await apiPost('/api/automation/execute', {
+        actionName: 'SwitchCraneContainer',
+        deviceUdid: account.deviceUdid,
+        parameters: {
+          containerId: account.containerId,
+          containerName: account.craneContainer,
+          proxyRotateUrl: device?.rotatingUrl || undefined,
+        },
+      })
+      toast.success('Container opening queued')
+    } catch (err) {
+      toast.error('Failed: ' + err.message)
+    } finally {
+      setContainerLoading(false)
     }
   }
 
@@ -668,6 +695,16 @@ export default function Accounts() {
                   >
                     <ExternalLink size={16} />
                   </a>
+                  {selectedAccount.deviceUdid && selectedAccount.containerId && (
+                    <button
+                      onClick={() => handleOpenContainer(selectedAccount)}
+                      disabled={containerLoading}
+                      className="p-2 rounded-md hover:bg-teal-500/10 text-[#333] hover:text-teal-400 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                      title="Rotate proxy & open container"
+                    >
+                      {containerLoading ? <Loader2 size={16} className="animate-spin" /> : <Container size={16} />}
+                    </button>
+                  )}
                   <select
                     value={selectedAccount.status}
                     onChange={e => handleStatusChange(selectedAccount.id, e.target.value)}

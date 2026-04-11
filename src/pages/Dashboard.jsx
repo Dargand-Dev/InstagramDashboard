@@ -35,6 +35,8 @@ import {
   ChevronDown,
 } from 'lucide-react'
 
+const CREATION_TYPES = ['CreateAccount', 'CreateAccountFromExistingContainer']
+
 function formatDuration(ms) {
   if (!ms) return '—'
   const s = Math.floor(ms / 1000)
@@ -134,8 +136,7 @@ function RecentRunRow({ run }) {
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-[#FAFAFA]">{run.workflowName || run.trigger || run.workflow}</span>
-            <StatusBadge status={run.status} />
+            <span className="text-sm text-[#FAFAFA]">{run.workflowName || run.workflowType || run.trigger || 'Run'}</span>
           </div>
         </div>
         <div className="flex items-center gap-4 shrink-0">
@@ -167,6 +168,82 @@ function RecentRunRow({ run }) {
       )}
     </div>
   )
+}
+
+function RecentRunGroup({ runs }) {
+  const [expanded, setExpanded] = useState(false)
+
+  const allResults = runs.flatMap(r => r.results || r.accountResults || [])
+  const successCount = allResults.filter(r => r.status === 'SUCCESS' || r.success).length
+  const failCount = allResults.filter(r => ['FAILED', 'ERROR'].includes(r.status) || r.failed).length
+  const totalDuration = runs.reduce((sum, r) => sum + (r.duration || r.durationMs || 0), 0)
+  const firstStarted = runs[runs.length - 1]?.startedAt || runs[runs.length - 1]?.startTime || runs[runs.length - 1]?.date
+
+  const statuses = runs.map(r => r.status)
+  const groupStatus = statuses.every(s => s === 'COMPLETED' || s === 'SUCCESS') ? 'COMPLETED'
+    : statuses.some(s => s === 'FAILED' || s === 'ERROR') ? 'PARTIAL'
+    : statuses[0]
+
+  return (
+    <div className="border-b border-[#1a1a1a] last:border-0">
+      <button
+        className="w-full flex items-center gap-4 px-4 py-3 text-left hover:bg-[#111111] transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-[#FAFAFA]">Create Account</span>
+            <Badge variant="outline" className="text-[10px] border-[#1a1a1a] text-[#52525B]">
+              {runs.length} runs
+            </Badge>
+            <StatusBadge status={groupStatus} />
+          </div>
+        </div>
+        <div className="flex items-center gap-4 shrink-0">
+          {(successCount > 0 || failCount > 0) && (
+            <div className="flex items-center gap-2 text-xs">
+              {successCount > 0 && <span className="text-[#22C55E]">{successCount} ok</span>}
+              {failCount > 0 && <span className="text-[#EF4444]">{failCount} fail</span>}
+            </div>
+          )}
+          <span className="text-xs text-[#52525B] tabular-nums w-14 text-right">{formatDuration(totalDuration)}</span>
+          <TimeAgo date={firstStarted} className="text-xs text-[#52525B] w-16 text-right" />
+          <ChevronRight className={`w-3.5 h-3.5 text-[#3f3f46] transition-transform ${expanded ? 'rotate-90' : ''}`} />
+        </div>
+      </button>
+      {expanded && (
+        <div className="pl-4 border-l-2 border-[#1a1a1a] ml-4">
+          {runs.map((run, i) => (
+            <RecentRunRow key={run.runId || run.id || i} run={run} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function groupConsecutiveCreationRuns(runs) {
+  const grouped = []
+  let i = 0
+  while (i < runs.length) {
+    const type = runs[i].workflowType || runs[i].workflowName || ''
+    if (CREATION_TYPES.includes(type)) {
+      const batch = [runs[i]]
+      while (i + 1 < runs.length && CREATION_TYPES.includes(runs[i + 1].workflowType || runs[i + 1].workflowName || '')) {
+        i++
+        batch.push(runs[i])
+      }
+      if (batch.length > 1) {
+        grouped.push({ _group: true, runs: batch })
+      } else {
+        grouped.push(batch[0])
+      }
+    } else {
+      grouped.push(runs[i])
+    }
+    i++
+  }
+  return grouped
 }
 
 export default function Dashboard() {
@@ -227,6 +304,7 @@ export default function Dashboard() {
     queryKey: ['operations-stats'],
     queryFn: () => apiGet('/api/stats/operations?days=30'),
     refetchInterval: 60_000,
+    staleTime: 30_000,
   })
 
   // WebSocket live updates for active runs
@@ -279,10 +357,11 @@ export default function Dashboard() {
 
   const activeRunsList = activeRuns?.data || activeRuns || []
   // Backend returns { totalRuns, showing, runs: [...] }
+  // Group consecutive CreateAccount runs together
   const recentRunsList = useMemo(() => {
     const raw = recentRuns?.data || recentRuns || {}
-    if (Array.isArray(raw)) return raw
-    return raw.runs || []
+    const list = Array.isArray(raw) ? [...raw] : [...(raw.runs || [])]
+    return groupConsecutiveCreationRuns(list)
   }, [recentRuns])
 
   // Backend returns List<HealthScore> with { accountId, username, score, ... }
@@ -330,15 +409,15 @@ export default function Dashboard() {
   }, [opsRaw.workflowSuccessRate])
 
   const errorsByDayData = useMemo(() => {
-    return (opsRaw.errorsByDay || []).sort((a, b) => a.date.localeCompare(b.date))
+    return [...(opsRaw.errorsByDay || [])].sort((a, b) => a.date.localeCompare(b.date))
   }, [opsRaw.errorsByDay])
 
   const autoCreationData = useMemo(() => {
-    return (opsRaw.autoCreationByDay || []).sort((a, b) => a.date.localeCompare(b.date))
+    return [...(opsRaw.autoCreationByDay || [])].sort((a, b) => a.date.localeCompare(b.date))
   }, [opsRaw.autoCreationByDay])
 
   const devicePerfData = useMemo(() => {
-    return (opsRaw.devicePerformance || []).sort((a, b) => b.totalRuns - a.totalRuns)
+    return [...(opsRaw.devicePerformance || [])].sort((a, b) => b.totalRuns - a.totalRuns)
   }, [opsRaw.devicePerformance])
 
   return (
@@ -529,9 +608,11 @@ export default function Dashboard() {
                 </div>
               ) : Array.isArray(recentRunsList) && recentRunsList.length > 0 ? (
                 <div className="divide-y divide-[#1a1a1a]">
-                  {recentRunsList.map((run, i) => (
-                    <RecentRunRow key={run.runId || run.id || i} run={run} />
-                  ))}
+                  {recentRunsList.map((item, i) =>
+                    item._group
+                      ? <RecentRunGroup key={`group-${i}`} runs={item.runs} />
+                      : <RecentRunRow key={item.runId || item.id || i} run={item} />
+                  )}
                 </div>
               ) : (
                 <EmptyState title="No recent runs" description="Run history will appear here" />
@@ -721,14 +802,10 @@ export default function Dashboard() {
                         <RechartsTooltip
                           contentStyle={{ backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: 8, fontSize: 12 }}
                           labelStyle={{ color: '#999' }}
-                          formatter={(value, name) => {
-                            if (name === 'Avg Duration') return `${Math.round(value / 1000 / 60)}m`
-                            return value
-                          }}
                         />
                         <Bar dataKey="errorCount" name="Errors" radius={[0, 4, 4, 0]} barSize={16}>
-                          {devicePerfData.map((entry, i) => (
-                            <Cell key={i} fill={entry.errorCount > 10 ? '#EF4444' : entry.errorCount > 3 ? '#F59E0B' : '#22C55E'} />
+                          {devicePerfData.map((entry) => (
+                            <Cell key={entry.deviceUdid} fill={entry.errorCount > 10 ? '#EF4444' : entry.errorCount > 3 ? '#F59E0B' : '#22C55E'} />
                           ))}
                         </Bar>
                       </BarChart>

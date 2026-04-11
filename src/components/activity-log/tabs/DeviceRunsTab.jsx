@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useMemo, useEffect } from 'react'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { apiGet, apiPost } from '@/lib/api'
 import { formatDuration } from '@/utils/format'
 import { useActiveRuns } from '@/hooks/useActiveRuns'
@@ -11,28 +11,44 @@ import EmptyState from '@/components/shared/EmptyState'
 import RunRow from '../RunRow'
 import {
   ScrollText, Loader2, StopCircle, User, CheckCircle, XCircle, Clock,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
+const PAGE_SIZE = 20
+
 export default function DeviceRunsTab({ device }) {
   const [typeFilter, setTypeFilter] = useState('')
+  const [page, setPage] = useState(0)
   const [retryingId, setRetryingId] = useState(null)
   const [stopping, setStopping] = useState(false)
 
   const { activeRuns } = useActiveRuns()
   const deviceActiveRun = activeRuns.find(r => (r.deviceUdid || r.device) === device.udid)
 
-  const { data: runs = [], isLoading } = useQuery({
-    queryKey: ['device-runs', device.udid],
-    queryFn: () => apiGet(`/api/automation/runs?deviceUdid=${encodeURIComponent(device.udid)}&limit=50`),
+  // Reset page when device or filter changes
+  useEffect(() => { setPage(0) }, [device.udid, typeFilter])
+
+  const { data: runsResponse = {}, isLoading } = useQuery({
+    queryKey: ['device-runs', device.udid, page],
+    queryFn: () => apiGet(`/api/automation/runs?deviceUdid=${encodeURIComponent(device.udid)}&limit=${PAGE_SIZE}&page=${page}`),
     select: res => {
       const raw = res.data || res || {}
-      if (Array.isArray(raw)) return raw
-      return raw.runs || []
+      if (Array.isArray(raw)) return { runs: raw, totalRuns: raw.length, totalPages: 1 }
+      return {
+        runs: raw.runs || [],
+        totalRuns: raw.totalRuns || 0,
+        totalPages: raw.totalPages || 1,
+      }
     },
+    placeholderData: keepPreviousData,
     staleTime: 30000,
     enabled: !!device.udid,
   })
+
+  const runs = runsResponse.runs || []
+  const totalRuns = runsResponse.totalRuns || 0
+  const totalPages = runsResponse.totalPages || 1
 
   const workflowTypes = useMemo(() => {
     const set = new Set(runs.map(r => r.workflowType || r.workflowName).filter(Boolean))
@@ -178,6 +194,40 @@ export default function DeviceRunsTab({ device }) {
         </div>
       ) : (
         <EmptyState icon={ScrollText} title="No runs" description="No execution history for this device." />
+      )}
+
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-2">
+          <p className="text-xs text-[#52525B]">
+            {totalRuns} run(s)
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-[#A1A1AA]"
+              onClick={() => setPage(p => p - 1)}
+              disabled={page === 0}
+              aria-label="Previous page"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <span className="text-xs text-[#52525B]">
+              {page + 1} / {totalPages}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-[#A1A1AA]"
+              onClick={() => setPage(p => p + 1)}
+              disabled={page >= totalPages - 1}
+              aria-label="Next page"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   )

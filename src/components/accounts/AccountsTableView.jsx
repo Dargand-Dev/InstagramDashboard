@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import {
   SlidersHorizontal, X, Plus, Clock, Calendar, TrendingDown, TrendingUp,
-  Ban, Link, ChevronDown, ChevronUp, Table2, Smartphone, CalendarOff,
+  Ban, Link, ChevronDown, ChevronUp, Table2, Smartphone, CalendarOff, ExternalLink,
 } from 'lucide-react'
 import DataTable from '@/components/shared/DataTable'
 import StatusBadge from '@/components/shared/StatusBadge'
@@ -284,12 +284,23 @@ export default function AccountsTableView({
       accessorKey: 'username',
       header: 'Username',
       cell: ({ row }) => (
-        <button
-          onClick={() => onSelectAccount(row.original.id)}
-          className="text-white font-medium hover:text-blue-400 transition-colors text-left"
-        >
-          <Blur>{row.original.username}</Blur>
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => onSelectAccount(row.original.id)}
+            className="text-white font-medium hover:text-blue-400 transition-colors text-left truncate"
+          >
+            <Blur>{row.original.username}</Blur>
+          </button>
+          {row.original.username && (
+            <button
+              onClick={() => { window.open(`https://instagram.com/${row.original.username}`, '_blank', 'noopener'); window.focus() }}
+              className="flex-shrink-0 text-[#333] hover:text-white transition-colors"
+              title={`Open @${row.original.username} on Instagram`}
+            >
+              <ExternalLink size={13} />
+            </button>
+          )}
+        </div>
       ),
       size: 140,
     },

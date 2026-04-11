@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Trash2, Search, Users, Link, Pencil, X, ExternalLink, Smartphone, Check, Calendar, LayoutList, LayoutGrid, ChevronRight, ChevronDown, Container, Loader2 } from 'lucide-react'
+import { Trash2, Search, Users, Link, Pencil, X, ExternalLink, Smartphone, Check, Calendar, LayoutList, LayoutGrid, ChevronRight, ChevronDown, Container } from 'lucide-react'
 import { toast } from 'sonner'
 import StatusBadge from '../components/StatusBadge'
 import { useApi, apiPost, apiPut, apiDelete } from '../hooks/useApi'
@@ -228,7 +228,6 @@ export default function Accounts() {
   const [linkValue, setLinkValue] = useState('')
   const [editing, setEditing] = useState(false)
   const [editValues, setEditValues] = useState({})
-  const [containerLoading, setContainerLoading] = useState(false)
 
   function openLinkEditor(currentUrl) {
     setLinkValue(currentUrl || 'https://getmysocial.com/')
@@ -276,7 +275,6 @@ export default function Accounts() {
       return
     }
     const device = (Array.isArray(devicesData) ? devicesData : []).find(d => d.udid === account.deviceUdid)
-    setContainerLoading(true)
     try {
       await apiPost('/api/automation/execute', {
         actionName: 'SwitchCraneContainer',
@@ -290,8 +288,6 @@ export default function Accounts() {
       toast.success('Container opening queued')
     } catch (err) {
       toast.error('Failed: ' + err.message)
-    } finally {
-      setContainerLoading(false)
     }
   }
 
@@ -698,11 +694,10 @@ export default function Accounts() {
                   {selectedAccount.deviceUdid && selectedAccount.containerId && (
                     <button
                       onClick={() => handleOpenContainer(selectedAccount)}
-                      disabled={containerLoading}
-                      className="p-2 rounded-md hover:bg-teal-500/10 text-[#333] hover:text-teal-400 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                      className="p-2 rounded-md hover:bg-teal-500/10 text-[#333] hover:text-teal-400 transition-colors"
                       title="Rotate proxy & open container"
                     >
-                      {containerLoading ? <Loader2 size={16} className="animate-spin" /> : <Container size={16} />}
+                      <Container size={16} />
                     </button>
                   )}
                   <select

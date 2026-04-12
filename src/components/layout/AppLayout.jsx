@@ -13,6 +13,7 @@ import {
   ScrollText,
   TrendingUp,
   Sparkles,
+  Activity,
   FileText,
   CalendarDays,
   Settings,
@@ -78,6 +79,7 @@ const NAV_SECTIONS = [
     label: 'ANALYTICS',
     items: [
       { path: '/analytics', label: 'Growth & Stats', icon: TrendingUp },
+      { path: '/operations', label: 'Operations', icon: Activity },
       { path: '/insights', label: 'AI Insights', icon: Sparkles },
       { path: '/posting-history', label: 'Posting History', icon: FileText },
       { path: '/schedule', label: 'Schedule', icon: CalendarDays },

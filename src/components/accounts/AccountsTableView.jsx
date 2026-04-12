@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import {
   SlidersHorizontal, X, Plus, Clock, Calendar, TrendingDown, TrendingUp,
   Ban, Link, ChevronDown, ChevronUp, Table2, Smartphone, CalendarOff, ExternalLink,
+  Target, CalendarClock, CheckCircle2,
 } from 'lucide-react'
 import DataTable from '@/components/shared/DataTable'
 import StatusBadge from '@/components/shared/StatusBadge'
@@ -14,6 +15,7 @@ import {
 
 const PRESET_ICONS = {
   Clock, Calendar, TrendingDown, TrendingUp, Ban, Link, SmartphoneOff: Smartphone, CalendarOff,
+  Target, CalendarClock, CheckCircle2,
 }
 
 // ── Relative time formatter ────────────────────────────────────────

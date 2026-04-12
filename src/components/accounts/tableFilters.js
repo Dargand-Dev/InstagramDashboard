@@ -139,9 +139,27 @@ export const FILTER_PRESETS = [
     filters: [{ field: 'viewsLast30Days', operator: 'gt', value: 100000 }],
   },
   {
+    label: '10k–100k views, no link',
+    icon: 'Target',
+    filters: [
+      { field: 'viewsLast30Days', operator: 'between', value: [10000, 100000] },
+      { field: 'hasLink', operator: 'eq', value: false },
+    ],
+  },
+  {
+    label: 'Created last 4 days',
+    icon: 'CalendarClock',
+    filters: [{ field: 'createdAt', operator: 'last_days', value: 4 }],
+  },
+  {
     label: 'No device',
     icon: 'SmartphoneOff',
     filters: [{ field: 'device', operator: 'empty', value: true }],
+  },
+  {
+    label: 'Active',
+    icon: 'CheckCircle2',
+    filters: [{ field: 'status', operator: 'eq', value: 'ACTIVE' }],
   },
   {
     label: 'Banned',

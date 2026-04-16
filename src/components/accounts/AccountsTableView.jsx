@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import {
   SlidersHorizontal, X, Plus, Clock, Calendar, TrendingDown, TrendingUp,
   Ban, Link, ChevronDown, ChevronUp, Table2, Smartphone, CalendarOff, ExternalLink,
-  Target, CalendarClock, CheckCircle2,
+  Target, CalendarClock, CheckCircle2, CalendarRange,
 } from 'lucide-react'
 import DataTable from '@/components/shared/DataTable'
 import StatusBadge from '@/components/shared/StatusBadge'
@@ -15,7 +15,7 @@ import {
 
 const PRESET_ICONS = {
   Clock, Calendar, TrendingDown, TrendingUp, Ban, Link, SmartphoneOff: Smartphone, CalendarOff,
-  Target, CalendarClock, CheckCircle2,
+  Target, CalendarClock, CheckCircle2, CalendarRange,
 }
 
 // ── Relative time formatter ────────────────────────────────────────
@@ -107,7 +107,13 @@ function FilterValueInput({ fieldDef, operator, value, onChange, identityNames, 
     )
   }
 
-  if (fieldDef.type === 'date' && (operator === 'last_hours' || operator === 'last_days')) {
+  if (
+    fieldDef.type === 'date' &&
+    (operator === 'last_hours' ||
+      operator === 'last_days' ||
+      operator === 'days_ago_gte' ||
+      operator === 'days_ago_lte')
+  ) {
     return (
       <input
         type="number"

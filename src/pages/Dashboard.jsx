@@ -35,7 +35,7 @@ import {
   ChevronDown,
 } from 'lucide-react'
 
-const CREATION_TYPES = ['CreateAccount', 'CreateAccountFromExistingContainer']
+const CREATION_TYPES = ['CreateAccount', 'CreateAccountFromExistingContainer', 'CreateAccountNoReel']
 
 function formatDuration(ms) {
   if (!ms) return '—'

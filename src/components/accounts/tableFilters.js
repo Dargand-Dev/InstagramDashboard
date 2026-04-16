@@ -57,6 +57,8 @@ export const FILTER_FIELDS = [
     operators: [
       { value: 'last_hours', label: 'in last N hours' },
       { value: 'last_days', label: 'in last N days' },
+      { value: 'days_ago_gte', label: 'at least N days ago' },
+      { value: 'days_ago_lte', label: 'at most N days ago' },
       { value: 'after', label: 'after' },
       { value: 'before', label: 'before' },
     ],
@@ -167,9 +169,12 @@ export const FILTER_PRESETS = [
     filters: [{ field: 'status', operator: 'eq', value: 'BANNED' }],
   },
   {
-    label: 'Scheduling OFF',
-    icon: 'CalendarOff',
-    filters: [{ field: 'schedulingEnabled', operator: 'eq', value: false }],
+    label: 'Created 3–6 days ago',
+    icon: 'CalendarRange',
+    filters: [
+      { field: 'createdAt', operator: 'days_ago_gte', value: 3 },
+      { field: 'createdAt', operator: 'days_ago_lte', value: 6 },
+    ],
   },
   {
     label: 'Has story link',
@@ -249,6 +254,16 @@ function evaluateCondition(rawValue, operator, filterValue) {
       const cutoff = Date.now() - Number(filterValue) * MS_PER_DAY
       return new Date(rawValue).getTime() >= cutoff
     }
+    case 'days_ago_gte': {
+      if (!rawValue) return false
+      const daysAgo = Math.floor((Date.now() - new Date(rawValue).getTime()) / MS_PER_DAY)
+      return daysAgo >= Number(filterValue)
+    }
+    case 'days_ago_lte': {
+      if (!rawValue) return false
+      const daysAgo = Math.floor((Date.now() - new Date(rawValue).getTime()) / MS_PER_DAY)
+      return daysAgo <= Number(filterValue)
+    }
 
     // Empty check
     case 'empty':
@@ -285,6 +300,8 @@ export function formatFilterLabel(filter) {
   }
   if (filter.operator === 'last_hours') return `${fieldLabel} last ${filter.value}h`
   if (filter.operator === 'last_days') return `${fieldLabel} last ${filter.value}d`
+  if (filter.operator === 'days_ago_gte') return `${fieldLabel} ≥ ${filter.value}d ago`
+  if (filter.operator === 'days_ago_lte') return `${fieldLabel} ≤ ${filter.value}d ago`
   if (typeof filter.value === 'boolean') {
     return `${fieldLabel} ${filter.value ? 'Yes' : 'No'}`
   }

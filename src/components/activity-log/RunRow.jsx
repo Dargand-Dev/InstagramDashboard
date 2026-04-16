@@ -1,20 +1,52 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { formatDuration } from '@/utils/format'
 import StatusBadge from '@/components/shared/StatusBadge'
 import TimeAgo from '@/components/shared/TimeAgo'
 import {
-  ChevronRight, ChevronDown, RotateCw, Loader2, Image, CheckCircle, XCircle, Clock, Terminal, Download,
+  ChevronRight, ChevronDown, RotateCw, Loader2, Image, CheckCircle, XCircle, Clock, Terminal, Download, ExternalLink,
 } from 'lucide-react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import RunLogModal from './RunLogModal'
 
-const CREATION_TYPES = ['CreateAccount', 'CreateAccountFromExistingContainer']
+const CREATION_TYPES = ['CreateAccount', 'CreateAccountFromExistingContainer', 'CreateAccountNoReel']
 
 function getAccountDisplayName(detail, run, index) {
   if (detail.username && detail.username !== 'unknown') return detail.username
   if (CREATION_TYPES.includes(run?.workflowType) && (detail.containerName || detail.container))
     return detail.containerName || detail.container
   return detail.account || detail.accountName || `Account ${index + 1}`
+}
+
+function getRealUsername(detail) {
+  return detail.username && detail.username !== 'unknown' ? detail.username : null
+}
+
+function AccountNameLink({ username, displayName }) {
+  if (!username) {
+    return <span className="text-[#A1A1AA]">{displayName}</span>
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Link
+        to={`/accounts?username=${encodeURIComponent(username)}`}
+        onClick={e => e.stopPropagation()}
+        className="text-[#A1A1AA] hover:text-[#3B82F6] hover:underline transition-colors"
+      >
+        {displayName}
+      </Link>
+      <a
+        href={`https://instagram.com/${username}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={e => e.stopPropagation()}
+        className="text-[#52525B] hover:text-[#3B82F6] transition-colors"
+        title="Open Instagram profile"
+      >
+        <ExternalLink className="w-3 h-3" />
+      </a>
+    </span>
+  )
 }
 
 export default function RunRow({ run, onRetry, retryingId }) {
@@ -102,7 +134,7 @@ export default function RunRow({ run, onRetry, retryingId }) {
                       ? <CheckCircle className="w-3 h-3 text-[#22C55E] shrink-0" />
                       : <XCircle className="w-3 h-3 text-[#EF4444] shrink-0" />
                     }
-                    <span className="text-[#A1A1AA]">{getAccountDisplayName(r, run, i)}</span>
+                    <AccountNameLink username={getRealUsername(r)} displayName={getAccountDisplayName(r, run, i)} />
                   </div>
                   <div className="flex items-center gap-3">
                     {r.durationMs > 0 && (

@@ -508,6 +508,14 @@ export default function Actions() {
     },
   })
 
+  const createAccountNoReel = useMutation({
+    mutationFn: (body) => apiPost('/api/automation/workflow/create-account-no-reel', body),
+    onSuccess: () => {
+      toast.success('Account creation (no reel) workflow started')
+      queryClient.invalidateQueries({ queryKey: ['lock-status'] })
+    },
+  })
+
   const executeAction = useMutation({
     mutationFn: ({ actionName, params }) =>
       apiPost('/api/automation/execute', {
@@ -825,6 +833,89 @@ export default function Actions() {
                 <Layers className="w-3.5 h-3.5 mr-1.5" />
               )}
               {createAccounts.isPending ? 'Creating...' : 'Create Accounts'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── PRIMARY: Create Account (No Reel) ────────────── */}
+      <Card className="bg-[#111111] border-[#1a1a1a]">
+        <CardHeader>
+          <CardTitle className="text-sm text-[#A1A1AA] flex items-center gap-2">
+            <UserPlus className="w-4 h-4 text-[#8B5CF6]" />
+            Create Account (No Reel)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Device */}
+            <div>
+              <label className="block text-[11px] text-[#52525B] font-semibold uppercase tracking-wider mb-1.5">
+                Device
+              </label>
+              {devicesLoading ? (
+                <Skeleton className="h-8 bg-[#1a1a1a]" />
+              ) : (
+                <Select value={creationDevice} onValueChange={setCreationDevice}>
+                  <SelectTrigger className="text-xs bg-[#0A0A0A] border-[#1a1a1a] text-[#FAFAFA] h-8">
+                    <SelectValue placeholder="Select device" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#111111] border-[#1a1a1a]">
+                    {devices.map(d => (
+                      <SelectItem key={d.udid} value={d.udid} className="text-xs text-[#FAFAFA]">
+                        {d.name} — ...{d.udid.slice(-8)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {/* Identity dropdown */}
+            <div>
+              <label className="block text-[11px] text-[#52525B] font-semibold uppercase tracking-wider mb-1.5">
+                Identity
+              </label>
+              <Select value={creationIdentity} onValueChange={setCreationIdentity}>
+                <SelectTrigger className="text-xs bg-[#0A0A0A] border-[#1a1a1a] text-[#FAFAFA] h-8">
+                  <SelectValue placeholder="Select identity" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#111111] border-[#1a1a1a]">
+                  {identities.map(id => {
+                    const name = id.identityId || id.name || id.identityName
+                    return (
+                      <SelectItem key={id.id || name} value={name} className="text-xs text-[#FAFAFA]">
+                        {name}
+                      </SelectItem>
+                    )
+                  })}
+                  {identities.length === 0 && (
+                    <SelectItem value="sofia" className="text-xs text-[#52525B]">sofia (default)</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-center justify-between gap-4">
+            <span className="text-[10px] text-[#3f3f46]">
+              Create Container &rarr; Register &rarr; Professional Setup &rarr; 2FA (no reel posted)
+            </span>
+
+            <Button
+              className="bg-[#8B5CF6] hover:bg-[#7C3AED] text-white shrink-0"
+              disabled={createAccountNoReel.isPending || !creationDevice}
+              onClick={() => createAccountNoReel.mutate({
+                deviceUdid: creationDevice,
+                identityId: creationIdentity || undefined,
+              })}
+            >
+              {createAccountNoReel.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <UserPlus className="w-3.5 h-3.5 mr-1.5" />
+              )}
+              {createAccountNoReel.isPending ? 'Creating...' : 'Create Account'}
             </Button>
           </div>
         </CardContent>

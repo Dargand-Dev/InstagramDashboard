@@ -44,11 +44,12 @@ const RUN_TYPE_CONFIG = {
   PostReel: { label: 'Post', icon: Send, cls: 'bg-cyan-500/8 text-cyan-400 border-cyan-500/15' },
   CreateAccount: { label: 'Account Creation', icon: UserPlus, cls: 'bg-violet-500/8 text-violet-400 border-violet-500/15' },
   CreateAccountFromExistingContainer: { label: 'Account Creation', icon: UserPlus, cls: 'bg-violet-500/8 text-violet-400 border-violet-500/15' },
+  CreateAccountNoReel: { label: 'Account Creation (No Reel)', icon: UserPlus, cls: 'bg-violet-500/8 text-violet-400 border-violet-500/15' },
 }
 
 const DEFAULT_RUN_TYPE = { label: 'Unknown', icon: Send, cls: 'bg-[#141414] text-[#555] border-[#1a1a1a]' }
 
-const CREATION_TYPES = ['CreateAccount', 'CreateAccountFromExistingContainer']
+const CREATION_TYPES = ['CreateAccount', 'CreateAccountFromExistingContainer', 'CreateAccountNoReel']
 
 function getAccountDisplayName(detail, run, index) {
   if (detail.username && detail.username !== 'unknown') return detail.username
@@ -77,7 +78,7 @@ export function RunsTab({ workflowFilter, onRetryFailed, retryLoading } = {}) {
   const runs = workflowFilter
     ? allRuns.filter(r => {
         const type = r.workflowType
-        if (workflowFilter === 'creation') return type === 'CreateAccount' || type === 'CreateAccountFromExistingContainer'
+        if (workflowFilter === 'creation') return type === 'CreateAccount' || type === 'CreateAccountFromExistingContainer' || type === 'CreateAccountNoReel'
         if (workflowFilter === 'posting') return type === 'PostReel'
         return true
       })

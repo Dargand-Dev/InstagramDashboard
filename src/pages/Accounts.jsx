@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Trash2, Search, Users, Link, Pencil, X, ExternalLink, Smartphone, Check, Calendar, LayoutList, LayoutGrid, ChevronRight, ChevronDown, Container } from 'lucide-react'
+import { Trash2, Search, Users, Link, Pencil, X, ExternalLink, Smartphone, Check, Calendar, LayoutList, LayoutGrid, ChevronRight, ChevronDown, Container, BarChart3 } from 'lucide-react'
 import { toast } from 'sonner'
 import StatusBadge from '../components/StatusBadge'
 import { useApi, apiPost, apiPut, apiDelete } from '../hooks/useApi'
 import AccountDailyViewsChart from '../components/AccountDailyViewsChart'
 import { Blur } from '../contexts/IncognitoContext'
 import AccountsTableView from '../components/accounts/AccountsTableView'
+import ReelStatsView from '../components/accounts/stats/ReelStatsView'
 
 const STATUSES = ['ALL', 'ACTIVE', 'SUSPENDED', 'BANNED', 'ERROR']
 
@@ -258,11 +259,11 @@ export default function Accounts() {
     }
   }
 
-  async function handleActivateLink(id) {
+  async function handleActivateLink(id, targetState = 'LINK_REQUIRED') {
     try {
       const account = accounts.find(a => a.id === id)
-      if (!account || !account.storyLinkUrl || account.necessaryLink === 'LINK_ACTIVE') return
-      await apiPut(`/api/accounts/${id}`, { ...account, necessaryLink: 'LINK_REQUIRED' })
+      if (!account || !account.storyLinkUrl || account.necessaryLink === targetState) return
+      await apiPut(`/api/accounts/${id}`, { ...account, necessaryLink: targetState })
       refetch()
     } catch (err) {
       alert('Failed to activate link: ' + err.message)
@@ -407,6 +408,15 @@ export default function Accounts() {
           >
             <LayoutGrid size={14} />
             Table
+          </button>
+          <button
+            onClick={() => setViewMode('stats')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              viewMode === 'stats' ? 'bg-white/10 text-white' : 'text-[#555] hover:text-white'
+            }`}
+          >
+            <BarChart3 size={14} />
+            Stats
           </button>
         </div>
       </div>
@@ -797,15 +807,25 @@ export default function Accounts() {
                         <Trash2 size={12} />
                       </button>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {selectedAccount.necessaryLink === 'LINK_REQUIRED' ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-blue-500/10 text-blue-400 border-blue-500/20">
-                          À mettre en bio
-                        </span>
-                      ) : selectedAccount.necessaryLink === 'LINK_ACTIVE' ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {selectedAccount.necessaryLink === 'LINK_ACTIVE' ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
                           Lien en bio
                         </span>
+                      ) : selectedAccount.necessaryLink === 'LINK_REQUIRED' ? (
+                        <>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-blue-500/10 text-blue-400 border-blue-500/20">
+                            À mettre en bio
+                          </span>
+                          <button
+                            onClick={() => handleActivateLink(selectedAccount.id, 'LINK_ACTIVE')}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+                            title="Marquer ce lien comme déjà actif sur le compte"
+                          >
+                            <Check size={11} />
+                            Marquer comme actif
+                          </button>
+                        </>
                       ) : (
                         <>
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-amber-500/10 text-amber-400 border-amber-500/20">
@@ -816,6 +836,14 @@ export default function Accounts() {
                             className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
                           >
                             Mettre en bio
+                          </button>
+                          <button
+                            onClick={() => handleActivateLink(selectedAccount.id, 'LINK_ACTIVE')}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+                            title="Marquer ce lien comme déjà actif sur le compte"
+                          >
+                            <Check size={11} />
+                            Marquer comme actif
                           </button>
                         </>
                       )}
@@ -941,6 +969,9 @@ export default function Accounts() {
           onSelectAccount={(id) => { setViewMode('list'); handleSelectAccount(id) }}
         />
       )}
+
+      {/* Stats View */}
+      {viewMode === 'stats' && <ReelStatsView />}
     </div>
   )
 }

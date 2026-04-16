@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -12,8 +12,18 @@ import { Button } from '@/components/ui/button'
 import { apiGet, apiPut } from '@/lib/api'
 import InteractiveLineChart from '@/components/charts/InteractiveLineChart'
 import DailyViewsBarChart from '@/components/charts/DailyViewsBarChart'
+import IdentityEvolutionChart from '@/components/charts/IdentityEvolutionChart'
+import IdentityMomentumChart from '@/components/charts/IdentityMomentumChart'
+import TopPerformersChart from '@/components/charts/TopPerformersChart'
+import SmsProviderViewsChart from '@/components/charts/SmsProviderViewsChart'
+import LinkReadinessTable from '@/components/charts/LinkReadinessTable'
+import RetirementCandidatesTable from '@/components/charts/RetirementCandidatesTable'
+import { tooltipStyle, formatNumber } from '@/components/charts/chartHelpers'
+import { BlurredXTick, BlurredYTick } from '@/components/charts/chartPrimitives'
 import DateRangePicker from '@/components/shared/DateRangePicker'
 import { CHART_COLORS, buildColorMap } from '@/utils/chartColors'
+import { computeAllTimeViews } from '@/utils/analyticsScoring'
+import { useIdentityMap } from '@/hooks/useIdentityMap'
 import { toBangkokISO } from '@/utils/format'
 import { Blur, useIncognito } from '@/contexts/IncognitoContext'
 
@@ -24,35 +34,15 @@ const PERIODS = [
   { key: '1d',      label: "Aujourd'hui",       days: 1,    titleSuffix: 'Today' },
 ]
 
-const tooltipStyle = {
-  contentStyle: { backgroundColor: '#111', border: '1px solid #1a1a1a', borderRadius: 8, fontSize: 12 },
-  labelStyle: { color: '#999', marginBottom: 4 },
-  itemStyle: { padding: '2px 0', color: '#ccc' },
-}
+const SMS_MIN_AGE_STORAGE_KEY = 'analytics:smsMinAge'
+const RETIRE_MIN_AGE_STORAGE_KEY = 'analytics:retireMinAge'
 
-function formatNumber(n) {
-  if (n == null) return '—'
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return n.toLocaleString()
-}
-
-function computeAllTimeViews(snapshots) {
-  const byAccount = {}
-  for (const snap of snapshots) {
-    if (!byAccount[snap.username]) byAccount[snap.username] = {}
-    const month = toBangkokISO(snap.snapshotAt)?.slice(0, 7)
-    if (!month) continue
-    const views = snap.viewsLast30Days || 0
-    if (!byAccount[snap.username][month] || views > byAccount[snap.username][month]) {
-      byAccount[snap.username][month] = views
-    }
-  }
-  const result = {}
-  for (const [username, months] of Object.entries(byAccount)) {
-    result[username] = Object.values(months).reduce((sum, v) => sum + v, 0)
-  }
-  return result
+function readLocalStorageNumber(key, fallback) {
+  if (typeof window === 'undefined') return fallback
+  const raw = window.localStorage.getItem(key)
+  if (raw == null) return fallback
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : fallback
 }
 
 export default function Analytics() {
@@ -64,6 +54,20 @@ export default function Analytics() {
   const [editingLinkUser, setEditingLinkUser] = useState(null)
   const [linkInputValue, setLinkInputValue] = useState('')
   const [showAllAccounts, setShowAllAccounts] = useState(false)
+  const [smsMinAge, setSmsMinAge] = useState(() => readLocalStorageNumber(SMS_MIN_AGE_STORAGE_KEY, 5))
+  const [retireMinAge, setRetireMinAge] = useState(() => readLocalStorageNumber(RETIRE_MIN_AGE_STORAGE_KEY, 45))
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(SMS_MIN_AGE_STORAGE_KEY, String(smsMinAge))
+    }
+  }, [smsMinAge])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(RETIRE_MIN_AGE_STORAGE_KEY, String(retireMinAge))
+    }
+  }, [retireMinAge])
 
   const currentPeriod = PERIODS.find(p => p.key === period)
 
@@ -99,13 +103,36 @@ export default function Analytics() {
 
   const navigate = useNavigate()
   const { isIncognito } = useIncognito()
+  const { identityNames: identityMapNames, usernameToIdentity, isLoading: identityLoading, error: identityError } = useIdentityMap()
 
   // Normalize data — handle both { data: ... } wrapper and direct response
   const overviewData = overview?.data || overview || {}
   const rawSnap = snapData?.data || snapData || {}
-  const snapshots = rawSnap.snapshots || (Array.isArray(rawSnap) ? rawSnap : [])
+  const rawSnapshots = rawSnap.snapshots || (Array.isArray(rawSnap) ? rawSnap : [])
   const rawAllSnap = allSnapData?.data || allSnapData || {}
-  const allSnapshots = rawAllSnap.snapshots || (Array.isArray(rawAllSnap) ? rawAllSnap : [])
+  const rawAllSnapshots = rawAllSnap.snapshots || (Array.isArray(rawAllSnap) ? rawAllSnap : [])
+
+  // Active usernames set — used to filter snapshots when "Comptes actifs" toggle is on
+  const activeUsernames = useMemo(() => {
+    const accounts = accountsData?.data?.accounts || accountsData?.data || accountsData?.accounts || accountsData || []
+    if (!Array.isArray(accounts)) return null
+    const set = new Set()
+    for (const acc of accounts) {
+      if (acc.username && acc.status === 'ACTIVE') set.add(acc.username)
+    }
+    return set
+  }, [accountsData])
+
+  // Apply global active/all filter to all snapshot streams
+  const snapshots = useMemo(() => {
+    if (showAllAccounts || !activeUsernames) return rawSnapshots
+    return rawSnapshots.filter(s => activeUsernames.has(s.username))
+  }, [rawSnapshots, showAllAccounts, activeUsernames])
+
+  const allSnapshots = useMemo(() => {
+    if (showAllAccounts || !activeUsernames) return rawAllSnapshots
+    return rawAllSnapshots.filter(s => activeUsernames.has(s.username))
+  }, [rawAllSnapshots, showAllAccounts, activeUsernames])
 
   const isInitialLoad = (snapLoading || overviewLoading) && !snapData
 
@@ -135,6 +162,21 @@ export default function Analytics() {
   // Period-aware KPIs
   const periodKpis = useMemo(() => {
     if (period === 'alltime') {
+      // When filter is active, recompute totals from filtered snapshots so KPIs match charts
+      if (!showAllAccounts && allSnapshots.length) {
+        const latest = {}
+        for (const snap of allSnapshots) {
+          if (!latest[snap.username] || snap.snapshotAt > latest[snap.username].snapshotAt) {
+            latest[snap.username] = snap
+          }
+        }
+        let totalFollowers = 0
+        for (const snap of Object.values(latest)) {
+          totalFollowers += snap.followerCount || 0
+        }
+        const totalViews = Object.values(computeAllTimeViews(allSnapshots)).reduce((sum, v) => sum + v, 0)
+        return { views: totalViews, followers: totalFollowers }
+      }
       return { views: overviewData?.totalViews, followers: overviewData?.totalFollowers }
     }
     if (!filteredSnapshots.length) return { views: null, followers: null }
@@ -157,7 +199,7 @@ export default function Analytics() {
     }
 
     return { views: totalViewsGain, followers: totalFollowersGain }
-  }, [filteredSnapshots, overviewData, period])
+  }, [filteredSnapshots, allSnapshots, overviewData, period, showAllAccounts])
 
   // Account links map
   const accountLinks = useMemo(() => {
@@ -238,14 +280,6 @@ export default function Analytics() {
     })
   }, [tableData, sortCol, sortAsc, allTimeViews])
 
-  const displayTableData = useMemo(() => {
-    if (showAllAccounts) return sortedTableData
-    return sortedTableData.filter(row => {
-      const acc = accountsByUsername[row.username]
-      return acc?.status === 'ACTIVE'
-    })
-  }, [sortedTableData, showAllAccounts, accountsByUsername])
-
   const handleSort = (col) => {
     if (sortCol === col) {
       setSortAsc(!sortAsc)
@@ -256,7 +290,7 @@ export default function Analytics() {
   }
 
   function openLinkEditor(username, e) {
-    e.stopPropagation()
+    e?.stopPropagation?.()
     const acc = accountsByUsername[username]
     setLinkInputValue(acc?.storyLinkUrl || 'https://getmysocial.com/')
     setEditingLinkUser(username)
@@ -286,24 +320,30 @@ export default function Analytics() {
     </th>
   )
 
-  const BlurredXTick = ({ x, y, payload }) => (
-    <text x={x} y={y} dy={14} textAnchor="middle" fill="#999" fontSize={11}>
-      {isIncognito ? '•••' : payload.value}
-    </text>
-  )
-
-  const BlurredYTick = ({ x, y, payload }) => (
-    <text x={x} y={y} dx={-4} textAnchor="end" fill="#999" fontSize={11}>
-      {isIncognito ? '•••' : payload.value}
-    </text>
-  )
-
-  // Stable color map
+  // Stable color map (usernames)
   const colorMap = useMemo(() => {
     if (!snapshots.length) return {}
     const usernames = new Set(snapshots.map(s => s.username))
     return buildColorMap([...usernames])
   }, [snapshots])
+
+  // Stable color map (identities) — shared between IdentityEvolution and IdentityMomentum charts
+  const identityColorMap = useMemo(() => {
+    if (!identityMapNames?.length) return {}
+    return buildColorMap(identityMapNames)
+  }, [identityMapNames])
+
+  // Accounts array normalized once for all new charts
+  const accountsArray = useMemo(() => {
+    const raw = accountsData?.data?.accounts || accountsData?.data || accountsData?.accounts || accountsData || []
+    return Array.isArray(raw) ? raw : []
+  }, [accountsData])
+
+  // Filtered accounts respecting the "active only" toggle — used by new charts that read account fields
+  const filteredAccounts = useMemo(() => {
+    if (showAllAccounts) return accountsArray
+    return accountsArray.filter((a) => a.status === 'ACTIVE')
+  }, [accountsArray, showAllAccounts])
 
   // Identity performance data
   const identityData = useMemo(() => {
@@ -335,9 +375,21 @@ export default function Analytics() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-white tracking-tight">Analytics</h1>
-        <p className="text-xs text-[#333] mt-0.5">Account performance & evolution</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold text-white tracking-tight">Analytics</h1>
+          <p className="text-xs text-[#333] mt-0.5">Account performance & evolution</p>
+        </div>
+        <button
+          onClick={() => setShowAllAccounts(!showAllAccounts)}
+          className={`shrink-0 px-3 py-1.5 rounded-md text-[11px] font-semibold tracking-wide transition-colors border ${
+            showAllAccounts
+              ? 'bg-white/10 text-white border-[#333]'
+              : 'bg-transparent text-[#555] border-[#1a1a1a] hover:text-white hover:border-[#333]'
+          }`}
+        >
+          {showAllAccounts ? 'Tous les comptes' : 'Comptes actifs'}
+        </button>
       </div>
 
       {/* Period selector */}
@@ -425,13 +477,13 @@ export default function Analytics() {
         <Card className="bg-[#111] border-[#1a1a1a]">
           <CardContent className="p-4">
             <div className="flex items-start justify-between mb-3">
-              <span className="label-upper">Comptes Actifs</span>
+              <span className="label-upper">{showAllAccounts ? 'Total Comptes' : 'Comptes Actifs'}</span>
               <div className="w-7 h-7 rounded-md flex items-center justify-center bg-purple-500/10">
                 <UserCheck size={14} className="text-purple-400" />
               </div>
             </div>
             <div className="text-3xl font-extrabold text-white tracking-tight">
-              {overviewData?.activeAccounts ?? '—'}
+              {showAllAccounts ? (overviewData?.totalAccounts ?? overviewData?.activeAccounts ?? '—') : (overviewData?.activeAccounts ?? '—')}
             </div>
           </CardContent>
         </Card>
@@ -494,6 +546,20 @@ export default function Analytics() {
         </CardContent>
       </Card>
 
+      {/* Identity Evolution — Chart 1 */}
+      <Card className="bg-[#111] border-[#1a1a1a] mb-3">
+        <CardContent className="p-4">
+          <IdentityEvolutionChart
+            snapshots={filteredSnapshots}
+            usernameToIdentity={usernameToIdentity}
+            identityColorMap={identityColorMap}
+            titleSuffix={titleSuffix}
+            isLoading={identityLoading}
+            error={identityError}
+          />
+        </CardContent>
+      </Card>
+
       {/* Identity Performance */}
       {identityData.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
@@ -547,6 +613,45 @@ export default function Analytics() {
         </div>
       )}
 
+      {/* Identity Momentum + Top Performers — Charts 2 & 4 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+        <Card className="bg-[#111] border-[#1a1a1a]">
+          <CardContent className="p-4">
+            <IdentityMomentumChart
+              snapshots={allSnapshots}
+              usernameToIdentity={usernameToIdentity}
+              identityColorMap={identityColorMap}
+              windowDays={7}
+              isLoading={identityLoading}
+              error={identityError}
+            />
+          </CardContent>
+        </Card>
+        <Card className="bg-[#111] border-[#1a1a1a]">
+          <CardContent className="p-4">
+            <TopPerformersChart
+              snapshots={allSnapshots}
+              colorMap={colorMap}
+              windowDays={7}
+              topN={20}
+              onSelectUsername={(u) => navigate(`/accounts?username=${encodeURIComponent(u)}`)}
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* SMS Provider Views — Chart 3 */}
+      <Card className="bg-[#111] border-[#1a1a1a] mb-3">
+        <CardContent className="p-4">
+          <SmsProviderViewsChart
+            snapshots={allSnapshots}
+            accounts={filteredAccounts}
+            minAgeDays={smsMinAge}
+            onMinAgeChange={setSmsMinAge}
+          />
+        </CardContent>
+      </Card>
+
       {/* Efficiency Chart + Account Details */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
         <Card className="bg-[#111] border-[#1a1a1a]">
@@ -577,16 +682,6 @@ export default function Analytics() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-4">
               <span className="label-upper !mb-0">Account Details</span>
-              <button
-                onClick={() => setShowAllAccounts(!showAllAccounts)}
-                className={`px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide transition-colors border ${
-                  showAllAccounts
-                    ? 'bg-white/10 text-white border-[#333]'
-                    : 'bg-transparent text-[#555] border-[#1a1a1a] hover:text-white hover:border-[#333]'
-                }`}
-              >
-                {showAllAccounts ? 'All' : 'Active only'}
-              </button>
             </div>
             <div className="overflow-hidden rounded-md border border-[#1a1a1a]">
               <table className="w-full text-xs">
@@ -600,10 +695,10 @@ export default function Analytics() {
                   </tr>
                 </thead>
                 <tbody>
-                  {displayTableData.length === 0 ? (
+                  {sortedTableData.length === 0 ? (
                     <tr><td colSpan={5} className="px-3 py-6 text-center text-[#333]">No data</td></tr>
                   ) : (
-                    displayTableData.map((row, i) => {
+                    sortedTableData.map((row, i) => {
                       const views = allTimeViews[row.username] || 0
                       const hasLink = !!accountLinks[row.username]
                       const showMissing = !hasLink && views >= 10000
@@ -652,6 +747,34 @@ export default function Analytics() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Link Readiness — Chart 5 */}
+      <Card className="bg-[#111] border-[#1a1a1a] mb-3">
+        <CardContent className="p-4">
+          <LinkReadinessTable
+            snapshots={allSnapshots}
+            accounts={filteredAccounts}
+            windowDays={14}
+            onEditLink={(username) => openLinkEditor(username)}
+            topN={20}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Retirement Candidates — Chart 6 */}
+      <Card className="bg-[#111] border-[#1a1a1a] mb-3">
+        <CardContent className="p-4">
+          <RetirementCandidatesTable
+            snapshots={allSnapshots}
+            accounts={filteredAccounts}
+            minAgeDays={retireMinAge}
+            onMinAgeChange={setRetireMinAge}
+            dailyViewsThreshold={100}
+            onSelectUsername={(u) => navigate(`/accounts?username=${encodeURIComponent(u)}`)}
+            topN={30}
+          />
+        </CardContent>
+      </Card>
 
       {/* Link editing modal — using v2 Dialog component */}
       <Dialog open={!!editingLinkUser} onOpenChange={(open) => { if (!open) setEditingLinkUser(null) }}>

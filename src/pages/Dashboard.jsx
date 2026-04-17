@@ -383,7 +383,13 @@ export default function Dashboard() {
   const lowStockIdentities = Object.entries(contentIdentities).filter(
     ([, v]) => v.status === 'LOW_STOCK' || v.status === 'EMPTY' || (v.reelCount || v.count || 0) < 3
   )
-  const lowHealthAccountsList = healthList.filter(a => (a.score ?? a.healthScore ?? 100) < 50)
+  const activeAccountIds = useMemo(() => {
+    const list = Array.isArray(allAccounts) ? allAccounts : []
+    return new Set(list.filter(a => a.status === 'ACTIVE').map(a => a.id || a._id))
+  }, [allAccounts])
+  const lowHealthAccountsList = healthList.filter(a =>
+    (a.score ?? a.healthScore ?? 100) < 50 && activeAccountIds.has(a.accountId || a.id)
+  )
   const lowHealthAccounts = lowHealthAccountsList.length
 
   const avgData = workflowAverages?.data || workflowAverages || {}

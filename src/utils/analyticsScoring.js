@@ -68,12 +68,19 @@ export function viewsDeltaInWindow(snapshots, days, nowMs = Date.now()) {
   const result = {}
   const targetMs = nowMs - days * DAY_MS
   for (const [username, userSnaps] of Object.entries(byUser)) {
+    if (!userSnaps.length) { result[username] = null; continue }
     const latest = userSnaps[userSnaps.length - 1]
-    const baseline = findClosestSnapshot(userSnaps, targetMs)
-    if (!latest || !baseline) {
-      result[username] = null
-      continue
+    // Baseline = premier snapshot >= targetMs (borne basse de la fenêtre).
+    // Si l'historique commence APRÈS target (Scraper fraîchement déployé), on prend le
+    // tout premier snapshot dispo — on sous-estime le delta mais on ne fait pas disparaître
+    // l'account du classement.
+    let baseline = null
+    for (const snap of userSnaps) {
+      const t = new Date(snap.snapshotAt).getTime()
+      if (t >= targetMs) { baseline = snap; break }
     }
+    if (!baseline) baseline = userSnaps[0]
+    if (baseline === latest) { result[username] = null; continue }
     result[username] = (latest.viewsLast30Days || 0) - (baseline.viewsLast30Days || 0)
   }
   return result
@@ -275,9 +282,11 @@ export function retirementScore(snapshots, accounts, { minAgeDays, dailyViewsThr
   return result.sort((a, b) => b.score - a.score)
 }
 
-export function viewsPerAccountByIdentityOverTime(snapshots, usernameToIdentity, { bucket = 'day' } = {}) {
+export function viewsPerAccountByIdentityOverTime(snapshots, usernameToIdentity, { bucket = 'snapshot' } = {}) {
   if (!snapshots.length) return { rows: [], identityNames: [] }
 
+  // Slot = minute-près par défaut → 1 point par snapshot.
+  // Conservé 'half-day' et 'day' pour compat si d'autres appelants le demandent.
   const slotOf = (snapshotAt) => {
     const local = toBangkokISO(snapshotAt)
     if (!local) return null
@@ -286,7 +295,8 @@ export function viewsPerAccountByIdentityOverTime(snapshots, usernameToIdentity,
       const hour = parseInt(local.slice(11, 13) || '0', 10)
       return `${date}T${hour < 12 ? '0' : '1'}`
     }
-    return local.slice(0, 10)
+    if (bucket === 'day') return local.slice(0, 10)
+    return local.slice(0, 16) // YYYY-MM-DDTHH:mm
   }
 
   const formatSlot = (slot) => {
@@ -295,7 +305,8 @@ export function viewsPerAccountByIdentityOverTime(snapshots, usernameToIdentity,
       const half = slot.slice(11) === '1' ? 'PM' : 'AM'
       return `${date.slice(8)}/${date.slice(5, 7)} ${half}`
     }
-    return `${slot.slice(8)}/${slot.slice(5, 7)}`
+    if (bucket === 'day') return `${slot.slice(8)}/${slot.slice(5, 7)}`
+    return `${slot.slice(8, 10)}/${slot.slice(5, 7)} ${slot.slice(11, 16)}`
   }
 
   const latestPerUserPerSlot = {}
@@ -312,11 +323,18 @@ export function viewsPerAccountByIdentityOverTime(snapshots, usernameToIdentity,
     }
   }
 
+  // Forward-fill par username sur les slots triés → un compte sans snapshot à t conserve
+  // sa dernière valeur connue au lieu de tomber à 0 (sinon les moyennes oscillent).
   const identitySet = new Set()
-  const rows = Object.keys(latestPerUserPerSlot).sort().map((slot) => {
-    const slotData = latestPerUserPerSlot[slot]
+  const sortedSlots = Object.keys(latestPerUserPerSlot).sort()
+  const lastKnownByUser = {}
+
+  const rows = sortedSlots.map((slot) => {
+    for (const [username, val] of Object.entries(latestPerUserPerSlot[slot])) {
+      lastKnownByUser[username] = val
+    }
     const byIdentity = {}
-    for (const [username, val] of Object.entries(slotData)) {
+    for (const [username, val] of Object.entries(lastKnownByUser)) {
       const identity = usernameToIdentity[username]
       if (!identity) continue
       identitySet.add(identity)

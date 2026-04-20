@@ -67,18 +67,17 @@ export default function InteractiveLineChart({ title, snapshots, dataKey, colorM
     if (!snapshots?.length || !top15.length) return []
     const top15Set = new Set(top15)
 
+    // Un slot = un timestamp exact (ISO minute-près). Chaque snapshot produit son propre point.
     const getSlot = (snapshotAt) => {
       if (!snapshotAt) return null
       const local = toBangkokISO(snapshotAt)
-      const date = local.slice(0, 10)
-      const hour = parseInt(local.slice(11, 13) || '0', 10)
-      return `${date}T${hour < 12 ? '0' : '1'}`
+      return local.slice(0, 16) // YYYY-MM-DDTHH:mm
     }
 
     const formatSlot = (slot) => {
       const date = slot.slice(0, 10)
-      const half = slot.slice(11) === '1' ? 'PM' : 'AM'
-      return `${date.slice(8)}/${date.slice(5, 7)} ${half}`
+      const time = slot.slice(11, 16)
+      return `${date.slice(8)}/${date.slice(5, 7)} ${time}`
     }
 
     const bySlot = {}
@@ -89,6 +88,7 @@ export default function InteractiveLineChart({ title, snapshots, dataKey, colorM
       const val = snap[dataKey] ?? 0
       if (top15Set.has(snap.username)) {
         if (!bySlot[slot]) bySlot[slot] = {}
+        // Au cas (rare) où 2 snapshots auraient exactement la même minute, on garde la max.
         const existing = bySlot[slot][snap.username]
         if (existing == null || val > existing) {
           bySlot[slot][snap.username] = val
@@ -100,11 +100,22 @@ export default function InteractiveLineChart({ title, snapshots, dataKey, colorM
         totalBySlot[slot][snap.username] = val
       }
     }
-    return Object.keys(bySlot).sort().map(slot => ({
-      date: formatSlot(slot),
-      ...bySlot[slot],
-      __total: Object.values(totalBySlot[slot] || {}).reduce((sum, v) => sum + (v || 0), 0),
-    }))
+
+    // Total Fleet : un compte sans snapshot à un slot t ne doit pas tomber à 0 —
+    // on forward-fill sa dernière valeur connue pour éviter les dents de scie.
+    const sortedSlots = Object.keys(totalBySlot).sort()
+    const lastKnown = {}
+    return sortedSlots.map(slot => {
+      for (const [username, v] of Object.entries(totalBySlot[slot] || {})) {
+        lastKnown[username] = v
+      }
+      const total = Object.values(lastKnown).reduce((sum, v) => sum + (v || 0), 0)
+      return {
+        date: formatSlot(slot),
+        ...bySlot[slot],
+        __total: total,
+      }
+    })
   }, [snapshots, top15, dataKey])
 
   const toggle = (username) => {

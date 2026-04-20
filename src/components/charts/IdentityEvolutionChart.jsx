@@ -37,7 +37,7 @@ export default function IdentityEvolutionChart({ snapshots, usernameToIdentity, 
     if (!snapshots?.length || !usernameToIdentity || Object.keys(usernameToIdentity).length === 0) {
       return { rows: [], identityNames: [] }
     }
-    return viewsPerAccountByIdentityOverTime(snapshots, usernameToIdentity, { bucket: 'day' })
+    return viewsPerAccountByIdentityOverTime(snapshots, usernameToIdentity, { bucket: 'snapshot' })
   }, [snapshots, usernameToIdentity])
 
   const [selected, setSelected] = useState(null)

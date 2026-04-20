@@ -30,7 +30,7 @@ export default function ReelCard({ reel }) {
       <div className="relative aspect-[9/16] bg-[#111]">
         {reel.thumbnailPath && !imageFailed ? (
           <img
-            src={`/api/reel-thumbnails/${reel.thumbnailPath}`}
+            src={reel.thumbnailPath.startsWith('http') ? reel.thumbnailPath : `/api/reel-thumbnails/${reel.thumbnailPath}`}
             alt={reel.caption ? `Reel: ${reel.caption.slice(0, 60)}` : `Reel ${reel.shortCode}`}
             className="w-full h-full object-cover"
             onError={() => setImageFailed(true)}

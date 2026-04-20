@@ -4,6 +4,8 @@ import { Trash2, Search, Users, Link, Pencil, X, ExternalLink, Smartphone, Check
 import { toast } from 'sonner'
 import StatusBadge from '../components/StatusBadge'
 import { useApi, apiPost, apiPut, apiDelete } from '../hooks/useApi'
+import { useQuery } from '@tanstack/react-query'
+import { scraperGet } from '@/api/scraperClient'
 import AccountDailyViewsChart from '../components/AccountDailyViewsChart'
 import { Blur } from '../contexts/IncognitoContext'
 import AccountsTableView from '../components/accounts/AccountsTableView'
@@ -79,7 +81,11 @@ export default function Accounts() {
     }
   }, [searchParams, accounts])
   const { data: historyData } = useApi('/api/automation/posting-history?limit=5000')
-  const { data: snapData } = useApi('/api/stats/snapshots?days=60')
+  const { data: snapData } = useQuery({
+    queryKey: ['scraper-snapshots-accounts', 60],
+    queryFn: () => scraperGet('/analytics/legacy/snapshots', { days: 60 }),
+    refetchInterval: 30_000,
+  })
   const { data: contentData } = useApi('/api/automation/content-status')
   const { data: devicesData } = useApi('/api/devices')
 
@@ -747,7 +753,7 @@ export default function Accounts() {
                 <span className="label-upper block mb-3">Daily Views</span>
                 <AccountDailyViewsChart
                   account={selectedAccount}
-                  snapshots={snapData?.snapshots || []}
+                  snapshots={snapData?.data?.snapshots || snapData?.snapshots || []}
                 />
               </div>
 

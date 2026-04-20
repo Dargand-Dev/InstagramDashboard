@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, Eye, Heart, Film, MessageCircle, AlertCircle } from 'lucide-react'
-import { apiGet } from '../../../lib/api'
+import { scraperGet } from '@/api/scraperClient'
 import ReelCard from './ReelCard'
 
 function formatNumber(n) {
@@ -30,20 +30,19 @@ function MetricTile({ icon: Icon, label, value, color }) {
 
 export default function AccountReelsDrilldown({ username, onBack }) {
   const { data: reels, isLoading, error } = useQuery({
-    queryKey: ['reel-stats-account', username],
-    queryFn: () => apiGet(`/api/reel-stats/accounts/${encodeURIComponent(username)}/reels`),
+    queryKey: ['scraper-reel-stats-account', username],
+    queryFn: () => scraperGet(`/analytics/legacy/reel-stats/accounts/${encodeURIComponent(username)}/reels`),
   })
 
   const totals = useMemo(() => {
     return (reels || []).reduce(
       (acc, r) => {
         acc.views += r.videoViewCount || 0
-        acc.plays += r.videoPlayCount || 0
         acc.likes += r.likesCount || 0
         acc.comments += r.commentsCount || 0
         return acc
       },
-      { views: 0, plays: 0, likes: 0, comments: 0 }
+      { views: 0, likes: 0, comments: 0 }
     )
   }, [reels])
 

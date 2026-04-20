@@ -19,6 +19,11 @@ export default defineConfig({
   server: {
     allowedHosts: true,
     proxy: {
+      '/api/scraper': {
+        target: process.env.VITE_SCRAPER_URL || 'http://localhost:8082',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/scraper/, ''),
+      },
       '/api': 'http://localhost:8081',
       '/ws': {
         target: 'http://localhost:8081',

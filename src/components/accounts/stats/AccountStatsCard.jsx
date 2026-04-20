@@ -24,9 +24,10 @@ function Thumbnail({ path }) {
   if (failed) {
     return <div className="w-full h-full bg-[#0a0a0a]" />
   }
+  const src = path?.startsWith('http') ? path : `/api/reel-thumbnails/${path}`
   return (
     <img
-      src={`/api/reel-thumbnails/${path}`}
+      src={src}
       alt=""
       className="w-full h-full object-cover"
       onError={() => setFailed(true)}

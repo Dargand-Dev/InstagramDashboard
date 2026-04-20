@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { apiGet, apiPut } from '@/lib/api'
+import { scraperGet } from '@/api/scraperClient'
 import InteractiveLineChart from '@/components/charts/InteractiveLineChart'
 import DailyViewsBarChart from '@/components/charts/DailyViewsBarChart'
 import IdentityEvolutionChart from '@/components/charts/IdentityEvolutionChart'
@@ -78,20 +79,20 @@ export default function Analytics() {
   const apiDays = period === 'custom' ? (customDays != null ? customDays + 30 : 9999) : currentPeriod?.days ?? 9999
 
   const { data: snapData, isLoading: snapLoading } = useQuery({
-    queryKey: ['snapshots', apiDays],
-    queryFn: () => apiGet(`/api/stats/snapshots?days=${apiDays}`),
+    queryKey: ['scraper-snapshots', apiDays],
+    queryFn: () => scraperGet('/analytics/legacy/snapshots', { days: apiDays }),
     refetchInterval: 30_000,
   })
 
   const { data: allSnapData } = useQuery({
-    queryKey: ['snapshots-all'],
-    queryFn: () => apiGet('/api/stats/snapshots?days=9999'),
+    queryKey: ['scraper-snapshots-all'],
+    queryFn: () => scraperGet('/analytics/legacy/snapshots', { days: 9999 }),
     refetchInterval: 30_000,
   })
 
   const { data: overview, isLoading: overviewLoading } = useQuery({
-    queryKey: ['overview', apiDays],
-    queryFn: () => apiGet(`/api/stats/overview?days=${apiDays}`),
+    queryKey: ['scraper-overview', apiDays],
+    queryFn: () => scraperGet('/analytics/legacy/overview', { days: apiDays }),
     refetchInterval: 30_000,
   })
 

@@ -1,45 +1,32 @@
 import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { AlertCircle } from 'lucide-react'
-import { apiGet } from '../../../lib/api'
+import { scraperGet } from '@/api/scraperClient'
 import ReelStatsGrid from './ReelStatsGrid'
 import AccountReelsDrilldown from './AccountReelsDrilldown'
-import FetchStatsButton from './FetchStatsButton'
 import TimeAgo from '../../shared/TimeAgo'
 
 export default function ReelStatsView() {
   const [selectedUsername, setSelectedUsername] = useState(null)
-  const queryClient = useQueryClient()
 
   const {
     data: summaries,
     isLoading: summariesLoading,
     error: summariesError,
   } = useQuery({
-    queryKey: ['reel-stats-summaries'],
-    queryFn: () => apiGet('/api/reel-stats/summaries'),
+    queryKey: ['scraper-reel-stats-summaries'],
+    queryFn: () => scraperGet('/analytics/legacy/reel-stats/summaries'),
+    refetchInterval: 60_000,
   })
 
   const {
     data: latestJob,
     error: latestJobError,
   } = useQuery({
-    queryKey: ['reel-stats-latest-job'],
-    queryFn: async () => {
-      try {
-        return await apiGet('/api/reel-stats/jobs/latest')
-      } catch (err) {
-        // 204 No Content is expected when no job has run yet
-        if (err?.message?.includes('204')) return null
-        throw err
-      }
-    },
+    queryKey: ['scraper-reel-stats-latest-job'],
+    queryFn: () => scraperGet('/analytics/legacy/reel-stats/jobs/latest'),
+    refetchInterval: 60_000,
   })
-
-  const handleFetchComplete = () => {
-    queryClient.invalidateQueries({ queryKey: ['reel-stats-summaries'] })
-    queryClient.invalidateQueries({ queryKey: ['reel-stats-latest-job'] })
-  }
 
   if (selectedUsername) {
     return (
@@ -64,13 +51,12 @@ export default function ReelStatsView() {
                 </span>
               </>
             ) : latestJobError ? (
-              <span className="text-amber-500">Could not read latest job status</span>
+              <span className="text-amber-500">Scraper unreachable — check backend status</span>
             ) : (
-              'No data yet. Click Fetch to start.'
+              <span className="text-[#666]">Le Scraper collecte les stats en continu (cycle 3h)</span>
             )}
           </p>
         </div>
-        <FetchStatsButton onComplete={handleFetchComplete} />
       </div>
 
       {summariesError && (
@@ -89,8 +75,8 @@ export default function ReelStatsView() {
 
       {!summariesLoading && !summariesError && (!summaries || summaries.length === 0) && (
         <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg p-12 text-center">
-          <p className="text-[#888] text-sm mb-2">No reel stats yet</p>
-          <p className="text-[#555] text-xs">Click "Fetch All Stats" to scrape reels from all ACTIVE accounts</p>
+          <p className="text-[#888] text-sm mb-2">Aucune stat de reel disponible</p>
+          <p className="text-[#555] text-xs">Le Scraper doit avoir tourné au moins un cycle pour remplir cette vue</p>
         </div>
       )}
 

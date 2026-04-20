@@ -181,7 +181,12 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
       setEditForm({
         name: device.name || device.label || '',
         port: device.port || '',
-        proxyUrl: device.proxyUrl || device.rotatingUrl || '',
+        proxyHost: device.proxyHost || '',
+        proxyPort: device.proxyPort || '',
+        proxyUsername: device.proxyUsername || '',
+        proxyPassword: device.proxyPassword || '',
+        proxyUrl: device.proxyUrl || '',
+        rotatingUrl: device.rotatingUrl || '',
         proxyExpiresAt: toDatetimeLocal(device.proxyExpiresAt),
       })
       setEditing(false)
@@ -191,6 +196,7 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
   const updateMutation = useMutation({
     mutationFn: (body) => apiPut(`/api/devices/${device.id}`, {
       ...body,
+      proxyPort: body.proxyPort ? Number(body.proxyPort) : null,
       proxyExpiresAt: body.proxyExpiresAt ? new Date(body.proxyExpiresAt).toISOString() : null,
     }),
     onSuccess: () => {
@@ -201,56 +207,60 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
     },
   })
 
+  const setField = (key) => (e) => setEditForm((f) => ({ ...f, [key]: e.target.value }))
+
   if (!device) return null
+
+  const expiryColor = proxyExpiryColor(device.proxyExpiresAt)
+  const expiryFormatted = formatProxyExpiry(device.proxyExpiresAt)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#0A0A0A] border-[#1a1a1a] max-w-xl w-full max-h-[85vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="border-b border-[#1a1a1a] px-6 py-4">
+      <DialogContent
+        className="bg-[#0A0A0A] border-[#1a1a1a] w-[92vw] sm:max-w-3xl max-h-[88vh] flex flex-col p-0 gap-0"
+      >
+        <DialogHeader className="border-b border-[#1a1a1a] px-6 py-4 shrink-0">
           <DialogTitle className="text-[#FAFAFA] flex items-center gap-2">
             <Smartphone className="w-4 h-4 text-[#A1A1AA]" />
             {device.name || device.label || 'Device'}
+            <StatusBadge status={device.status || 'OFFLINE'} />
           </DialogTitle>
           <DialogDescription className="text-[#52525B] font-mono text-xs break-all">
             {device.udid || 'No UDID'}
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 px-6 py-4">
-          <Tabs defaultValue="info">
-            <TabsList variant="line" className="w-full justify-start mb-4">
-              <TabsTrigger value="info" className="text-xs">Info</TabsTrigger>
-              <TabsTrigger value="history" className="text-xs">Run History</TabsTrigger>
-            </TabsList>
+        <ScrollArea className="flex-1">
+          <div className="px-6 py-5">
+            <Tabs defaultValue="info">
+              <TabsList variant="line" className="w-full justify-start mb-5">
+                <TabsTrigger value="info" className="text-xs">Info & Proxy</TabsTrigger>
+                <TabsTrigger value="history" className="text-xs">Run History</TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="info" className="space-y-4 pb-4">
-              <div className="flex items-center justify-between p-3 rounded-lg bg-[#111111] border border-[#1a1a1a]">
-                <span className="text-xs text-[#52525B]">Status</span>
-                <StatusBadge status={device.status || 'OFFLINE'} />
-              </div>
-
-              {device.status === 'RUNNING' && (
-                <div className="p-3 rounded-lg bg-[#3B82F6]/5 border border-[#3B82F6]/10 space-y-2">
-                  <p className="text-xs font-medium text-[#3B82F6]">Current Run</p>
-                  <div className="space-y-1 text-xs text-[#A1A1AA]">
-                    {(device.currentAction || device.currentWorkflow) && <p>Workflow: {device.currentAction || device.currentWorkflow}</p>}
-                    {device.currentAccount && <p>Account: {device.currentAccount}</p>}
-                    {device.lastActivityAt && <p>Last activity: <TimeAgo date={device.lastActivityAt} /></p>}
-                    {device.currentRunId && (
-                      <a
-                        href={`/execution-center?run=${device.currentRunId}`}
-                        className="text-[#3B82F6] hover:underline inline-flex items-center gap-1 mt-1"
-                      >
-                        <Monitor className="w-3 h-3" /> View in Execution Center
-                      </a>
-                    )}
+              <TabsContent value="info" className="space-y-5 pb-2">
+                {device.status === 'RUNNING' && (
+                  <div className="p-3 rounded-lg bg-[#3B82F6]/5 border border-[#3B82F6]/10 space-y-2">
+                    <p className="text-xs font-medium text-[#3B82F6]">Current Run</p>
+                    <div className="space-y-1 text-xs text-[#A1A1AA]">
+                      {(device.currentAction || device.currentWorkflow) && <p>Workflow: {device.currentAction || device.currentWorkflow}</p>}
+                      {device.currentAccount && <p>Account: {device.currentAccount}</p>}
+                      {device.lastActivityAt && <p>Last activity: <TimeAgo date={device.lastActivityAt} /></p>}
+                      {device.currentRunId && (
+                        <a
+                          href={`/execution-center?run=${device.currentRunId}`}
+                          className="text-[#3B82F6] hover:underline inline-flex items-center gap-1 mt-1"
+                        >
+                          <Monitor className="w-3 h-3" /> View in Execution Center
+                        </a>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <div className="space-y-3">
+                {/* Header with Edit / Save / Cancel */}
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium text-[#A1A1AA]">Configuration</p>
+                  <p className="text-xs font-semibold text-[#FAFAFA] uppercase tracking-wide">Device</p>
                   {!editing ? (
                     <Button
                       variant="ghost"
@@ -277,86 +287,136 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
                   )}
                 </div>
 
-                {editing ? (
-                  <div className="space-y-3">
-                    {[
-                      { key: 'name', label: 'Name', type: 'text' },
-                      { key: 'port', label: 'Port', type: 'text' },
-                      { key: 'proxyUrl', label: 'Proxy URL', type: 'text' },
-                      { key: 'proxyExpiresAt', label: 'Proxy expires at', type: 'datetime-local' },
-                    ].map(({ key, label, type }) => (
-                      <div key={key} className="space-y-1.5">
-                        <Label className="text-xs text-[#52525B]">{label}</Label>
-                        <Input
-                          type={type}
-                          value={editForm[key] || ''}
-                          onChange={(e) => setEditForm((f) => ({ ...f, [key]: e.target.value }))}
-                          className="h-8 bg-[#0A0A0A] border-[#1a1a1a] text-sm text-[#FAFAFA]"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {[
-                      ['UDID', device.udid, null],
-                      ['Port', device.port, null],
-                      ['Proxy', device.proxyUrl || device.rotatingUrl, null],
-                      ['Proxy expires', formatProxyExpiry(device.proxyExpiresAt), proxyExpiryColor(device.proxyExpiresAt)],
-                      ['Enabled', device.enabled !== false ? 'Yes' : 'No', null],
-                    ].map(([label, value, color]) => (
-                      <div key={label} className="flex items-start justify-between gap-3 py-1.5 border-b border-[#1a1a1a] last:border-0">
-                        <span className="text-xs text-[#52525B] shrink-0">{label}</span>
-                        <span
-                          className="text-xs font-mono text-right break-all min-w-0"
-                          style={{ color: color || '#A1A1AA' }}
-                        >
-                          {value || '—'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </TabsContent>
+                {/* Device basics */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <FieldRow label="Name" editing={editing} value={device.name || device.label}>
+                    <Input value={editForm.name || ''} onChange={setField('name')} className="h-9 bg-[#0A0A0A] border-[#1a1a1a] text-sm text-[#FAFAFA]" />
+                  </FieldRow>
+                  <FieldRow label="Appium port" editing={editing} value={device.port}>
+                    <Input value={editForm.port || ''} onChange={setField('port')} className="h-9 bg-[#0A0A0A] border-[#1a1a1a] text-sm text-[#FAFAFA] font-mono" />
+                  </FieldRow>
+                  <FieldRow label="UDID" editing={false} value={device.udid} mono />
+                  <FieldRow label="Enabled" editing={false} value={device.enabled !== false ? 'Yes' : 'No'} />
+                </div>
 
-            <TabsContent value="history" className="space-y-2 pb-4">
-              {loadingHistory ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-16 w-full bg-[#111111]" />
-                ))
-              ) : runHistory.length === 0 ? (
-                <EmptyState icon={History} title="No run history" description="This device hasn't executed any runs yet." />
-              ) : (
-                runHistory.map((run) => (
-                  <div key={run.id} className="p-3 rounded-lg bg-[#111111] border border-[#1a1a1a] space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-[#FAFAFA]">{run.workflowName || run.workflowType || run.type || 'Run'}</span>
-                      <StatusBadge status={run.status} />
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-[#52525B]">
-                      <span>{run.accountUsername || run.account || '—'}</span>
-                      <TimeAgo date={run.startedAt || run.createdAt} />
-                    </div>
-                    {run.error && <p className="text-xs text-[#EF4444] truncate mt-1">{run.error}</p>}
+                {/* Proxy section */}
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-[#FAFAFA] uppercase tracking-wide">Proxy HTTP</p>
+                    {expiryFormatted && (
+                      <span
+                        className="text-xs font-medium px-2 py-0.5 rounded border"
+                        style={{
+                          color: expiryColor || '#A1A1AA',
+                          borderColor: (expiryColor || '#1a1a1a') + '40',
+                          backgroundColor: expiryColor ? expiryColor + '10' : 'transparent',
+                        }}
+                      >
+                        {expiryColor === '#EF4444' ? 'Expired' : expiryColor === '#F59E0B' ? 'Expires soon' : 'Active'} · {expiryFormatted}
+                      </span>
+                    )}
                   </div>
-                ))
-              )}
-            </TabsContent>
-          </Tabs>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <FieldRow label="Host" editing={editing} value={device.proxyHost} mono>
+                      <Input placeholder="proxy.example.com" value={editForm.proxyHost || ''} onChange={setField('proxyHost')} className="h-9 bg-[#0A0A0A] border-[#1a1a1a] text-sm text-[#FAFAFA] font-mono" />
+                    </FieldRow>
+                    <FieldRow label="Port" editing={editing} value={device.proxyPort} mono>
+                      <Input type="number" placeholder="8080" value={editForm.proxyPort || ''} onChange={setField('proxyPort')} className="h-9 bg-[#0A0A0A] border-[#1a1a1a] text-sm text-[#FAFAFA] font-mono" />
+                    </FieldRow>
+                    <FieldRow label="Username" editing={editing} value={device.proxyUsername} mono>
+                      <Input placeholder="user" value={editForm.proxyUsername || ''} onChange={setField('proxyUsername')} className="h-9 bg-[#0A0A0A] border-[#1a1a1a] text-sm text-[#FAFAFA] font-mono" />
+                    </FieldRow>
+                    <FieldRow label="Password" editing={editing} value={device.proxyPassword ? '••••••••' : null} mono>
+                      <Input type="password" placeholder="••••••••" value={editForm.proxyPassword || ''} onChange={setField('proxyPassword')} className="h-9 bg-[#0A0A0A] border-[#1a1a1a] text-sm text-[#FAFAFA] font-mono" />
+                    </FieldRow>
+                  </div>
+
+                  <FieldRow label="Proxy URL (full, optional)" editing={editing} value={device.proxyUrl} mono>
+                    <Input placeholder="http://user:pass@host:port" value={editForm.proxyUrl || ''} onChange={setField('proxyUrl')} className="h-9 bg-[#0A0A0A] border-[#1a1a1a] text-sm text-[#FAFAFA] font-mono" />
+                  </FieldRow>
+
+                  <FieldRow label="Rotating URL" editing={editing} value={device.rotatingUrl} mono>
+                    <Input placeholder="https://..." value={editForm.rotatingUrl || ''} onChange={setField('rotatingUrl')} className="h-9 bg-[#0A0A0A] border-[#1a1a1a] text-sm text-[#FAFAFA] font-mono" />
+                  </FieldRow>
+
+                  <FieldRow label="Expires at" editing={editing} value={expiryFormatted} valueColor={expiryColor}>
+                    <Input type="datetime-local" value={editForm.proxyExpiresAt || ''} onChange={setField('proxyExpiresAt')} className="h-9 bg-[#0A0A0A] border-[#1a1a1a] text-sm text-[#FAFAFA]" />
+                  </FieldRow>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="history" className="space-y-2 pb-2">
+                {loadingHistory ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full bg-[#111111]" />
+                  ))
+                ) : runHistory.length === 0 ? (
+                  <EmptyState icon={History} title="No run history" description="This device hasn't executed any runs yet." />
+                ) : (
+                  runHistory.map((run) => (
+                    <div key={run.id} className="p-3 rounded-lg bg-[#111111] border border-[#1a1a1a] space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-[#FAFAFA]">{run.workflowName || run.workflowType || run.type || 'Run'}</span>
+                        <StatusBadge status={run.status} />
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-[#52525B]">
+                        <span>{run.accountUsername || run.account || '—'}</span>
+                        <TimeAgo date={run.startedAt || run.createdAt} />
+                      </div>
+                      {run.error && <p className="text-xs text-[#EF4444] truncate mt-1">{run.error}</p>}
+                    </div>
+                  ))
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
         </ScrollArea>
       </DialogContent>
     </Dialog>
   )
 }
 
+function FieldRow({ label, editing, value, mono, valueColor, children }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-[11px] uppercase tracking-wide text-[#52525B]">{label}</Label>
+      {editing && children ? (
+        children
+      ) : (
+        <div
+          className={`min-h-9 px-3 py-2 rounded-md bg-[#111111] border border-[#1a1a1a] text-sm ${mono ? 'font-mono' : ''} break-all`}
+          style={{ color: valueColor || '#A1A1AA' }}
+        >
+          {value || <span className="text-[#3f3f46]">—</span>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const EMPTY_ADD_FORM = {
+  name: '',
+  udid: '',
+  port: '',
+  proxyHost: '',
+  proxyPort: '',
+  proxyUsername: '',
+  proxyPassword: '',
+  proxyUrl: '',
+  rotatingUrl: '',
+  proxyExpiresAt: '',
+}
+
 function AddDeviceDialog({ open, onOpenChange }) {
   const queryClient = useQueryClient()
-  const [form, setForm] = useState({ name: '', udid: '', port: '', proxyUrl: '', proxyExpiresAt: '' })
+  const [form, setForm] = useState(EMPTY_ADD_FORM)
+  const setField = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
   const createMutation = useMutation({
     mutationFn: (body) => apiPost('/api/devices', {
       ...body,
+      proxyPort: body.proxyPort ? Number(body.proxyPort) : null,
       proxyExpiresAt: body.proxyExpiresAt ? new Date(body.proxyExpiresAt).toISOString() : null,
     }),
     onSuccess: () => {
@@ -364,67 +424,74 @@ function AddDeviceDialog({ open, onOpenChange }) {
       queryClient.invalidateQueries({ queryKey: ['devices-config'] })
       queryClient.invalidateQueries({ queryKey: ['devices-proxy-expiring'] })
       onOpenChange(false)
-      setForm({ name: '', udid: '', port: '', proxyUrl: '', proxyExpiresAt: '' })
+      setForm(EMPTY_ADD_FORM)
     },
   })
 
+  const inputCls = 'h-9 bg-[#111111] border-[#1a1a1a] text-sm text-[#FAFAFA] placeholder:text-[#52525B]'
+  const monoInputCls = inputCls + ' font-mono'
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#0A0A0A] border-[#1a1a1a] sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="bg-[#0A0A0A] border-[#1a1a1a] w-[92vw] sm:max-w-3xl max-h-[88vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="border-b border-[#1a1a1a] px-6 py-4 shrink-0">
           <DialogTitle className="text-[#FAFAFA]">Add Device</DialogTitle>
-          <DialogDescription className="text-[#52525B]">Register a new device for automation workflows.</DialogDescription>
+          <DialogDescription className="text-[#52525B]">Register a new device and its HTTP proxy.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-[#52525B]">Device Name</Label>
-            <Input
-              placeholder="iPhone 15 Pro"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              className="h-9 bg-[#111111] border-[#1a1a1a] text-sm text-[#FAFAFA] placeholder:text-[#52525B]"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-[#52525B]">UDID</Label>
-            <Input
-              placeholder="00008101-..."
-              value={form.udid}
-              onChange={(e) => setForm((f) => ({ ...f, udid: e.target.value }))}
-              className="h-9 bg-[#111111] border-[#1a1a1a] text-sm text-[#FAFAFA] font-mono placeholder:text-[#52525B]"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-[#52525B]">Port</Label>
-              <Input
-                placeholder="8100"
-                value={form.port}
-                onChange={(e) => setForm((f) => ({ ...f, port: e.target.value }))}
-                className="h-9 bg-[#111111] border-[#1a1a1a] text-sm text-[#FAFAFA] placeholder:text-[#52525B]"
-              />
+
+        <ScrollArea className="flex-1">
+          <div className="px-6 py-5 space-y-5">
+            <p className="text-xs font-semibold text-[#FAFAFA] uppercase tracking-wide">Device</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] uppercase tracking-wide text-[#52525B]">Name</Label>
+                <Input placeholder="iPhone 15 Pro" value={form.name} onChange={setField('name')} className={inputCls} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] uppercase tracking-wide text-[#52525B]">Appium port</Label>
+                <Input placeholder="8100" value={form.port} onChange={setField('port')} className={monoInputCls} />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-[11px] uppercase tracking-wide text-[#52525B]">UDID</Label>
+                <Input placeholder="00008101-..." value={form.udid} onChange={setField('udid')} className={monoInputCls} />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-[#52525B]">Proxy URL</Label>
-              <Input
-                placeholder="http://..."
-                value={form.proxyUrl}
-                onChange={(e) => setForm((f) => ({ ...f, proxyUrl: e.target.value }))}
-                className="h-9 bg-[#111111] border-[#1a1a1a] text-sm text-[#FAFAFA] placeholder:text-[#52525B]"
-              />
+
+            <p className="text-xs font-semibold text-[#FAFAFA] uppercase tracking-wide pt-2">Proxy HTTP</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] uppercase tracking-wide text-[#52525B]">Host</Label>
+                <Input placeholder="proxy.example.com" value={form.proxyHost} onChange={setField('proxyHost')} className={monoInputCls} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] uppercase tracking-wide text-[#52525B]">Port</Label>
+                <Input type="number" placeholder="8080" value={form.proxyPort} onChange={setField('proxyPort')} className={monoInputCls} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] uppercase tracking-wide text-[#52525B]">Username</Label>
+                <Input placeholder="user" value={form.proxyUsername} onChange={setField('proxyUsername')} className={monoInputCls} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] uppercase tracking-wide text-[#52525B]">Password</Label>
+                <Input type="password" placeholder="••••••••" value={form.proxyPassword} onChange={setField('proxyPassword')} className={monoInputCls} />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-[11px] uppercase tracking-wide text-[#52525B]">Proxy URL (full, optional)</Label>
+                <Input placeholder="http://user:pass@host:port" value={form.proxyUrl} onChange={setField('proxyUrl')} className={monoInputCls} />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-[11px] uppercase tracking-wide text-[#52525B]">Rotating URL</Label>
+                <Input placeholder="https://..." value={form.rotatingUrl} onChange={setField('rotatingUrl')} className={monoInputCls} />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-[11px] uppercase tracking-wide text-[#52525B]">Expires at</Label>
+                <Input type="datetime-local" value={form.proxyExpiresAt} onChange={setField('proxyExpiresAt')} className={inputCls} />
+              </div>
             </div>
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-[#52525B]">Proxy expires at</Label>
-            <Input
-              type="datetime-local"
-              value={form.proxyExpiresAt}
-              onChange={(e) => setForm((f) => ({ ...f, proxyExpiresAt: e.target.value }))}
-              className="h-9 bg-[#111111] border-[#1a1a1a] text-sm text-[#FAFAFA] placeholder:text-[#52525B]"
-            />
-          </div>
-        </div>
-        <DialogFooter>
+        </ScrollArea>
+
+        <DialogFooter className="border-t border-[#1a1a1a] px-6 py-3 shrink-0">
           <Button variant="outline" size="sm" className="border-[#1a1a1a] text-[#A1A1AA]" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>

@@ -214,6 +214,7 @@ export default function AccountsTableView({
   postCounts,
   usernameToIdentity,
   accountDeviceMap,
+  scraperByUsername,
   identityNames,
   deviceNames,
   onSelectAccount,
@@ -226,7 +227,8 @@ export default function AccountsTableView({
     postCounts: postCounts || {},
     usernameToIdentity: usernameToIdentity || {},
     accountDeviceMap: accountDeviceMap || {},
-  }), [postCounts, usernameToIdentity, accountDeviceMap])
+    scraperByUsername: scraperByUsername || {},
+  }), [postCounts, usernameToIdentity, accountDeviceMap, scraperByUsername])
 
   const filteredData = useMemo(
     () => applyFilters(accounts || [], filters, enrichment),
@@ -343,23 +345,25 @@ export default function AccountsTableView({
       size: 120,
     },
     {
-      accessorKey: 'viewsLast30Days',
+      id: 'viewsLast30Days',
       header: 'Views (30d)',
-      cell: ({ row }) => (
-        <span className="tabular-nums text-white">
-          {(row.original.viewsLast30Days ?? 0).toLocaleString()}
-        </span>
-      ),
+      accessorFn: row => scraperByUsername?.[row.username]?.viewsLast30Days ?? row.viewsLast30Days ?? 0,
+      cell: ({ row }) => {
+        const snap = scraperByUsername?.[row.original.username]
+        const value = snap?.viewsLast30Days ?? row.original.viewsLast30Days ?? 0
+        return <span className="tabular-nums text-white">{value.toLocaleString()}</span>
+      },
       size: 100,
     },
     {
-      accessorKey: 'followerCount',
+      id: 'followerCount',
       header: 'Followers',
-      cell: ({ row }) => (
-        <span className="tabular-nums text-white">
-          {(row.original.followerCount ?? 0).toLocaleString()}
-        </span>
-      ),
+      accessorFn: row => scraperByUsername?.[row.username]?.followerCount ?? row.followerCount ?? 0,
+      cell: ({ row }) => {
+        const snap = scraperByUsername?.[row.original.username]
+        const value = snap?.followerCount ?? row.original.followerCount ?? 0
+        return <span className="tabular-nums text-white">{value.toLocaleString()}</span>
+      },
       size: 100,
     },
     {
@@ -389,11 +393,13 @@ export default function AccountsTableView({
       cell: ({ row }) => {
         const link = row.original.storyLinkUrl
         if (!link) return <span className="text-[#333]">---</span>
-        const pinned = row.original.linkHighlightSaved
-        const colors = pinned
+        const status = row.original.highlightStatus
+        const colors = status === 'HIGHLIGHT_ACTIVE'
           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-          : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-        const label = pinned ? 'Pinned' : 'Pending'
+          : status === 'HIGHLIGHT_REQUIRED'
+            ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+            : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+        const label = status === 'HIGHLIGHT_ACTIVE' ? 'Pinned' : status === 'HIGHLIGHT_REQUIRED' ? 'Required' : 'Pending'
         return <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-md border ${colors}`}>{label}</span>
       },
       size: 80,
@@ -404,13 +410,7 @@ export default function AccountsTableView({
       cell: ({ row }) => <span className="text-[#A1A1AA] text-xs">{timeAgo(row.original.createdAt)}</span>,
       size: 90,
     },
-    {
-      accessorKey: 'lastLoginAt',
-      header: 'Last Login',
-      cell: ({ row }) => <span className="text-[#A1A1AA] text-xs">{timeAgo(row.original.lastLoginAt)}</span>,
-      size: 90,
-    },
-  ], [postCounts, usernameToIdentity, accountDeviceMap, onSelectAccount])
+  ], [postCounts, usernameToIdentity, accountDeviceMap, scraperByUsername, onSelectAccount])
 
   const hasFilters = filters.length > 0
 

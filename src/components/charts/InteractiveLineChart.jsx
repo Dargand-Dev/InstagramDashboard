@@ -74,11 +74,8 @@ export default function InteractiveLineChart({ title, snapshots, dataKey, colorM
       return local.slice(0, 16) // YYYY-MM-DDTHH:mm
     }
 
-    const formatSlot = (slot) => {
-      const date = slot.slice(0, 10)
-      const time = slot.slice(11, 16)
-      return `${date.slice(8)}/${date.slice(5, 7)} ${time}`
-    }
+    // ts = millis UTC du début de la minute, pour un axe temporel proportionnel.
+    const slotToTs = (slot) => Date.parse(`${slot}:00Z`)
 
     const bySlot = {}
     const totalBySlot = {}
@@ -111,12 +108,21 @@ export default function InteractiveLineChart({ title, snapshots, dataKey, colorM
       }
       const total = Object.values(lastKnown).reduce((sum, v) => sum + (v || 0), 0)
       return {
-        date: formatSlot(slot),
+        ts: slotToTs(slot),
         ...bySlot[slot],
         __total: total,
       }
     })
   }, [snapshots, top15, dataKey])
+
+  const formatTick = (ts) => {
+    const d = new Date(ts)
+    const dd = String(d.getUTCDate()).padStart(2, '0')
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+    const hh = String(d.getUTCHours()).padStart(2, '0')
+    const mi = String(d.getUTCMinutes()).padStart(2, '0')
+    return `${dd}/${mm} ${hh}:${mi}`
+  }
 
   const toggle = (username) => {
     setSelected(prev => {
@@ -190,12 +196,24 @@ export default function InteractiveLineChart({ title, snapshots, dataKey, colorM
       <ResponsiveContainer width="100%" height={280}>
         <LineChart data={series}>
           <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" />
-          <XAxis dataKey="date" tick={{ fill: '#555', fontSize: 10 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} interval="preserveStartEnd" angle={-30} textAnchor="end" height={45} />
+          <XAxis
+            dataKey="ts"
+            type="number"
+            scale="time"
+            domain={['dataMin', 'dataMax']}
+            tickFormatter={formatTick}
+            tick={{ fill: '#555', fontSize: 10 }}
+            axisLine={{ stroke: '#1a1a1a' }}
+            tickLine={false}
+            angle={-30}
+            textAnchor="end"
+            height={45}
+          />
           <YAxis tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
-          <Tooltip content={<LineChartTooltip isIncognito={isIncognito} colorMap={colorMap} top15={top15} />} />
+          <Tooltip content={<LineChartTooltip isIncognito={isIncognito} colorMap={colorMap} top15={top15} />} labelFormatter={formatTick} />
           <Line
             key="__total"
-            type="monotone"
+            type="basis"
             dataKey="__total"
             name="Total Fleet"
             stroke="#ffffff"
@@ -209,7 +227,7 @@ export default function InteractiveLineChart({ title, snapshots, dataKey, colorM
           {top15.map((username, i) => (
             <Line
               key={username}
-              type="monotone"
+              type="basis"
               dataKey={username}
               stroke={colorMap?.[username] || CHART_COLORS[i % CHART_COLORS.length]}
               strokeWidth={2}

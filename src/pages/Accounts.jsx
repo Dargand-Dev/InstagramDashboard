@@ -10,6 +10,7 @@ import AccountDailyViewsChart from '../components/AccountDailyViewsChart'
 import { Blur } from '../contexts/IncognitoContext'
 import AccountsTableView from '../components/accounts/AccountsTableView'
 import ReelStatsView from '../components/accounts/stats/ReelStatsView'
+import { latestSnapshotPerUsername } from '../utils/analyticsScoring'
 
 const STATUSES = ['ALL', 'ACTIVE', 'SUSPENDED', 'BANNED', 'ERROR']
 
@@ -159,6 +160,15 @@ export default function Accounts() {
     return map
   }, [accounts, deviceMap])
 
+  const snapshots = useMemo(
+    () => snapData?.data?.snapshots || snapData?.snapshots || [],
+    [snapData],
+  )
+  const scraperByUsername = useMemo(
+    () => latestSnapshotPerUsername(snapshots),
+    [snapshots],
+  )
+
   const { deviceNames, deviceCounts } = useMemo(() => {
     if (!accounts) return { deviceNames: [], deviceCounts: {} }
     const nameSet = new Set()
@@ -249,8 +259,8 @@ export default function Accounts() {
       await apiPut(`/api/accounts/${id}`, {
         ...account,
         storyLinkUrl: linkValue || null,
-        // Si l'URL change ou est vidée, reset le flag pour que le prochain post re-épingle
-        linkHighlightSaved: urlChanged ? false : account.linkHighlightSaved,
+        // Si l'URL change, on reset le status (nouveau lien → à re-traiter manuellement)
+        highlightStatus: urlChanged ? null : account.highlightStatus,
       })
       setEditingLink(false)
       refetch()
@@ -263,7 +273,7 @@ export default function Accounts() {
     try {
       const account = accounts.find(a => a.id === id)
       if (!account) return
-      await apiPut(`/api/accounts/${id}`, { ...account, storyLinkUrl: null, linkHighlightSaved: false })
+      await apiPut(`/api/accounts/${id}`, { ...account, storyLinkUrl: null, highlightStatus: null })
       setEditingLink(false)
       refetch()
     } catch (err) {
@@ -271,14 +281,14 @@ export default function Accounts() {
     }
   }
 
-  async function handleMarkAsPinned(id) {
+  async function handleSetHighlightStatus(id, targetStatus) {
     try {
       const account = accounts.find(a => a.id === id)
-      if (!account || !account.storyLinkUrl || account.linkHighlightSaved) return
-      await apiPut(`/api/accounts/${id}`, { ...account, linkHighlightSaved: true })
+      if (!account || !account.storyLinkUrl || account.highlightStatus === targetStatus) return
+      await apiPut(`/api/accounts/${id}`, { ...account, highlightStatus: targetStatus })
       refetch()
     } catch (err) {
-      alert('Failed to mark as pinned: ' + err.message)
+      alert('Failed to update highlight status: ' + err.message)
     }
   }
 
@@ -759,7 +769,7 @@ export default function Accounts() {
                 <span className="label-upper block mb-3">Daily Views</span>
                 <AccountDailyViewsChart
                   account={selectedAccount}
-                  snapshots={snapData?.data?.snapshots || snapData?.snapshots || []}
+                  snapshots={snapshots}
                 />
               </div>
 
@@ -820,22 +830,42 @@ export default function Accounts() {
                       </button>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      {selectedAccount.linkHighlightSaved ? (
+                      {selectedAccount.highlightStatus === 'HIGHLIGHT_ACTIVE' ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
                           Lien épinglé en Story
                         </span>
+                      ) : selectedAccount.highlightStatus === 'HIGHLIGHT_REQUIRED' ? (
+                        <>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-blue-500/10 text-blue-400 border-blue-500/20">
+                            À épingler au prochain post
+                          </span>
+                          <button
+                            onClick={() => handleSetHighlightStatus(selectedAccount.id, 'HIGHLIGHT_ACTIVE')}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
+                            title="Marquer ce lien comme déjà épinglé en Story à la Une"
+                          >
+                            <Check size={11} />
+                            Marquer comme épinglé
+                          </button>
+                        </>
                       ) : (
                         <>
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-amber-500/10 text-amber-400 border-amber-500/20">
-                            Épinglage au prochain post
+                            En attente
                           </span>
                           <button
-                            onClick={() => handleMarkAsPinned(selectedAccount.id)}
+                            onClick={() => handleSetHighlightStatus(selectedAccount.id, 'HIGHLIGHT_REQUIRED')}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
+                          >
+                            Épingler au prochain post
+                          </button>
+                          <button
+                            onClick={() => handleSetHighlightStatus(selectedAccount.id, 'HIGHLIGHT_ACTIVE')}
                             className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
-                            title="Marquer ce lien comme déjà épinglé en Story à la Une (manuel)"
+                            title="Marquer ce lien comme déjà épinglé en Story à la Une"
                           >
                             <Check size={11} />
-                            Marquer comme déjà épinglé
+                            Marquer comme épinglé
                           </button>
                         </>
                       )}
@@ -956,6 +986,7 @@ export default function Accounts() {
           postCounts={postCounts}
           usernameToIdentity={usernameToIdentity}
           accountDeviceMap={accountDeviceMap}
+          scraperByUsername={scraperByUsername}
           identityNames={identityNames}
           deviceNames={deviceNames}
           onSelectAccount={(id) => { setViewMode('list'); handleSelectAccount(id) }}

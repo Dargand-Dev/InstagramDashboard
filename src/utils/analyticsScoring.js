@@ -309,6 +309,17 @@ export function viewsPerAccountByIdentityOverTime(snapshots, usernameToIdentity,
     return `${slot.slice(8, 10)}/${slot.slice(5, 7)} ${slot.slice(11, 16)}`
   }
 
+  // ts = millis UTC pour un axe X temporel proportionnel (au lieu de categorical).
+  const slotToTs = (slot) => {
+    if (bucket === 'half-day') {
+      const date = slot.slice(0, 10)
+      const hour = slot.slice(11) === '1' ? '12' : '00'
+      return Date.parse(`${date}T${hour}:00:00Z`)
+    }
+    if (bucket === 'day') return Date.parse(`${slot}T00:00:00Z`)
+    return Date.parse(`${slot}:00Z`)
+  }
+
   const latestPerUserPerSlot = {}
   for (const snap of snapshots) {
     const identity = usernameToIdentity[snap.username]
@@ -342,7 +353,7 @@ export function viewsPerAccountByIdentityOverTime(snapshots, usernameToIdentity,
       byIdentity[identity].sum += val
       byIdentity[identity].count += 1
     }
-    const point = { slot: formatSlot(slot) }
+    const point = { slot: formatSlot(slot), ts: slotToTs(slot) }
     for (const [identity, { sum, count }] of Object.entries(byIdentity)) {
       point[identity] = count > 0 ? Math.round(sum / count) : 0
     }

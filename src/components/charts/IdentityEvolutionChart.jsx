@@ -59,6 +59,15 @@ export default function IdentityEvolutionChart({ snapshots, usernameToIdentity, 
   const selectAll = () => setSelected(new Set(identityNames))
   const selectNone = () => setSelected(new Set())
 
+  const formatTick = (ts) => {
+    const d = new Date(ts)
+    const dd = String(d.getUTCDate()).padStart(2, '0')
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+    const hh = String(d.getUTCHours()).padStart(2, '0')
+    const mi = String(d.getUTCMinutes()).padStart(2, '0')
+    return `${dd}/${mm} ${hh}:${mi}`
+  }
+
   if (isLoading) {
     return (
       <div>
@@ -126,13 +135,25 @@ export default function IdentityEvolutionChart({ snapshots, usernameToIdentity, 
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={rows}>
           <CartesianGrid stroke="#1a1a1a" strokeDasharray="3 3" />
-          <XAxis dataKey="slot" tick={{ fill: '#555', fontSize: 10 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} interval="preserveStartEnd" angle={-30} textAnchor="end" height={45} />
+          <XAxis
+            dataKey="ts"
+            type="number"
+            scale="time"
+            domain={['dataMin', 'dataMax']}
+            tickFormatter={formatTick}
+            tick={{ fill: '#555', fontSize: 10 }}
+            axisLine={{ stroke: '#1a1a1a' }}
+            tickLine={false}
+            angle={-30}
+            textAnchor="end"
+            height={45}
+          />
           <YAxis tick={{ fill: '#555', fontSize: 11 }} axisLine={{ stroke: '#1a1a1a' }} tickLine={false} tickFormatter={formatNumber} />
-          <Tooltip content={<IdentityTooltip identityColorMap={identityColorMap} isIncognito={isIncognito} />} />
+          <Tooltip content={<IdentityTooltip identityColorMap={identityColorMap} isIncognito={isIncognito} />} labelFormatter={formatTick} />
           {identityNames.map((identity, i) => (
             <Line
               key={identity}
-              type="monotone"
+              type="basis"
               dataKey={identity}
               stroke={identityColorMap?.[identity] || CHART_COLORS[i % CHART_COLORS.length]}
               strokeWidth={2}

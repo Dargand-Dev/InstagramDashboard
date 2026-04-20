@@ -16,13 +16,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from '@/components/ui/sheet'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import StatusBadge from '@/components/shared/StatusBadge'
 import TimeAgo from '@/components/shared/TimeAgo'
@@ -211,19 +204,19 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
   if (!device) return null
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="bg-[#0A0A0A] border-[#1a1a1a] sm:max-w-md w-full">
-        <SheetHeader className="border-b border-[#1a1a1a] pb-4">
-          <SheetTitle className="text-[#FAFAFA] flex items-center gap-2">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-[#0A0A0A] border-[#1a1a1a] max-w-xl w-full max-h-[85vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="border-b border-[#1a1a1a] px-6 py-4">
+          <DialogTitle className="text-[#FAFAFA] flex items-center gap-2">
             <Smartphone className="w-4 h-4 text-[#A1A1AA]" />
             {device.name || device.label || 'Device'}
-          </SheetTitle>
-          <SheetDescription className="text-[#52525B] font-mono text-xs">
+          </DialogTitle>
+          <DialogDescription className="text-[#52525B] font-mono text-xs break-all">
             {device.udid || 'No UDID'}
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
-        <ScrollArea className="flex-1 -mx-4 px-4">
+        <ScrollArea className="flex-1 px-6 py-4">
           <Tabs defaultValue="info">
             <TabsList variant="line" className="w-full justify-start mb-4">
               <TabsTrigger value="info" className="text-xs">Info</TabsTrigger>
@@ -312,10 +305,10 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
                       ['Proxy expires', formatProxyExpiry(device.proxyExpiresAt), proxyExpiryColor(device.proxyExpiresAt)],
                       ['Enabled', device.enabled !== false ? 'Yes' : 'No', null],
                     ].map(([label, value, color]) => (
-                      <div key={label} className="flex items-center justify-between py-1.5 border-b border-[#1a1a1a] last:border-0">
-                        <span className="text-xs text-[#52525B]">{label}</span>
+                      <div key={label} className="flex items-start justify-between gap-3 py-1.5 border-b border-[#1a1a1a] last:border-0">
+                        <span className="text-xs text-[#52525B] shrink-0">{label}</span>
                         <span
-                          className="text-xs font-mono"
+                          className="text-xs font-mono text-right break-all min-w-0"
                           style={{ color: color || '#A1A1AA' }}
                         >
                           {value || '—'}
@@ -352,8 +345,8 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
             </TabsContent>
           </Tabs>
         </ScrollArea>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }
 

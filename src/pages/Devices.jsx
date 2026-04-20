@@ -51,6 +51,32 @@ const STATUS_DOT = {
   DISCONNECTED: 'bg-[#F59E0B] animate-subtle-pulse',
 }
 
+const ONE_DAY_MS = 24 * 60 * 60 * 1000
+
+// Convertit un ISO string (ou Instant sérialisé) en valeur `datetime-local` (YYYY-MM-DDTHH:mm)
+function toDatetimeLocal(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function formatProxyExpiry(iso) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return null
+  return d.toLocaleString()
+}
+
+function proxyExpiryColor(iso) {
+  if (!iso) return null
+  const ms = new Date(iso).getTime() - Date.now()
+  if (ms <= 0) return '#EF4444'
+  if (ms <= ONE_DAY_MS) return '#F59E0B'
+  return null
+}
+
 function DeviceCard({ device, onSelect, onToggle }) {
   const statusColor = STATUS_DOT[device.status] || STATUS_DOT.OFFLINE
   const isRunning = device.status === 'RUNNING'
@@ -163,16 +189,21 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
         name: device.name || device.label || '',
         port: device.port || '',
         proxyUrl: device.proxyUrl || device.rotatingUrl || '',
+        proxyExpiresAt: toDatetimeLocal(device.proxyExpiresAt),
       })
       setEditing(false)
     }
   }, [device])
 
   const updateMutation = useMutation({
-    mutationFn: (body) => apiPut(`/api/devices/${device.id}`, body),
+    mutationFn: (body) => apiPut(`/api/devices/${device.id}`, {
+      ...body,
+      proxyExpiresAt: body.proxyExpiresAt ? new Date(body.proxyExpiresAt).toISOString() : null,
+    }),
     onSuccess: () => {
       toast.success('Device updated')
-      queryClient.invalidateQueries({ queryKey: ['devices'] })
+      queryClient.invalidateQueries({ queryKey: ['devices-config'] })
+      queryClient.invalidateQueries({ queryKey: ['devices-proxy-expiring'] })
       setEditing(false)
     },
   })
@@ -256,14 +287,16 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
                 {editing ? (
                   <div className="space-y-3">
                     {[
-                      { key: 'name', label: 'Name' },
-                      { key: 'port', label: 'Port' },
-                      { key: 'proxyUrl', label: 'Proxy URL' },
-                    ].map(({ key, label }) => (
+                      { key: 'name', label: 'Name', type: 'text' },
+                      { key: 'port', label: 'Port', type: 'text' },
+                      { key: 'proxyUrl', label: 'Proxy URL', type: 'text' },
+                      { key: 'proxyExpiresAt', label: 'Proxy expires at', type: 'datetime-local' },
+                    ].map(({ key, label, type }) => (
                       <div key={key} className="space-y-1.5">
                         <Label className="text-xs text-[#52525B]">{label}</Label>
                         <Input
-                          value={editForm[key]}
+                          type={type}
+                          value={editForm[key] || ''}
                           onChange={(e) => setEditForm((f) => ({ ...f, [key]: e.target.value }))}
                           className="h-8 bg-[#0A0A0A] border-[#1a1a1a] text-sm text-[#FAFAFA]"
                         />
@@ -273,14 +306,20 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
                 ) : (
                   <div className="space-y-2">
                     {[
-                      ['UDID', device.udid],
-                      ['Port', device.port],
-                      ['Proxy', device.proxyUrl || device.rotatingUrl],
-                      ['Enabled', device.enabled !== false ? 'Yes' : 'No'],
-                    ].map(([label, value]) => (
+                      ['UDID', device.udid, null],
+                      ['Port', device.port, null],
+                      ['Proxy', device.proxyUrl || device.rotatingUrl, null],
+                      ['Proxy expires', formatProxyExpiry(device.proxyExpiresAt), proxyExpiryColor(device.proxyExpiresAt)],
+                      ['Enabled', device.enabled !== false ? 'Yes' : 'No', null],
+                    ].map(([label, value, color]) => (
                       <div key={label} className="flex items-center justify-between py-1.5 border-b border-[#1a1a1a] last:border-0">
                         <span className="text-xs text-[#52525B]">{label}</span>
-                        <span className="text-xs text-[#A1A1AA] font-mono">{value || '—'}</span>
+                        <span
+                          className="text-xs font-mono"
+                          style={{ color: color || '#A1A1AA' }}
+                        >
+                          {value || '—'}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -320,15 +359,19 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
 
 function AddDeviceDialog({ open, onOpenChange }) {
   const queryClient = useQueryClient()
-  const [form, setForm] = useState({ name: '', udid: '', port: '', proxyUrl: '' })
+  const [form, setForm] = useState({ name: '', udid: '', port: '', proxyUrl: '', proxyExpiresAt: '' })
 
   const createMutation = useMutation({
-    mutationFn: (body) => apiPost('/api/devices', body),
+    mutationFn: (body) => apiPost('/api/devices', {
+      ...body,
+      proxyExpiresAt: body.proxyExpiresAt ? new Date(body.proxyExpiresAt).toISOString() : null,
+    }),
     onSuccess: () => {
       toast.success('Device added')
-      queryClient.invalidateQueries({ queryKey: ['devices'] })
+      queryClient.invalidateQueries({ queryKey: ['devices-config'] })
+      queryClient.invalidateQueries({ queryKey: ['devices-proxy-expiring'] })
       onOpenChange(false)
-      setForm({ name: '', udid: '', port: '', proxyUrl: '' })
+      setForm({ name: '', udid: '', port: '', proxyUrl: '', proxyExpiresAt: '' })
     },
   })
 
@@ -378,6 +421,15 @@ function AddDeviceDialog({ open, onOpenChange }) {
               />
             </div>
           </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-[#52525B]">Proxy expires at</Label>
+            <Input
+              type="datetime-local"
+              value={form.proxyExpiresAt}
+              onChange={(e) => setForm((f) => ({ ...f, proxyExpiresAt: e.target.value }))}
+              className="h-9 bg-[#111111] border-[#1a1a1a] text-sm text-[#FAFAFA] placeholder:text-[#52525B]"
+            />
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" size="sm" className="border-[#1a1a1a] text-[#A1A1AA]" onClick={() => onOpenChange(false)}>
@@ -419,6 +471,34 @@ export default function Devices() {
     refetchInterval: 10000,
   })
 
+  const { data: expiringProxies = [] } = useQuery({
+    queryKey: ['devices-proxy-expiring'],
+    queryFn: () => apiGet('/api/devices/proxy-expiring?withinHours=24'),
+    select: (res) => {
+      const raw = res.data || res || []
+      return Array.isArray(raw) ? raw : []
+    },
+  })
+
+  useEffect(() => {
+    if (expiringProxies.length === 0) return
+    const now = Date.now()
+    const expired = expiringProxies.filter((d) => new Date(d.proxyExpiresAt).getTime() <= now)
+    const soon = expiringProxies.filter((d) => new Date(d.proxyExpiresAt).getTime() > now)
+    if (expired.length > 0) {
+      toast.error(
+        `${expired.length} proxy expiré(s) : ${expired.map((d) => d.name || d.udid).join(', ')}`,
+        { id: 'proxy-expired', duration: 8000 }
+      )
+    }
+    if (soon.length > 0) {
+      toast.warning(
+        `${soon.length} proxy expire dans moins de 24h : ${soon.map((d) => d.name || d.udid).join(', ')}`,
+        { id: 'proxy-soon', duration: 8000 }
+      )
+    }
+  }, [expiringProxies])
+
   // Merge static device config with live status
   const devices = useMemo(() => {
     const liveMap = {}
@@ -452,7 +532,10 @@ export default function Devices() {
 
   const toggleMutation = useMutation({
     mutationFn: (device) => apiPut(`/api/devices/${device.id}/enabled`, { enabled: device.enabled === false }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['devices'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['devices-config'] })
+      queryClient.invalidateQueries({ queryKey: ['devices-proxy-expiring'] })
+    },
   })
 
   const filtered = useMemo(() => {

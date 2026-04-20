@@ -90,17 +90,17 @@ export default function Operations() {
   const currentPeriod = PERIODS.find(p => p.key === period) ?? PERIODS[1]
   const days = currentPeriod.days
 
+  // L'ancien endpoint /api/analytics/overview (basé sur les rollups quotidiens) a été supprimé
+  // avec la migration vers Scraper. La page Operations reste affichée en vue "dégradée" jusqu'à
+  // ce qu'une vraie source de données operations soit rebranchée.
   const { data: overview, isLoading, error } = useQuery({
     queryKey: ['ops-overview', days],
-    queryFn: () => apiGet(`/api/analytics/overview?days=${days}`),
+    queryFn: async () => ({}),
     refetchInterval: 30_000,
   })
 
   const rebuild = useMutation({
-    mutationFn: () => {
-      const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
-      return apiPost(`/api/rollups/rebuild?day=${yesterday}`)
-    },
+    mutationFn: async () => ({}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ops-overview'] })
     },

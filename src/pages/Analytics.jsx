@@ -230,24 +230,34 @@ export default function Analytics() {
   }, [allSnapshots])
 
   // Efficiency data (views per post)
+  // Le cycle 3h côté Scraper ne renseigne PAS postCount (seul le job nocturne /v1/user_info le fait).
+  // On prend donc le dernier snapshot ayant postCount non null pour chaque username.
   const efficiencyData = useMemo(() => {
     if (!snapshots.length) return []
 
-    const latest = {}
+    const latestViews = {}
+    const latestWithPostCount = {}
     for (const snap of snapshots) {
-      if (!latest[snap.username] || snap.snapshotAt > latest[snap.username].snapshotAt) {
-        latest[snap.username] = snap
+      if (!latestViews[snap.username] || snap.snapshotAt > latestViews[snap.username].snapshotAt) {
+        latestViews[snap.username] = snap
+      }
+      if (snap.postCount != null && snap.postCount > 0) {
+        if (!latestWithPostCount[snap.username] || snap.snapshotAt > latestWithPostCount[snap.username].snapshotAt) {
+          latestWithPostCount[snap.username] = snap
+        }
       }
     }
 
-    return Object.values(latest)
-      .filter(s => s.postCount > 0)
-      .map(s => ({
-        username: s.username,
-        ratio: Math.round((s.viewsLast30Days || 0) / s.postCount),
-        views: s.viewsLast30Days || 0,
-        posts: s.postCount,
-      }))
+    return Object.entries(latestWithPostCount)
+      .map(([username, s]) => {
+        const views = latestViews[username]?.viewsLast30Days || s.viewsLast30Days || 0
+        return {
+          username,
+          ratio: Math.round(views / s.postCount),
+          views,
+          posts: s.postCount,
+        }
+      })
       .sort((a, b) => b.ratio - a.ratio)
   }, [snapshots])
 
@@ -353,7 +363,7 @@ export default function Analytics() {
     return breakdown
       .filter(id => id.accountCount > 0)
       .map(id => ({
-        name: id.identityId || id.identityName || id.identity || `Identity ${breakdown.indexOf(id) + 1}`,
+        name: id.identityName || id.identityId || id.identity || `Identity ${breakdown.indexOf(id) + 1}`,
         accounts: id.accountCount,
         totalFollowers: id.totalFollowers || 0,
         totalViews: id.totalViews || 0,

@@ -388,14 +388,12 @@ export default function AccountsTableView({
       accessorFn: row => row.storyLinkUrl ? 1 : 0,
       cell: ({ row }) => {
         const link = row.original.storyLinkUrl
-        const status = row.original.necessaryLink
         if (!link) return <span className="text-[#333]">---</span>
-        const colors = status === 'LINK_ACTIVE'
+        const pinned = row.original.linkHighlightSaved
+        const colors = pinned
           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-          : status === 'LINK_REQUIRED'
-            ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-            : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-        const label = status === 'LINK_ACTIVE' ? 'Active' : status === 'LINK_REQUIRED' ? 'Required' : 'Pending'
+          : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+        const label = pinned ? 'Pinned' : 'Pending'
         return <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-md border ${colors}`}>{label}</span>
       },
       size: 80,

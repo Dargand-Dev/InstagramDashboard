@@ -245,7 +245,13 @@ export default function Accounts() {
     try {
       const account = accounts.find(a => a.id === id)
       if (!account) return
-      await apiPut(`/api/accounts/${id}`, { ...account, storyLinkUrl: linkValue || null, necessaryLink: linkValue ? (['LINK_ACTIVE', 'LINK_REQUIRED'].includes(account.necessaryLink) ? account.necessaryLink : 'LINK_PENDING') : null })
+      const urlChanged = (linkValue || null) !== (account.storyLinkUrl || null)
+      await apiPut(`/api/accounts/${id}`, {
+        ...account,
+        storyLinkUrl: linkValue || null,
+        // Si l'URL change ou est vidée, reset le flag pour que le prochain post re-épingle
+        linkHighlightSaved: urlChanged ? false : account.linkHighlightSaved,
+      })
       setEditingLink(false)
       refetch()
     } catch (err) {
@@ -257,7 +263,7 @@ export default function Accounts() {
     try {
       const account = accounts.find(a => a.id === id)
       if (!account) return
-      await apiPut(`/api/accounts/${id}`, { ...account, storyLinkUrl: null, necessaryLink: null })
+      await apiPut(`/api/accounts/${id}`, { ...account, storyLinkUrl: null, linkHighlightSaved: false })
       setEditingLink(false)
       refetch()
     } catch (err) {
@@ -265,14 +271,14 @@ export default function Accounts() {
     }
   }
 
-  async function handleActivateLink(id, targetState = 'LINK_REQUIRED') {
+  async function handleMarkAsPinned(id) {
     try {
       const account = accounts.find(a => a.id === id)
-      if (!account || !account.storyLinkUrl || account.necessaryLink === targetState) return
-      await apiPut(`/api/accounts/${id}`, { ...account, necessaryLink: targetState })
+      if (!account || !account.storyLinkUrl || account.linkHighlightSaved) return
+      await apiPut(`/api/accounts/${id}`, { ...account, linkHighlightSaved: true })
       refetch()
     } catch (err) {
-      alert('Failed to activate link: ' + err.message)
+      alert('Failed to mark as pinned: ' + err.message)
     }
   }
 
@@ -814,42 +820,22 @@ export default function Accounts() {
                       </button>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      {selectedAccount.necessaryLink === 'LINK_ACTIVE' ? (
+                      {selectedAccount.linkHighlightSaved ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
-                          Lien en bio
+                          Lien épinglé en Story
                         </span>
-                      ) : selectedAccount.necessaryLink === 'LINK_REQUIRED' ? (
-                        <>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-blue-500/10 text-blue-400 border-blue-500/20">
-                            À mettre en bio
-                          </span>
-                          <button
-                            onClick={() => handleActivateLink(selectedAccount.id, 'LINK_ACTIVE')}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
-                            title="Marquer ce lien comme déjà actif sur le compte"
-                          >
-                            <Check size={11} />
-                            Marquer comme actif
-                          </button>
-                        </>
                       ) : (
                         <>
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-semibold tracking-wide uppercase bg-amber-500/10 text-amber-400 border-amber-500/20">
-                            En attente
+                            Épinglage au prochain post
                           </span>
                           <button
-                            onClick={() => handleActivateLink(selectedAccount.id)}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
-                          >
-                            Mettre en bio
-                          </button>
-                          <button
-                            onClick={() => handleActivateLink(selectedAccount.id, 'LINK_ACTIVE')}
+                            onClick={() => handleMarkAsPinned(selectedAccount.id)}
                             className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors"
-                            title="Marquer ce lien comme déjà actif sur le compte"
+                            title="Marquer ce lien comme déjà épinglé en Story à la Une (manuel)"
                           >
                             <Check size={11} />
-                            Marquer comme actif
+                            Marquer comme déjà épinglé
                           </button>
                         </>
                       )}

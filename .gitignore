@@ -14,6 +14,9 @@ dist-ssr
 .env
 .superpowers/
 client_secret_*.json
+.playwright-mcp/
+.serena/
+text.txt
 
 # Editor directories and files
 .vscode/*

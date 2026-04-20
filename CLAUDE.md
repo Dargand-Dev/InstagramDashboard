@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Instagram automation dashboard — a React frontend for monitoring and managing Instagram account automation workflows. Displays real-time status of account creation, reel posting, and story posting runs. Connects to a backend API at `localhost:8081` (proxied via Vite dev server).
 
-**Backend**: `/Users/samyhne/Documents/trading automatisé/InstagramAutomation`
+**Backend**: `/Users/samyhne/IG-bot/InstagramAutomation`
 
 ## Commands
 
@@ -78,3 +78,5 @@ Dark-mode only. Theme tokens defined via `@theme` in `src/index.css` (surface co
 - `src/components/auth/` — ProtectedRoute
 - `src/components/actions/`, `activity-log/`, `charts/` — domain-specific components
 - `src/pages/` — one file per route, lightweight wrappers composing shared/domain components
+
+

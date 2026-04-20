@@ -16,7 +16,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import StatusBadge from '@/components/shared/StatusBadge'
 import TimeAgo from '@/components/shared/TimeAgo'
 import EmptyState from '@/components/shared/EmptyState'
@@ -164,6 +163,7 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
   const queryClient = useQueryClient()
   const [editForm, setEditForm] = useState({})
   const [editing, setEditing] = useState(false)
+  const [activeTab, setActiveTab] = useState('info')
 
   const { data: runHistory = [], isLoading: loadingHistory } = useQuery({
     queryKey: ['device-runs', device?.id],
@@ -230,15 +230,30 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
           </DialogDescription>
         </DialogHeader>
 
+        <div className="flex gap-4 border-b border-[#1a1a1a] px-6 shrink-0">
+          {[
+            { key: 'info', label: 'Info & Proxy' },
+            { key: 'history', label: 'Run History' },
+          ].map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setActiveTab(t.key)}
+              className={`py-2.5 text-xs font-medium border-b-2 transition-colors ${
+                activeTab === t.key
+                  ? 'border-[#FAFAFA] text-[#FAFAFA]'
+                  : 'border-transparent text-[#52525B] hover:text-[#A1A1AA]'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
         <ScrollArea className="flex-1">
           <div className="px-6 py-5">
-            <Tabs defaultValue="info">
-              <TabsList variant="line" className="w-full justify-start mb-5">
-                <TabsTrigger value="info" className="text-xs">Info & Proxy</TabsTrigger>
-                <TabsTrigger value="history" className="text-xs">Run History</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="info" className="space-y-5 pb-2">
+            {activeTab === 'info' && (
+              <div className="space-y-5 pb-2">
                 {device.status === 'RUNNING' && (
                   <div className="p-3 rounded-lg bg-[#3B82F6]/5 border border-[#3B82F6]/10 space-y-2">
                     <p className="text-xs font-medium text-[#3B82F6]">Current Run</p>
@@ -344,9 +359,11 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
                     <Input type="datetime-local" value={editForm.proxyExpiresAt || ''} onChange={setField('proxyExpiresAt')} className="h-9 bg-[#0A0A0A] border-[#1a1a1a] text-sm text-[#FAFAFA]" />
                   </FieldRow>
                 </div>
-              </TabsContent>
+              </div>
+            )}
 
-              <TabsContent value="history" className="space-y-2 pb-2">
+            {activeTab === 'history' && (
+              <div className="space-y-2 pb-2">
                 {loadingHistory ? (
                   Array.from({ length: 3 }).map((_, i) => (
                     <Skeleton key={i} className="h-16 w-full bg-[#111111]" />
@@ -368,8 +385,8 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
                     </div>
                   ))
                 )}
-              </TabsContent>
-            </Tabs>
+              </div>
+            )}
           </div>
         </ScrollArea>
       </DialogContent>

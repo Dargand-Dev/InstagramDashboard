@@ -12,7 +12,7 @@ export const FILTER_FIELDS = [
     key: 'status',
     label: 'Status',
     type: 'enum',
-    options: ['ACTIVE', 'SUSPENDED', 'BANNED', 'ERROR'],
+    options: ['ACTIVE', 'SUSPENDED', 'AUTO_SUSPENDED', 'BANNED', 'ERROR'],
     operators: [
       { value: 'eq', label: 'is' },
       { value: 'neq', label: 'is not' },
@@ -195,10 +195,14 @@ function getFieldValue(account, fieldKey, enrichment) {
       return enrichment.accountDeviceMap[account.id] || ''
     case 'hasLink':
       return !!account.storyLinkUrl
-    case 'viewsLast30Days':
-      return account.viewsLast30Days ?? 0
-    case 'followerCount':
-      return account.followerCount ?? 0
+    case 'viewsLast30Days': {
+      const snap = enrichment.scraperByUsername?.[account.username]
+      return snap?.viewsLast30Days ?? account.viewsLast30Days ?? 0
+    }
+    case 'followerCount': {
+      const snap = enrichment.scraperByUsername?.[account.username]
+      return snap?.followerCount ?? account.followerCount ?? 0
+    }
     default:
       return account[fieldKey]
   }

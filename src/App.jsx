@@ -17,6 +17,7 @@ const Queue = lazy(() => import('@/pages/Queue'))
 const Actions = lazy(() => import('@/pages/Actions'))
 const Devices = lazy(() => import('@/pages/Devices'))
 const Accounts = lazy(() => import('@/pages/Accounts'))
+const AutoSuspended = lazy(() => import('@/pages/AutoSuspended'))
 const ErrorCenter = lazy(() => import('@/pages/ErrorCenter'))
 const Notifications = lazy(() => import('@/pages/Notifications'))
 const ActivityLog = lazy(() => import('@/pages/ActivityLog'))
@@ -55,6 +56,7 @@ export default function App() {
                 <Route path="/actions" element={<LazyPage><Actions /></LazyPage>} />
                 <Route path="/devices" element={<LazyPage><Devices /></LazyPage>} />
                 <Route path="/accounts" element={<LazyPage><Accounts /></LazyPage>} />
+                <Route path="/auto-suspended" element={<LazyPage><AutoSuspended /></LazyPage>} />
                 <Route path="/error-center" element={<LazyPage><ErrorCenter /></LazyPage>} />
                 <Route path="/notifications" element={<LazyPage><Notifications /></LazyPage>} />
                 <Route path="/activity-log" element={<LazyPage><ActivityLog /></LazyPage>} />

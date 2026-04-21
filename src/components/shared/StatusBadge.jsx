@@ -8,6 +8,8 @@ const STATUS_STYLES = {
   FAILED: 'bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/20',
   ERROR: 'bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/20',
   BANNED: 'bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/20',
+  SUSPENDED: 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20',
+  AUTO_SUSPENDED: 'bg-[#A855F7]/10 text-[#A855F7] border-[#A855F7]/20',
   RUNNING: 'bg-[#3B82F6]/10 text-[#3B82F6] border-[#3B82F6]/20 animate-subtle-pulse',
   IN_PROGRESS: 'bg-[#3B82F6]/10 text-[#3B82F6] border-[#3B82F6]/20 animate-subtle-pulse',
   PARTIAL: 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20',

@@ -22,6 +22,7 @@ import {
   Instagram,
   Menu,
   UserPlus,
+  AlertOctagon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -64,6 +65,7 @@ const NAV_SECTIONS = [
     items: [
       { path: '/devices', label: 'Devices', icon: Smartphone },
       { path: '/accounts', label: 'Accounts', icon: Users },
+      { path: '/auto-suspended', label: 'Auto-Suspended', icon: AlertOctagon },
     ],
   },
   {

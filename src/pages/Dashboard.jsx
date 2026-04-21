@@ -639,6 +639,7 @@ export default function Dashboard() {
                 {[
                   { label: 'Active', count: statusCounts.ACTIVE || statusCounts.active || 0, color: '#22C55E' },
                   { label: 'Suspended', count: statusCounts.SUSPENDED || statusCounts.suspended || 0, color: '#F59E0B' },
+                  { label: 'Auto-Suspended', count: statusCounts.AUTO_SUSPENDED || statusCounts.auto_suspended || 0, color: '#A855F7' },
                   { label: 'Banned', count: statusCounts.BANNED || statusCounts.banned || 0, color: '#EF4444' },
                 ].map(({ label, count, color }) => (
                   <div key={label} className="flex items-center justify-between">

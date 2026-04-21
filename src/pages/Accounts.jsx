@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Trash2, Search, Users, Link, Pencil, X, ExternalLink, Smartphone, Check, Calendar, LayoutList, LayoutGrid, ChevronRight, ChevronDown, Container, BarChart3 } from 'lucide-react'
+import { Trash2, Search, Users, Link, Pencil, X, ExternalLink, Smartphone, Check, Calendar, LayoutList, LayoutGrid, ChevronRight, ChevronDown, Container, BarChart3, AlertOctagon } from 'lucide-react'
 import { toast } from 'sonner'
 import StatusBadge from '../components/StatusBadge'
 import { useApi, apiPost, apiPut, apiDelete } from '../hooks/useApi'
@@ -12,13 +12,14 @@ import AccountsTableView from '../components/accounts/AccountsTableView'
 import ReelStatsView from '../components/accounts/stats/ReelStatsView'
 import { latestSnapshotPerUsername } from '../utils/analyticsScoring'
 
-const STATUSES = ['ALL', 'ACTIVE', 'SUSPENDED', 'BANNED', 'ERROR']
+const STATUSES = ['ALL', 'ACTIVE', 'SUSPENDED', 'AUTO_SUSPENDED', 'BANNED', 'ERROR']
 
 function statusDotColor(status) {
   switch (status) {
     case 'ACTIVE': return 'bg-emerald-500'
     case 'BANNED': return 'bg-red-500'
     case 'SUSPENDED': return 'bg-amber-500'
+    case 'AUTO_SUSPENDED': return 'bg-purple-500'
     case 'ERROR': return 'bg-orange-500'
     default: return 'bg-gray-500'
   }
@@ -199,7 +200,7 @@ export default function Accounts() {
           name: deviceName || 'No Device',
           udid: a.deviceUdid || null,
           accounts: [],
-          kpis: { total: 0, active: 0, suspended: 0, banned: 0, error: 0, schedulingEnabled: 0, totalViews: 0, totalFollowers: 0, totalPosts: 0 },
+          kpis: { total: 0, active: 0, suspended: 0, autoSuspended: 0, banned: 0, error: 0, schedulingEnabled: 0, totalViews: 0, totalFollowers: 0, totalPosts: 0 },
         }
       }
       groups[key].accounts.push(a)
@@ -207,6 +208,7 @@ export default function Accounts() {
       const s = a.status?.toLowerCase()
       if (s === 'active') groups[key].kpis.active++
       else if (s === 'suspended') groups[key].kpis.suspended++
+      else if (s === 'auto_suspended') groups[key].kpis.autoSuspended++
       else if (s === 'banned') groups[key].kpis.banned++
       else if (s === 'error') groups[key].kpis.error++
       if (a.schedulingEnabled) groups[key].kpis.schedulingEnabled++
@@ -470,6 +472,7 @@ export default function Accounts() {
                     <div className="h-full flex">
                       {k.active > 0 && <div className="bg-emerald-500 h-full" style={{ width: `${(k.active / k.total) * 100}%` }} />}
                       {k.suspended > 0 && <div className="bg-amber-500 h-full" style={{ width: `${(k.suspended / k.total) * 100}%` }} />}
+                      {k.autoSuspended > 0 && <div className="bg-purple-500 h-full" style={{ width: `${(k.autoSuspended / k.total) * 100}%` }} />}
                       {k.error > 0 && <div className="bg-orange-500 h-full" style={{ width: `${(k.error / k.total) * 100}%` }} />}
                       {k.banned > 0 && <div className="bg-red-500 h-full" style={{ width: `${(k.banned / k.total) * 100}%` }} />}
                     </div>
@@ -763,6 +766,44 @@ export default function Accounts() {
                   </div>
                 ))}
               </div>
+
+              {/* Auto-Suspension — affiché si le compte est AUTO_SUSPENDED ou a des méta-données de suspension */}
+              {(selectedAccount.status === 'AUTO_SUSPENDED' || selectedAccount.autoSuspendReason || selectedAccount.autoSuspendedAt) && (
+                <div className="px-8 py-5 border-b border-[#1a1a1a] bg-purple-500/[0.03]">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertOctagon size={14} className="text-purple-400" />
+                    <span className="label-upper !mb-0 text-purple-400">Auto-Suspension</span>
+                  </div>
+                  <div className="space-y-2">
+                    {selectedAccount.autoSuspendReason && (
+                      <div className="flex items-start gap-3 text-sm">
+                        <span className="text-[#555] min-w-[110px] shrink-0">Raison</span>
+                        <span className="text-white">{selectedAccount.autoSuspendReason}</span>
+                      </div>
+                    )}
+                    {selectedAccount.autoSuspendAvgViewsLast5 != null && (
+                      <div className="flex items-start gap-3 text-sm">
+                        <span className="text-[#555] min-w-[110px] shrink-0">Moy. 5 derniers</span>
+                        <span className="text-white font-mono">{selectedAccount.autoSuspendAvgViewsLast5.toLocaleString()} vues</span>
+                      </div>
+                    )}
+                    {selectedAccount.autoSuspendedAt && (
+                      <div className="flex items-start gap-3 text-sm">
+                        <span className="text-[#555] min-w-[110px] shrink-0">Suspendu le</span>
+                        <span className="text-white">{new Date(selectedAccount.autoSuspendedAt).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {selectedAccount.autoSuspendGraceUntil && (
+                      <div className="flex items-start gap-3 text-sm">
+                        <span className="text-[#555] min-w-[110px] shrink-0">Grâce jusqu'au</span>
+                        <span className={`${new Date(selectedAccount.autoSuspendGraceUntil).getTime() > Date.now() ? 'text-emerald-400' : 'text-[#555]'}`}>
+                          {new Date(selectedAccount.autoSuspendGraceUntil).toLocaleString()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Daily Views Chart */}
               <div className="px-8 py-5 border-b border-[#1a1a1a]">

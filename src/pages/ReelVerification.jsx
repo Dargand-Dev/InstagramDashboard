@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { toast } from 'sonner'
 import {
   useStartScan, useScanStatus, useMissingReels, useRecheckOne,
@@ -63,7 +63,7 @@ export default function ReelVerification() {
     }
   }
 
-  const handleRecheck = async (entryId) => {
+  const handleRecheck = useCallback(async (entryId) => {
     try {
       const resp = await recheck.mutateAsync(entryId)
       if (resp?.verificationStatus === 'VERIFIED') {
@@ -74,7 +74,7 @@ export default function ReelVerification() {
     } catch (e) {
       toast.error(`Re-vérif KO — ${e.message}`)
     }
-  }
+  }, [recheck])
 
   const scanRunning = scanStatus.data?.status === 'RUNNING'
   const records = useMemo(
@@ -86,7 +86,7 @@ export default function ReelVerification() {
     [records],
   )
 
-  const columns = [
+  const columns = useMemo(() => [
     {
       accessorKey: 'username',
       header: 'Compte',
@@ -132,7 +132,7 @@ export default function ReelVerification() {
         </Button>
       ),
     },
-  ]
+  ], [recheck.isPending, handleRecheck])
 
   return (
     <div className="p-6 space-y-6">

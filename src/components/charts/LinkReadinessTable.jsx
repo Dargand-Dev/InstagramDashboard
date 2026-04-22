@@ -54,7 +54,7 @@ export default function LinkReadinessTable({ snapshots, accounts, windowDays = 1
                   <td className="px-3 py-2.5 text-right font-mono text-[#ccc]">{formatNumber(row.totalViews)}</td>
                   <td className="px-3 py-2.5 text-right font-mono text-[#ccc]">{formatNumber(Math.round(row.dailyMean))}/d</td>
                   <td className="px-3 py-2.5 text-right"><StabilityBadge value={row.stability} /></td>
-                  <td className="px-3 py-2.5 text-right font-mono text-blue-400">{formatNumber(Math.round(row.score))}</td>
+                  <td className="px-3 py-2.5 text-right font-mono text-blue-400">{Math.round(row.score).toLocaleString()} pts</td>
                 </tr>
               ))
             )}

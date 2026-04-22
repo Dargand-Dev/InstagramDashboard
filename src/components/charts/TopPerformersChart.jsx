@@ -42,15 +42,14 @@ export default function TopPerformersChart({ snapshots, colorMap, windowDays = 7
             {...tooltipStyle}
             cursor={{ fill: 'rgba(255,255,255,0.05)' }}
             formatter={(v, name) => {
-              if (name === 'score') return [formatNumber(Math.round(v)), 'Momentum']
-              if (name === 'recentDelta') return [formatNumber(Math.round(v)), 'Δ views 7d']
+              if (name === 'score' || name === 'recentDelta') return [formatNumber(Math.round(v)), `Views ${windowDays}d`]
               return [formatNumber(v), name]
             }}
             labelFormatter={isIncognito ? () => '•••' : undefined}
           />
           <Bar
             dataKey="score"
-            name="Momentum"
+            name={`Views ${windowDays}d`}
             radius={[0, 4, 4, 0]}
             barSize={16}
             onClick={(payload) => {

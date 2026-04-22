@@ -2,10 +2,6 @@ import { toBangkokISO } from './format'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value))
-}
-
 export function latestSnapshotPerUsername(snapshots) {
   const latest = {}
   for (const snap of snapshots) {
@@ -18,19 +14,23 @@ export function latestSnapshotPerUsername(snapshots) {
 }
 
 export function computeAllTimeViews(snapshots) {
-  const byAccount = {}
-  for (const snap of snapshots) {
-    if (!byAccount[snap.username]) byAccount[snap.username] = {}
-    const month = toBangkokISO(snap.snapshotAt)?.slice(0, 7)
-    if (!month) continue
-    const views = snap.viewsLast30Days || 0
-    if (!byAccount[snap.username][month] || views > byAccount[snap.username][month]) {
-      byAccount[snap.username][month] = views
-    }
-  }
+  // viewsLast30Days est un STOCK (vues sur 30j glissants à l'instant t), pas un flux.
+  // On reconstruit le flux quotidien par compte et on le somme — évite le double-comptage
+  // des ~29 jours qui se chevauchent entre mois consécutifs.
+  const byUser = snapshotsByUsername(snapshots)
   const result = {}
-  for (const [username, months] of Object.entries(byAccount)) {
-    result[username] = Object.values(months).reduce((sum, v) => sum + v, 0)
+  for (const [username, userSnaps] of Object.entries(byUser)) {
+    const daily = computeDailyViewsForUsername(userSnaps)
+    let total = 0
+    for (const v of Object.values(daily)) {
+      if (v != null) total += v
+    }
+    // On ajoute le stock 30j du tout premier snapshot connu : la reconstruction daily
+    // ne le capte pas (jour 0 = null). Sans ça, un compte avec des vues antérieures
+    // à son premier snapshot perdrait ces vues.
+    const first = userSnaps[0]
+    if (first) total += first.viewsLast30Days || 0
+    result[username] = total
   }
   return result
 }
@@ -47,22 +47,6 @@ function snapshotsByUsername(snapshots) {
   return map
 }
 
-function findClosestSnapshot(sortedSnapshots, targetMs, toleranceMs = DAY_MS) {
-  if (!sortedSnapshots.length) return null
-  let best = null
-  let bestDiff = Infinity
-  for (const snap of sortedSnapshots) {
-    const diff = Math.abs(new Date(snap.snapshotAt).getTime() - targetMs)
-    if (diff < bestDiff) {
-      bestDiff = diff
-      best = snap
-    }
-    if (diff > bestDiff) break
-  }
-  if (bestDiff > toleranceMs) return null
-  return best
-}
-
 export function viewsDeltaInWindow(snapshots, days, nowMs = Date.now()) {
   const byUser = snapshotsByUsername(snapshots)
   const result = {}
@@ -70,14 +54,15 @@ export function viewsDeltaInWindow(snapshots, days, nowMs = Date.now()) {
   for (const [username, userSnaps] of Object.entries(byUser)) {
     if (!userSnaps.length) { result[username] = null; continue }
     const latest = userSnaps[userSnaps.length - 1]
-    // Baseline = premier snapshot >= targetMs (borne basse de la fenêtre).
-    // Si l'historique commence APRÈS target (Scraper fraîchement déployé), on prend le
-    // tout premier snapshot dispo — on sous-estime le delta mais on ne fait pas disparaître
-    // l'account du classement.
+    // Baseline = dernier snapshot STRICTEMENT avant targetMs (borne basse exacte).
+    // Si l'historique commence APRÈS targetMs (Scraper fraîchement déployé), on prend
+    // le tout premier snapshot dispo — on sous-estime le delta mais on ne fait pas
+    // disparaître l'account du classement.
     let baseline = null
     for (const snap of userSnaps) {
       const t = new Date(snap.snapshotAt).getTime()
-      if (t >= targetMs) { baseline = snap; break }
+      if (t < targetMs) baseline = snap
+      else break
     }
     if (!baseline) baseline = userSnaps[0]
     if (baseline === latest) { result[username] = null; continue }
@@ -94,17 +79,12 @@ export function accountMomentumScore(snapshots, { windowDays = 7, nowMs = Date.n
   for (const [username, recentDelta] of Object.entries(recent)) {
     if (recentDelta == null) continue
     const totalPrev = prev[username]
-    if (totalPrev == null) continue
-    const prevDelta = totalPrev - recentDelta
-    const accelRatio = (recentDelta - prevDelta) / Math.max(Math.abs(prevDelta), 1)
-    const acceleration = clamp(accelRatio, -1, 2)
-    const score = recentDelta * (1 + acceleration)
+    const prevDelta = totalPrev == null ? null : totalPrev - recentDelta
     result.push({
       username,
       recentDelta,
       prevDelta,
-      acceleration,
-      score,
+      score: recentDelta,
     })
   }
   return result.sort((a, b) => b.score - a.score)
@@ -141,7 +121,7 @@ export function identityAvgViewsPerAccount(snapshots, usernameToIdentity, { wind
     .sort((a, b) => b.avgViewsPerAccount - a.avgViewsPerAccount)
 }
 
-function computeDailyViewsForUsername(sortedSnaps) {
+export function computeDailyViewsForUsername(sortedSnaps) {
   if (!sortedSnaps.length) return {}
   const dayMap = {}
   for (const snap of sortedSnaps) {
@@ -163,20 +143,25 @@ function computeDailyViewsForUsername(sortedSnaps) {
     return d.toISOString().slice(0, 10)
   }
 
+  // Le flux quotidien vrai est r_today - r_prev + vues[J-30] (les vues de J-30
+  // "sortent" de la fenêtre 30j et doivent être réinjectées).
+  // Jour 0 : flux inconnu — on n'a pas de snapshot J-1 pour reconstituer.
+  // Quand vues[J-30] manque (historique < 30j), on traite comme 0 : approximation
+  // qui sous-estime si le compte produisait avant, exacte si le compte est né au
+  // premier snapshot. Bien meilleur que null qui excluait tous les comptes récents
+  // des agrégats (Avg Views/Account, Link Readiness, Retirement).
+  const firstDay = days[0]
   for (let i = 0; i < days.length; i++) {
     const day = days[i]
     const rToday = dayMap[day].val
     if (i === 0) {
-      computed[day] = rToday
-    } else {
-      const rPrev = dayMap[days[i - 1]].val
-      let views = rToday - rPrev
-      const day30Ago = dateDaysAgo(day, 30)
-      if (computed[day30Ago] !== undefined) {
-        views += computed[day30Ago]
-      }
-      computed[day] = Math.max(0, views)
+      computed[day] = null
+      continue
     }
+    const rPrev = dayMap[days[i - 1]].val
+    const day30Ago = dateDaysAgo(day, 30)
+    const prior = day30Ago < firstDay ? 0 : (computed[day30Ago] ?? 0)
+    computed[day] = Math.max(0, rToday - rPrev + prior)
   }
   return computed
 }
@@ -282,8 +267,12 @@ export function retirementScore(snapshots, accounts, { minAgeDays, dailyViewsThr
   return result.sort((a, b) => b.score - a.score)
 }
 
-export function viewsPerAccountByIdentityOverTime(snapshots, usernameToIdentity, { bucket = 'snapshot' } = {}) {
+export function viewsPerAccountByIdentityOverTime(snapshots, usernameToIdentity, { bucket = 'snapshot', staleDays = 14 } = {}) {
   if (!snapshots.length) return { rows: [], identityNames: [] }
+
+  // TTL du forward-fill : après staleDays sans nouveau snapshot, un compte cesse de
+  // contribuer à la moyenne de son identity (probablement banni/supprimé).
+  const staleMs = staleDays * DAY_MS
 
   // Slot = minute-près par défaut → 1 point par snapshot.
   // Conservé 'half-day' et 'day' pour compat si d'autres appelants le demandent.
@@ -321,6 +310,7 @@ export function viewsPerAccountByIdentityOverTime(snapshots, usernameToIdentity,
   }
 
   const latestPerUserPerSlot = {}
+  const slotTsCache = {}
   for (const snap of snapshots) {
     const identity = usernameToIdentity[snap.username]
     if (!identity) continue
@@ -336,16 +326,19 @@ export function viewsPerAccountByIdentityOverTime(snapshots, usernameToIdentity,
 
   // Forward-fill par username sur les slots triés → un compte sans snapshot à t conserve
   // sa dernière valeur connue au lieu de tomber à 0 (sinon les moyennes oscillent).
+  // Expiré après staleDays : un compte banni/supprimé cesse de peser sur son identity.
   const identitySet = new Set()
   const sortedSlots = Object.keys(latestPerUserPerSlot).sort()
-  const lastKnownByUser = {}
+  const lastKnownByUser = {}  // username → { val, ts }
 
   const rows = sortedSlots.map((slot) => {
+    const slotTs = slotTsCache[slot] ?? (slotTsCache[slot] = slotToTs(slot))
     for (const [username, val] of Object.entries(latestPerUserPerSlot[slot])) {
-      lastKnownByUser[username] = val
+      lastKnownByUser[username] = { val, ts: slotTs }
     }
     const byIdentity = {}
-    for (const [username, val] of Object.entries(lastKnownByUser)) {
+    for (const [username, { val, ts }] of Object.entries(lastKnownByUser)) {
+      if (slotTs - ts > staleMs) continue
       const identity = usernameToIdentity[username]
       if (!identity) continue
       identitySet.add(identity)
@@ -353,7 +346,7 @@ export function viewsPerAccountByIdentityOverTime(snapshots, usernameToIdentity,
       byIdentity[identity].sum += val
       byIdentity[identity].count += 1
     }
-    const point = { slot: formatSlot(slot), ts: slotToTs(slot) }
+    const point = { slot: formatSlot(slot), ts: slotTs }
     for (const [identity, { sum, count }] of Object.entries(byIdentity)) {
       point[identity] = count > 0 ? Math.round(sum / count) : 0
     }

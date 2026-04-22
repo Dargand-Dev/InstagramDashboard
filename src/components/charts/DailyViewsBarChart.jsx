@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 
 import { CHART_COLORS } from '@/utils/chartColors'
-import { toBangkokISO } from '@/utils/format'
+import { computeDailyViewsForUsername } from '@/utils/analyticsScoring'
 import { Blur, useIncognito } from '@/contexts/IncognitoContext'
 
 function formatNumber(n) {
@@ -71,49 +71,22 @@ export default function DailyViewsBarChart({ title, snapshots, colorMap, display
   const chartData = useMemo(() => {
     if (!snapshots?.length || !top15.length) return []
 
-    const dateDaysAgo = (dateStr, n) => {
-      const d = new Date(dateStr + 'T00:00:00')
-      d.setDate(d.getDate() - n)
-      return d.toISOString().slice(0, 10)
-    }
-
-    const R = {}
+    const byUser = {}
     const allUsernames = new Set()
     for (const snap of snapshots) {
       if (!snap.snapshotAt) continue
-      const local = toBangkokISO(snap.snapshotAt)
-      const day = local.slice(0, 10)
       const username = snap.username
       allUsernames.add(username)
-      if (!R[username]) R[username] = {}
-      if (!R[username][day] || snap.snapshotAt > R[username][day].at) {
-        R[username][day] = { at: snap.snapshotAt, val: snap.viewsLast30Days || 0 }
-      }
+      if (!byUser[username]) byUser[username] = []
+      byUser[username].push(snap)
+    }
+    for (const username of allUsernames) {
+      byUser[username].sort((a, b) => new Date(a.snapshotAt) - new Date(b.snapshotAt))
     }
 
     const dailyViews = {}
     for (const username of allUsernames) {
-      const dayMap = R[username] || {}
-      const days = Object.keys(dayMap).sort()
-      if (!days.length) continue
-
-      const computed = {}
-      for (let i = 0; i < days.length; i++) {
-        const day = days[i]
-        const rToday = dayMap[day].val
-        if (i === 0) {
-          computed[day] = rToday
-        } else {
-          const rPrev = dayMap[days[i - 1]].val
-          let views = rToday - rPrev
-          const day30Ago = dateDaysAgo(day, 30)
-          if (computed[day30Ago] !== undefined) {
-            views += computed[day30Ago]
-          }
-          computed[day] = Math.max(0, views)
-        }
-      }
-      dailyViews[username] = computed
+      dailyViews[username] = computeDailyViewsForUsername(byUser[username])
     }
 
     const allDaysSet = new Set()
@@ -130,13 +103,19 @@ export default function DailyViewsBarChart({ title, snapshots, colorMap, display
         date: `${day.slice(8)}/${day.slice(5, 7)}`,
       }
       let total = 0
+      let totalKnown = false
       for (const username of top15) {
-        point[username] = dailyViews[username]?.[day] || 0
+        const v = dailyViews[username]?.[day]
+        point[username] = v == null ? 0 : v
       }
       for (const username of allUsernames) {
-        total += dailyViews[username]?.[day] || 0
+        const v = dailyViews[username]?.[day]
+        if (v != null) {
+          total += v
+          totalKnown = true
+        }
       }
-      point.__total = total
+      point.__total = totalKnown ? total : null
       return point
     })
   }, [snapshots, top15, displayDaysProp])

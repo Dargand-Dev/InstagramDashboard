@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Trash2, Search, Users, Link, Pencil, X, ExternalLink, Smartphone, Check, Calendar, LayoutList, LayoutGrid, ChevronRight, ChevronDown, Container, BarChart3, AlertOctagon } from 'lucide-react'
+import { Trash2, Search, Users, Link, Pencil, X, ExternalLink, Smartphone, Check, Calendar, LayoutList, LayoutGrid, ChevronRight, ChevronDown, Container, BarChart3, AlertOctagon, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import StatusBadge from '../components/StatusBadge'
 import { useApi, apiPost, apiPut, apiDelete } from '../hooks/useApi'
@@ -401,8 +401,17 @@ export default function Accounts() {
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-white tracking-tight">Accounts</h1>
-          <p className="text-xs text-[#333] mt-0.5">
-            {accounts ? `${accounts.length} total accounts` : 'Loading...'}
+          <p className="text-xs text-[#333] mt-0.5 flex items-center gap-2">
+            <span>{accounts ? `${accounts.length} total accounts` : 'Loading...'}</span>
+            {(() => {
+              const warningsCount = (accounts || []).filter(a => a.setupProfessionalFailed || a.twoFaFailed).length
+              return warningsCount > 0 ? (
+                <span className="inline-flex items-center gap-1 text-[#F59E0B]">
+                  <AlertTriangle size={11} />
+                  {warningsCount} avec warnings
+                </span>
+              ) : null
+            })()}
           </p>
         </div>
         <div className="flex items-center gap-1 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg p-0.5">

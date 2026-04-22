@@ -67,7 +67,7 @@ Suivre la convention exacte d'`AccountReelsStatsTest` pour la mise en place des 
 
 Run:
 ```bash
-./mvnw -pl . test -Dtest=AnalyticsQueryServiceTest#reelsStatsByUsername_surfaceShortcode
+./mvnw -pl . test -Dtest=AccountReelsStatsTest#reelsStatsByUsername_surfaceShortcode
 ```
 Expected: FAIL — `cannot find symbol: shortcode()` ou assertion mismatch.
 
@@ -110,7 +110,7 @@ L'ordre des arguments du constructeur doit matcher l'ordre déclaré du record m
 
 Run:
 ```bash
-./mvnw -pl . test -Dtest=AnalyticsQueryServiceTest#reelsStatsByUsername_surfaceShortcode
+./mvnw -pl . test -Dtest=AccountReelsStatsTest#reelsStatsByUsername_surfaceShortcode
 ```
 Expected: PASS.
 
@@ -1313,35 +1313,47 @@ class ReelVerificationServiceTest {
     @Mock ScraperStatsClient statsClient;
     @Mock ReelMatcher matcher;
     @Mock ScanRunRegistry registry;
+    @Mock ReelScanRunner runner;   // injecté dans ReelVerificationService
 
-    // Exécuter @Async en synchrone pour les tests :
-    // fournir un Executor.directExecutor() ou tester startScan en mode synchrone via
-    // un séparateur de méthode (runScanInternal) directement appelé.
-
-    @Test
-    void startScan_emptyWindow_completesImmediately() { /* ... */ }
+    // Tests du SERVICE uniquement. Les cas runScan* vivent dans ReelScanRunnerTest (Step 4).
 
     @Test
-    void startScan_twoUsers_callsCheckNowBeforeFetch() { /* InOrder */ }
+    void startScan_emptyWindow_completesImmediately() {
+        // given : aucun post récent
+        // then  : registry.startOrGet(0) → run COMPLETED immédiatement, runner.runAsync JAMAIS appelé
+    }
 
     @Test
-    void runScanInternal_retryOnceAfterCheckNowFailure() { /* ... */ }
+    void startScan_twoUsers_kicksOffRunner() {
+        // given : 2 usernames ACTIVE avec posts récents
+        // then  : runner.runAsync(scanId, byUser) appelé une fois, retourne avant exécution async
+    }
 
     @Test
-    void runScanInternal_doubleFailure_incrementsErrorsAndContinues() { /* ... */ }
+    void verifyOneEntry_happyPath_matchVerified() {
+        // given : 1 entry, mocks checkNow + fetchReelsStats OK, matcher retourne VERIFIED
+        // then  : entry.verificationStatus == VERIFIED, matchedShortcode rempli, saveAll called
+    }
 
     @Test
-    void runScanInternal_notFound_marksEntriesMissing() { /* ... */ }
+    void verifyOneEntry_notFound_marksMissing() {
+        // given : checkNowClient.checkNow(username) throw NotFoundException
+        // then  : entry marqué MISSING et persisté
+    }
 
     @Test
-    void verifyOneEntry_happyPath() { /* ... */ }
+    void verifyOneEntry_retryOnceOnTransportError() {
+        // given : 1er checkNow throw TransportException, 2e retourne OK
+        // then  : verifyOneEntry complète sans re-throw ; matcher appelé 1x
+    }
 
     @Test
-    void verifyOneEntry_unknownId_throws() { /* ... */ }
+    void verifyOneEntry_unknownId_throws() {
+        // given : postingHistoryRepo.findById → empty
+        // then  : NoSuchElementException
+    }
 }
 ```
-
-**Conseil design** : extraire la logique async du scan dans une méthode package-private `runScanInternal(UUID scanId, Map<String, List<PostingHistoryEntry>> byUsername)` testable sans executor. `startScan` prépare les données puis délègue à `@Async void runScanInternal(...)`.
 
 - [ ] **Step 2 : Run — échec attendu (classe absente)**
 
@@ -1509,7 +1521,9 @@ public class ReelScanRunner {
     private final PostingHistoryRepository postingHistoryRepo;
     private final ScanRunRegistry registry;
 
-    @Async
+    // Qualifier explicite pour utiliser le pool dédié plutôt que SimpleAsyncTaskExecutor par défaut.
+    // Convention du repo : cf. ScraperAccountSyncListener qui cible le même pool.
+    @Async("reelStatsExecutor")
     public void runAsync(UUID scanId, Map<String, List<PostingHistoryEntry>> byUser) {
         try {
             runInternal(scanId, byUser);

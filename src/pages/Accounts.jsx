@@ -142,6 +142,11 @@ export default function Accounts() {
     }, {})
   }, [accounts])
 
+  const warningsCount = useMemo(
+    () => (accounts || []).filter(a => a.setupProfessionalFailed || a.twoFaFailed).length,
+    [accounts],
+  )
+
   const identityCounts = useMemo(() => {
     if (!accounts) return {}
     const counts = { ALL: accounts.length }
@@ -403,15 +408,12 @@ export default function Accounts() {
           <h1 className="text-2xl font-extrabold text-white tracking-tight">Accounts</h1>
           <p className="text-xs text-[#333] mt-0.5 flex items-center gap-2">
             <span>{accounts ? `${accounts.length} total accounts` : 'Loading...'}</span>
-            {(() => {
-              const warningsCount = (accounts || []).filter(a => a.setupProfessionalFailed || a.twoFaFailed).length
-              return warningsCount > 0 ? (
-                <span className="inline-flex items-center gap-1 text-[#F59E0B]">
-                  <AlertTriangle size={11} />
-                  {warningsCount} avec warnings
-                </span>
-              ) : null
-            })()}
+            {warningsCount > 0 && (
+              <span className="inline-flex items-center gap-1 text-[#F59E0B]">
+                <AlertTriangle size={11} />
+                {warningsCount} avec warnings
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-1 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg p-0.5">

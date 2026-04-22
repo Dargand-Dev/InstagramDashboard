@@ -260,6 +260,7 @@ export default function AccountsTableView({
 
   function clearAll() {
     setFilters([])
+    setWarningsOnly(false)
     setPanelOpen(false)
   }
 

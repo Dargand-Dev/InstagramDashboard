@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
-  useStartScan, useScanStatus, useMissingReels, useRecheckOne,
+  useStartScan, useScanStatus, useMissingReels, useRecheckOne, useDismissOne,
 } from '@/hooks/useReelVerification'
 import DataTable from '@/components/shared/DataTable'
 import EmptyState from '@/components/shared/EmptyState'
@@ -12,8 +12,14 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  ShieldCheck, RefreshCw, CheckCircle2, AlertCircle, Clock,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import {
+  ShieldCheck, RefreshCw, CheckCircle2, AlertCircle, Clock, EyeOff, Smartphone,
 } from 'lucide-react'
+
+const ALL_DEVICES = '__all__'
+const NO_DEVICE = '__none__'
 
 const WINDOWS = [
   { value: 1,  label: '1 heure' },
@@ -24,12 +30,14 @@ const WINDOWS = [
 export default function ReelVerification() {
   const [hours, setHours] = useState(6)
   const [scanId, setScanId] = useState(null)
+  const [deviceFilter, setDeviceFilter] = useState(ALL_DEVICES)
 
   const qc = useQueryClient()
   const startScan = useStartScan()
   const scanStatus = useScanStatus(scanId)
   const missing = useMissingReels(hours)
   const recheck = useRecheckOne()
+  const dismiss = useDismissOne()
 
   // Surface l'erreur de polling (scanId expiré / backend down) et reset le spinner.
   // setScanId est différé via setTimeout pour éviter un setState synchrone dans l'effet.
@@ -91,11 +99,46 @@ export default function ReelVerification() {
     }
   }, [recheck])
 
+  const handleDismiss = useCallback(async (entryId) => {
+    try {
+      await dismiss.mutateAsync(entryId)
+      toast.success('Reel ignoré')
+    } catch (e) {
+      toast.error(`Impossible d'ignorer — ${e.message}`)
+    }
+  }, [dismiss])
+
   const scanRunning = scanStatus.data?.status === 'RUNNING'
-  const records = useMemo(
+  const allRecords = useMemo(
     () => (Array.isArray(missing.data) ? missing.data : (missing.data?.data || [])),
     [missing.data],
   )
+
+  // Liste triée et dédupliquée des devices présents dans les résultats, pour alimenter le filtre.
+  // Les entries sans device sont regroupées sous NO_DEVICE (option "Sans téléphone").
+  const devicesInResults = useMemo(() => {
+    const byUdid = new Map()
+    let hasOrphan = false
+    for (const r of allRecords) {
+      if (r.deviceUdid) {
+        if (!byUdid.has(r.deviceUdid)) {
+          byUdid.set(r.deviceUdid, r.deviceName || r.deviceUdid)
+        }
+      } else {
+        hasOrphan = true
+      }
+    }
+    const sorted = Array.from(byUdid, ([udid, name]) => ({ udid, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    return { list: sorted, hasOrphan }
+  }, [allRecords])
+
+  const records = useMemo(() => {
+    if (deviceFilter === ALL_DEVICES) return allRecords
+    if (deviceFilter === NO_DEVICE) return allRecords.filter(r => !r.deviceUdid)
+    return allRecords.filter(r => r.deviceUdid === deviceFilter)
+  }, [allRecords, deviceFilter])
+
   const uniqueUsers = useMemo(
     () => new Set(records.map(r => r.username)).size,
     [records],
@@ -106,6 +149,15 @@ export default function ReelVerification() {
       accessorKey: 'username',
       header: 'Compte',
       cell: ({ row }) => <span className="font-mono">@{row.original.username}</span>,
+    },
+    {
+      accessorKey: 'deviceName',
+      header: 'Téléphone',
+      cell: ({ row }) => (
+        row.original.deviceName
+          ? <span className="text-sm">{row.original.deviceName}</span>
+          : <span className="text-xs text-muted-foreground italic">—</span>
+      ),
     },
     {
       accessorKey: 'baseVideo',
@@ -136,18 +188,29 @@ export default function ReelVerification() {
       id: 'action',
       header: '',
       cell: ({ row }) => (
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={recheck.isPending}
-          onClick={() => handleRecheck(row.original.entryId)}
-        >
-          <RefreshCw className="h-3 w-3 mr-1" />
-          Re-vérifier
-        </Button>
+        <div className="flex gap-2 justify-end">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={recheck.isPending}
+            onClick={() => handleRecheck(row.original.entryId)}
+          >
+            <RefreshCw className="h-3 w-3 mr-1" />
+            Re-vérifier
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={dismiss.isPending}
+            onClick={() => handleDismiss(row.original.entryId)}
+          >
+            <EyeOff className="h-3 w-3 mr-1" />
+            Ignorer
+          </Button>
+        </div>
       ),
     },
-  ], [recheck.isPending, handleRecheck])
+  ], [recheck.isPending, dismiss.isPending, handleRecheck, handleDismiss])
 
   return (
     <div className="p-6 space-y-6">
@@ -181,6 +244,25 @@ export default function ReelVerification() {
                 </Button>
               ))}
             </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Smartphone className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Téléphone :</span>
+            <Select value={deviceFilter} onValueChange={setDeviceFilter}>
+              <SelectTrigger className="h-8 w-[200px]">
+                <SelectValue placeholder="Tous" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_DEVICES}>Tous les téléphones</SelectItem>
+                {devicesInResults.hasOrphan && (
+                  <SelectItem value={NO_DEVICE}>Sans téléphone</SelectItem>
+                )}
+                {devicesInResults.list.map(d => (
+                  <SelectItem key={d.udid} value={d.udid}>{d.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <Button

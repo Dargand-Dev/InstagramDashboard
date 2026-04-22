@@ -51,3 +51,13 @@ export function useRecheckOne() {
     },
   })
 }
+
+export function useDismissOne() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (entryId) => apiPost(`${BASE}/dismiss`, { entryId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['reel-verification', 'missing'] })
+    },
+  })
+}

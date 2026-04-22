@@ -441,10 +441,10 @@ export default function Actions() {
   }, [activeAccounts, postingDevice, usernameSearch])
 
   const stalePostingAccounts = useMemo(() => {
-    const twelveHours = 12 * 60 * 60 * 1000
+    const sixHours = 6 * 60 * 60 * 1000
     return filteredPostingAccounts.filter(a => {
       if (!a.lastPost) return true
-      return Date.now() - new Date(a.lastPost).getTime() >= twelveHours
+      return Date.now() - new Date(a.lastPost).getTime() >= sixHours
     })
   }, [filteredPostingAccounts])
 
@@ -651,7 +651,7 @@ export default function Actions() {
                     onClick={() => setSelectedUsernames(new Set(stalePostingAccounts.map(a => a.username)))}
                   >
                     <Clock className="w-2.5 h-2.5" />
-                    Stale 12h+ ({stalePostingAccounts.length})
+                    Stale 6h+ ({stalePostingAccounts.length})
                   </button>
                 )}
                 <button

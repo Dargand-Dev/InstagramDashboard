@@ -30,9 +30,10 @@
 
 **Files:**
 - Modify: `InstagramScraper/src/main/java/com/dargand/igscraper/web/dto/ReelStatsResponse.java`
-- Modify: `InstagramScraper/src/main/java/com/dargand/igscraper/repository/ReelStatsAggregationRepository.java` (la méthode `findReelsWithLatestViewsByAccountId`)
-- Modify: `InstagramScraper/src/main/java/com/dargand/igscraper/service/analytics/AnalyticsQueryService.java` (la méthode `reelsStatsByUsername` et son mapper)
-- Test: `InstagramScraper/src/test/java/com/dargand/igscraper/service/analytics/AnalyticsQueryServiceTest.java` (ou équivalent existant)
+- Modify: `InstagramScraper/src/main/java/com/dargand/igscraper/repository/ReelStatsAggregationRepository.java` — le pipeline d'aggregation (`$project` à la ligne ~115) ET le mapper `toDto(Document)` à la ligne ~129 (qui construit le record).
+- Test: `InstagramScraper/src/test/java/com/dargand/igscraper/web/AccountReelsStatsTest.java` (test live existant à étendre, convention du projet : tests controller vivent dans `src/test/java/com/dargand/igscraper/web/` **sans** sous-dossier `controller/`).
+
+> **Note** : `AnalyticsQueryService.reelsStatsByUsername` ne nécessite **aucune** modification : il délègue à `repository.findReelsWithLatestViewsByAccountId(...)` qui retourne déjà des `ReelStatsResponse`. Toute la transformation Document→DTO se fait dans `toDto(Document)` du repository. Le domain `Reel.shortcode` est déjà persisté (cf. `Reel.java:34`) — pas de migration, juste le projeter et le mapper.
 
 - [ ] **Step 1 : Lire les 3 fichiers pour comprendre la forme actuelle**
 
@@ -47,15 +48,20 @@ Expected: identifier précisément le `$project` de l'aggregation qui oublie `sh
 
 - [ ] **Step 2 : Écrire un test qui vérifie que `reelsStatsByUsername` renvoie `shortcode` non-null**
 
-Si un test `AnalyticsQueryServiceTest` existe déjà, y ajouter un cas. Sinon, créer un test minimal avec `@DataMongoTest` (convention du scraper — chercher `@DataMongoTest` dans `src/test/java/` pour un modèle). Exemple de cas :
+Ajouter un cas dans `AccountReelsStatsTest.java` (test `@SpringBootTest` existant, convention du projet) qui insère un `Reel` en base avec un `shortcode` connu + un `ReelSnapshot`, appelle l'endpoint `/analytics/account/by-username/{username}/reels-stats` et asserte que le champ `shortcode` du premier reel retourné est présent. Exemple de cas :
 ```java
 @Test
-void reelsStatsByUsername_surfaceShortcode() {
-    // étant donné un InstagramAccount + un Reel {shortcode="ABC123", publishedAt=now} en base,
-    // quand on appelle reelsStatsByUsername("user1")
-    // alors response.reels().get(0).shortcode().equals("ABC123")
+@WithMockUser(roles = "SERVICE")
+void reelsStatsByUsername_surfaceShortcode() throws Exception {
+    // Given: un InstagramAccount + un Reel {shortcode="ABC123", publishedAt=now} + 1 snapshot
+    // When: GET /analytics/account/by-username/user1/reels-stats
+    // Then: response.reels[0].shortcode == "ABC123"
+    mockMvc.perform(get("/analytics/account/by-username/user1/reels-stats"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.reels[0].shortcode").value("ABC123"));
 }
 ```
+Suivre la convention exacte d'`AccountReelsStatsTest` pour la mise en place des fixtures Mongo.
 
 - [ ] **Step 3 : Run le test — doit échouer car `shortcode` absent du DTO**
 
@@ -79,15 +85,26 @@ public record ReelStatsResponse(
 
 - [ ] **Step 5 : Ajouter `shortcode` dans la projection de l'aggregation**
 
-Dans `ReelStatsAggregationRepository.findReelsWithLatestViewsByAccountId`, ajouter une ligne similaire à celles qui existent pour les autres champs. Exemple (le pipeline MongoOperations / Aggregation exact dépend de ce qui est écrit) :
+Dans `ReelStatsAggregationRepository.findReelsWithLatestViewsByAccountId`, étendre le bloc `Aggregation.project()` (ligne ~115) :
 ```java
-.and("reel.shortcode").as("shortcode")
+Aggregation.project()
+        .and("reel.publishedAt").as("publishedAt")
+        .and("reel.shortcode").as("shortcode")   // NOUVEAU
+        .and("latestViewsCount").as("viewsCount"),
 ```
-Rechercher le bloc `$project` existant et y insérer la projection.
 
-- [ ] **Step 6 : Propager dans le mapper d'`AnalyticsQueryService.reelsStatsByUsername`**
+- [ ] **Step 6 : Étendre le mapper `toDto(Document)` dans le même fichier**
 
-Là où le service construit un `new ReelStatsResponse(...)`, ajouter `row.getShortcode()` (ou l'équivalent selon la shape du résultat d'aggregation).
+La construction du record se fait dans `toDto(Document)` à la ligne ~129. Ajouter l'extraction du shortcode (String, null-safe) et le passer au constructeur :
+```java
+private static ReelStatsResponse toDto(Document doc) {
+    // ... code existant pour publishedAt et viewsCount (inchangé) ...
+
+    String shortcode = doc.getString("shortcode");  // NOUVEAU, null-safe
+    return new ReelStatsResponse(publishedAt, shortcode, viewsCount);
+}
+```
+L'ordre des arguments du constructeur doit matcher l'ordre déclaré du record modifié au Step 4.
 
 - [ ] **Step 7 : Run le test — doit passer**
 
@@ -111,8 +128,7 @@ Expected: PASS. En particulier les tests existants d'`AnalyticsController` et `A
 cd /Users/samyhne/IG-bot/InstagramScraper
 git add src/main/java/com/dargand/igscraper/web/dto/ReelStatsResponse.java \
         src/main/java/com/dargand/igscraper/repository/ReelStatsAggregationRepository.java \
-        src/main/java/com/dargand/igscraper/service/analytics/AnalyticsQueryService.java \
-        src/test/java/com/dargand/igscraper/service/analytics/AnalyticsQueryServiceTest.java
+        src/test/java/com/dargand/igscraper/web/AccountReelsStatsTest.java
 git commit -m "feat(analytics): expose shortcode in reels-stats response"
 ```
 
@@ -124,17 +140,17 @@ git commit -m "feat(analytics): expose shortcode in reels-stats response"
 
 **Files:**
 - Modify: `InstagramScraper/src/main/java/com/dargand/igscraper/web/controller/InternalAccountController.java`
-- Test: `InstagramScraper/src/test/java/com/dargand/igscraper/web/controller/InternalAccountControllerTest.java` (créer si absent — chercher s'il existe déjà avec `ls src/test/java/com/dargand/igscraper/web/controller/`)
+- Test: `InstagramScraper/src/test/java/com/dargand/igscraper/web/InternalAccountControllerTest.java` — **flat dans `web/`, PAS de sous-dossier `controller/`** (convention du projet : les tests controller vivent directement sous `src/test/java/com/dargand/igscraper/web/`, cf. `AccountFlowTest.java`, `InternalUserControllerTest.java`, etc.).
 
 - [ ] **Step 1 : Vérifier la forme des tests controller existants**
 
 Run:
 ```bash
 cd /Users/samyhne/IG-bot/InstagramScraper
-ls src/test/java/com/dargand/igscraper/web/controller/
-grep -l "MockMvc\|WebMvcTest\|SpringBootTest" src/test/java/com/dargand/igscraper/web/controller/*.java | head -3
+ls src/test/java/com/dargand/igscraper/web/
+grep -l "MockMvc\|WebMvcTest\|SpringBootTest" src/test/java/com/dargand/igscraper/web/*.java | head -3
 ```
-But: identifier la convention (MockMvc + `@WebMvcTest` ou `@SpringBootTest`). Adopter la même pour le nouveau test.
+But: identifier la convention (`@SpringBootTest` + `MockMvc` est dominante dans ce projet — voir `AccountFlowTest`, `InternalUserControllerTest`). Adopter la même pour le nouveau test.
 
 - [ ] **Step 2 : Écrire un test d'intégration `checkNowByUsername_returnsCheckNowResponse`**
 
@@ -162,7 +178,13 @@ void checkNowByUsername_whenUsernameMissing_returns404() throws Exception { /* .
 void checkNowByUsername_whenNotService_returns403() throws Exception { /* ... */ }
 ```
 
-Pour le mock de `ScraperService.processOne`, l'injecter via `@MockBean` et stubber `when(scraperService.processOne(any(), eq(SnapshotSource.MANUAL))).thenReturn(new ScrapeOutcome(true, 100L, 2, 0, null))`.
+Pour le mock de `ScraperService.processOne`, l'injecter via `@MockBean` et stubber avec le **factory** existant (le record a 7 champs — `(ObjectId accountId, String username, boolean success, long durationMs, int reelsTouched, int reelsSkipped, String error)` — utiliser le helper pour éviter les pièges) :
+```java
+when(scraperService.processOne(any(), eq(SnapshotSource.MANUAL)))
+    .thenReturn(ScrapeOutcome.success(new ObjectId(), "user1", 100L, 2, 0));
+```
+
+> `@MockBean` est deprecated dans Spring Boot 3.4+. Si le projet convention (vérifiée au Step 1) utilise `@MockitoBean` ou injecte les mocks différemment, adopter la convention observée. Le gabarit ci-dessus est illustratif.
 
 - [ ] **Step 3 : Run le test — échec attendu (endpoint non implémenté)**
 
@@ -205,17 +227,7 @@ public ResponseEntity<CheckNowResponse> checkNowByUsername(@PathVariable String 
 }
 ```
 
-**Note sur la 404** : si un `@ControllerAdvice` global existe déjà pour mapper `NoSuchElementException → 404`, c'est bon. Sinon, vérifier avec :
-```bash
-grep -rn "NoSuchElementException\|ExceptionHandler" src/main/java/com/dargand/igscraper/ | grep -v test
-```
-S'il n'y a pas de mapping, ajouter localement :
-```java
-@ExceptionHandler(NoSuchElementException.class)
-@ResponseStatus(HttpStatus.NOT_FOUND)
-public void handleNotFound() {}
-```
-dans ce controller, OU préférer un `try/catch` qui retourne `ResponseEntity.notFound().build()`. Choisir la convention cohérente avec le reste du projet.
+**Note sur la 404** : `GlobalExceptionHandler` existe déjà (cf. `web/error/GlobalExceptionHandler.java:66`) et mappe `NoSuchElementException → 404` globalement. Le throw suffit, aucun handler local à ajouter.
 
 - [ ] **Step 5 : Run le test — doit passer**
 
@@ -253,7 +265,7 @@ Expected: `{"success":true,"durationMs":…,"reelsTouched":…,"reelsSkipped":�
 ```bash
 cd /Users/samyhne/IG-bot/InstagramScraper
 git add src/main/java/com/dargand/igscraper/web/controller/InternalAccountController.java \
-        src/test/java/com/dargand/igscraper/web/controller/InternalAccountControllerTest.java
+        src/test/java/com/dargand/igscraper/web/InternalAccountControllerTest.java
 git commit -m "feat(scraper): add check-now by-username endpoint for service callers"
 ```
 
@@ -448,14 +460,32 @@ public record ScraperReelStatsDto(
 ) {}
 ```
 
-- [ ] **Step 2 : Vérifier que le binding Jackson tolère les anciens payloads (sans shortcode) pour rétro-compat**
+- [ ] **Step 2 : Adapter les tests qui construisent `ScraperReelStatsDto(...)` positionnellement**
 
-En théorie Jackson sets `shortcode=null` si le JSON ne contient pas le champ. Mais vérifier qu'aucun test existant ne casse :
+L'ajout du champ `shortcode` entre `publishedAt` et `viewsCount` **va casser** les tests qui utilisent le constructeur positionnel (car le 2e argument change de type : `Long` → `String`). Jackson bind par nom donc les tests orientés JSON ne cassent pas, mais les tests Java directs oui.
+
+**Fichiers impactés (vérifiés par grep)** :
+- `src/test/java/com/automation/instagram/service/autolink/AutoLinkDecisionServiceTest.java` — helper `reel(...)` ligne ~336 + ~20 callsites
+- `src/test/java/com/automation/instagram/service/reelstats/scraper/ScraperAccountRankerTest.java` — ligne ~106
+
+Dans chacun, ajouter `null` pour `shortcode` :
+```java
+// Avant
+return new ScraperReelStatsDto(publishedAt, views);
+// Après
+return new ScraperReelStatsDto(publishedAt, null, views);
+```
+
+- [ ] **Step 2b : Run les tests ciblés**
+
+Run:
 ```bash
+./mvnw test -Dtest=AutoLinkDecisionServiceTest
+./mvnw test -Dtest=ScraperAccountRankerTest
 ./mvnw test -Dtest=RawScraperStatsClientTest
 ./mvnw test -Dtest=ScraperStatsClientTest
 ```
-Expected: PASS. Si l'un casse sur un mismatch de constructeur, c'est que le test construit un `ScraperReelStatsDto(...)` positionnel et qu'il faut l'adapter (ajouter `null` pour `shortcode`).
+Expected: PASS. Jackson bind par nom donc les tests JSON-driven (Raw/ScraperStatsClientTest) passent sans modif.
 
 - [ ] **Step 3 : Run toute la suite**
 
@@ -469,7 +499,8 @@ Expected: PASS.
 
 ```bash
 git add src/main/java/com/automation/instagram/service/reelstats/scraper/ScraperReelStatsDto.java \
-        src/test/java/com/automation/instagram/service/reelstats/scraper/*.java
+        src/test/java/com/automation/instagram/service/autolink/AutoLinkDecisionServiceTest.java \
+        src/test/java/com/automation/instagram/service/reelstats/scraper/ScraperAccountRankerTest.java
 git commit -m "feat(scraper-client): propagate shortcode in ScraperReelStatsDto"
 ```
 
@@ -868,7 +899,6 @@ package com.automation.instagram.service.reelverification;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -1178,10 +1208,11 @@ public class ScraperCheckNowClient {
             throw new ScraperStatsException.NotFoundException("Compte inconnu côté scraper : " + username);
         }
         if (status / 100 == 5) {
-            throw new ScraperStatsException.TransportException("check-now 5xx : " + status);
+            // TransportException a une signature (String, Throwable) — pas de single-arg constructor.
+            throw new ScraperStatsException.TransportException("check-now 5xx : " + status, null);
         }
         if (status != 200) {
-            throw new ScraperStatsException.TransportException("check-now status inattendu : " + status);
+            throw new ScraperStatsException.TransportException("check-now status inattendu : " + status, null);
         }
         try {
             JsonNode node = objectMapper.readTree(resp.body());
@@ -1192,7 +1223,7 @@ public class ScraperCheckNowClient {
                     node.path("reelsSkipped").asInt(0),
                     node.path("error").isNull() ? null : node.path("error").asText());
         } catch (Exception e) {
-            throw new ScraperStatsException.TransportException("Parse check-now response failed: " + e.getMessage());
+            throw new ScraperStatsException.TransportException("Parse check-now response failed: " + e.getMessage(), e);
         }
     }
 
@@ -1208,7 +1239,7 @@ public class ScraperCheckNowClient {
         try {
             return http.send(req, HttpResponse.BodyHandlers.ofString());
         } catch (java.io.IOException e) {
-            throw new ScraperStatsException.TransportException("check-now transport failure: " + e.getMessage());
+            throw new ScraperStatsException.TransportException("check-now transport failure: " + e.getMessage(), e);
         }
     }
 
@@ -1248,13 +1279,17 @@ git commit -m "feat(reel-verification): add ScraperCheckNowClient with shared JW
 
 ---
 
-### Task 3.4 — Créer `ReelVerificationService`
+### Task 3.4 — Créer `ReelVerificationService` + `ReelScanRunner`
 
 **Context:** Cœur de la feature. Orchestre : scan global async, vérification unitaire synchrone, retry × 1 sur échec scraper, persistence des résultats sur `PostingHistoryEntry`.
 
+> **Gotcha Spring `@Async`** : on ne peut PAS appeler une méthode `@Async` depuis une autre méthode du même bean — l'appel passe à côté du proxy AOP et s'exécute synchronement. Solution retenue : **séparer le runner dans un bean distinct** (`ReelScanRunner`). `ReelVerificationService.startScan(...)` prépare les données, démarre le `ScanRun` dans le registry, puis délègue l'exécution asynchrone à `reelScanRunner.runAsync(scanId, byUser)`. C'est `runAsync` (sur un bean différent) qui porte `@Async` et s'exécute dans un thread du pool.
+
 **Files:**
 - Create: `InstagramAutomation/src/main/java/com/automation/instagram/service/reelverification/ReelVerificationService.java`
+- Create: `InstagramAutomation/src/main/java/com/automation/instagram/service/reelverification/ReelScanRunner.java`
 - Test: `InstagramAutomation/src/test/java/com/automation/instagram/service/reelverification/ReelVerificationServiceTest.java`
+- Test: `InstagramAutomation/src/test/java/com/automation/instagram/service/reelverification/ReelScanRunnerTest.java`
 
 - [ ] **Step 1 : Écrire le test avec mocks**
 
@@ -1318,6 +1353,8 @@ Expected: compile error.
 
 - [ ] **Step 3 : Implémenter `ReelVerificationService`**
 
+Ce service ne porte **plus** la méthode `@Async` — il délègue à `ReelScanRunner` (Step 3b) pour éviter le piège proxy AOP. Il garde : `startScan` (préparation + kick-off async), `verifyOneEntry` (synchrone), `listMissing`, et la méthode utilitaire `verifyAccount` (package-private, réutilisée par `ReelScanRunner`).
+
 ```java
 package com.automation.instagram.service.reelverification;
 
@@ -1333,7 +1370,6 @@ import com.automation.instagram.service.reelstats.scraper.ScraperStatsException;
 import com.automation.instagram.service.reelverification.scraper.ScraperCheckNowClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -1351,8 +1387,9 @@ public class ReelVerificationService {
     private final ScraperStatsClient statsClient;
     private final ReelMatcher matcher;
     private final ScanRunRegistry registry;
+    private final ReelScanRunner runner;   // bean séparé, porte @Async
 
-    /** Démarre un scan (idempotent si un scan tourne déjà). */
+    /** Démarre un scan (idempotent si un scan tourne déjà). Retourne immédiatement. */
     public ScanRun startScan(int lookbackHours) {
         LocalDateTime threshold = LocalDateTime.now().minusHours(lookbackHours);
         List<PostingHistoryEntry> recent = postingHistoryRepo.findByPostedAtAfter(threshold);
@@ -1373,55 +1410,18 @@ public class ReelVerificationService {
             return registry.get(run.id()).orElse(run);
         }
 
-        runScanAsync(run.id(), byUser);
+        // Délègue à un bean séparé pour que @Async soit pris en compte par le proxy Spring.
+        runner.runAsync(run.id(), byUser);
         return run;
     }
 
-    @Async
-    public void runScanAsync(UUID scanId, Map<String, List<PostingHistoryEntry>> byUser) {
-        try {
-            runScanInternal(scanId, byUser);
-        } catch (Exception e) {
-            log.error("Scan {} échec global : {}", scanId, e.getMessage(), e);
-            registry.fail(scanId, e.getMessage());
-        }
-    }
-
-    void runScanInternal(UUID scanId, Map<String, List<PostingHistoryEntry>> byUser) {
-        int done = 0, errors = 0, missing = 0;
-        for (Map.Entry<String, List<PostingHistoryEntry>> e : byUser.entrySet()) {
-            String username = e.getKey();
-            List<PostingHistoryEntry> entries = e.getValue();
-            try {
-                verifyAccount(username, entries, (m) -> {});
-                long miss = entries.stream()
-                        .filter(pe -> pe.getVerificationStatus() == VerificationStatus.MISSING).count();
-                missing += (int) miss;
-                done++;
-            } catch (ScraperStatsException.NotFoundException nf) {
-                entries.forEach(en -> {
-                    en.setVerificationStatus(VerificationStatus.MISSING);
-                    en.setVerifiedAt(LocalDateTime.now());
-                    en.setMatchedShortcode(null);
-                });
-                postingHistoryRepo.saveAll(entries);
-                missing += entries.size();
-                done++;
-                log.info("Compte '{}' inconnu côté scraper : entries marquées MISSING", username);
-            } catch (Exception ex) {
-                errors++;
-                log.warn("Compte '{}' : scraper KO après retry, scan ignoré — {}", username, ex.getMessage());
-            }
-            registry.updateProgress(scanId, done, errors, missing);
-        }
-        registry.complete(scanId);
-        log.info("Scan terminé — scanId={}, verified={}, missing={}, errors={}",
-                scanId, done - errors, missing, errors);
-    }
-
-    /** Vérifie un seul user avec retry × 1 sur checkNow. Thow si double échec. */
-    private void verifyAccount(String username, List<PostingHistoryEntry> entries,
-                               java.util.function.Consumer<Void> onProgress) throws InterruptedException {
+    /**
+     * Vérifie un username (check-now + fetch + match + persist). Retry × 1 sur checkNow.
+     * Throw {@link ScraperStatsException.NotFoundException} si le compte est inconnu du scraper
+     * (le caller décide du marquage MISSING). Throw le reste sur double échec transport/auth.
+     * Package-private : appelé par ReelScanRunner.
+     */
+    void verifyAccount(String username, List<PostingHistoryEntry> entries) throws InterruptedException {
         ScraperCheckNowClient.CheckNowResult cn;
         try {
             cn = checkNowClient.checkNow(username);
@@ -1429,7 +1429,7 @@ public class ReelVerificationService {
             throw e;  // propagation → marquage MISSING côté caller
         } catch (Exception first) {
             log.debug("Compte '{}' : 1er checkNow KO ({}) — retry", username, first.getMessage());
-            cn = checkNowClient.checkNow(username);  // 1 retry
+            cn = checkNowClient.checkNow(username);  // 1 retry, peut re-throw
         }
         log.info("Compte '{}' : check-now OK, success={}, reelsTouched={}",
                 username, cn.success(), cn.reelsTouched());
@@ -1456,7 +1456,7 @@ public class ReelVerificationService {
         PostingHistoryEntry entry = postingHistoryRepo.findById(entryId)
                 .orElseThrow(() -> new NoSuchElementException("Entry introuvable : " + entryId));
         try {
-            verifyAccount(entry.getUsername(), List.of(entry), v -> {});
+            verifyAccount(entry.getUsername(), List.of(entry));
         } catch (ScraperStatsException.NotFoundException nf) {
             entry.setVerificationStatus(VerificationStatus.MISSING);
             entry.setVerifiedAt(LocalDateTime.now());
@@ -1477,15 +1477,107 @@ public class ReelVerificationService {
 }
 ```
 
-- [ ] **Step 4 : Run les tests — doivent passer**
+- [ ] **Step 3b : Implémenter `ReelScanRunner` (bean séparé, porte `@Async`)**
+
+```java
+package com.automation.instagram.service.reelverification;
+
+import com.automation.instagram.model.mongo.PostingHistoryEntry;
+import com.automation.instagram.model.mongo.VerificationStatus;
+import com.automation.instagram.repository.PostingHistoryRepository;
+import com.automation.instagram.service.reelstats.scraper.ScraperStatsException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * Runner asynchrone du scan global. Séparé de {@link ReelVerificationService} car
+ * {@code @Async} requiert un appel via proxy Spring — impossible en self-invocation.
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class ReelScanRunner {
+
+    private final ReelVerificationService service;
+    private final PostingHistoryRepository postingHistoryRepo;
+    private final ScanRunRegistry registry;
+
+    @Async
+    public void runAsync(UUID scanId, Map<String, List<PostingHistoryEntry>> byUser) {
+        try {
+            runInternal(scanId, byUser);
+        } catch (Exception e) {
+            log.error("Scan {} échec global : {}", scanId, e.getMessage(), e);
+            registry.fail(scanId, e.getMessage());
+        }
+    }
+
+    /** Package-private pour être testé en synchrone (sans executor). */
+    void runInternal(UUID scanId, Map<String, List<PostingHistoryEntry>> byUser) {
+        int done = 0, errors = 0, missing = 0;
+        for (Map.Entry<String, List<PostingHistoryEntry>> e : byUser.entrySet()) {
+            String username = e.getKey();
+            List<PostingHistoryEntry> entries = e.getValue();
+            try {
+                service.verifyAccount(username, entries);
+                long miss = entries.stream()
+                        .filter(pe -> pe.getVerificationStatus() == VerificationStatus.MISSING).count();
+                missing += (int) miss;
+                done++;
+            } catch (ScraperStatsException.NotFoundException nf) {
+                entries.forEach(en -> {
+                    en.setVerificationStatus(VerificationStatus.MISSING);
+                    en.setVerifiedAt(LocalDateTime.now());
+                    en.setMatchedShortcode(null);
+                });
+                postingHistoryRepo.saveAll(entries);
+                missing += entries.size();
+                done++;
+                log.info("Compte '{}' inconnu côté scraper : entries marquées MISSING", username);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                errors++;
+                log.warn("Compte '{}' : scan interrompu", username);
+            } catch (Exception ex) {
+                errors++;
+                log.warn("Compte '{}' : scraper KO après retry, scan ignoré — {}", username, ex.getMessage());
+            }
+            registry.updateProgress(scanId, done, errors, missing);
+        }
+        registry.complete(scanId);
+        int verified = Math.max(0, done - errors - missing);
+        log.info("Scan terminé — scanId={}, verified={}, missing={}, errors={}",
+                scanId, verified, missing, errors);
+    }
+}
+```
+
+- [ ] **Step 4 : Écrire un test `ReelScanRunnerTest`**
+
+Test focalisé sur `runInternal(...)` (appelable synchroniquement) :
+- iter sur plusieurs usernames → `verifyAccount` appelé une fois par user
+- si `verifyAccount` throw `NotFoundException` pour un user → entries de ce user persistés en MISSING, `done++`
+- si `verifyAccount` throw `TransportException` → `errors++`, entries **non** modifiés, itération continue pour les autres users
+- les compteurs du `ScanRun` sont mis à jour après chaque user (via `registry.updateProgress`)
+- `registry.complete(scanId)` est appelé en fin.
+
+- [ ] **Step 5 : Run les tests — doivent passer**
 
 Run:
 ```bash
 ./mvnw test -Dtest=ReelVerificationServiceTest
+./mvnw test -Dtest=ReelScanRunnerTest
 ```
-Expected: PASS (7 cas). Si un test échoue, vérifier que les mocks sont cohérents avec la signature réelle implémentée.
+Expected: PASS (7 cas service + 4 cas runner). Si un test échoue, vérifier que les mocks sont cohérents avec la signature réelle implémentée.
 
-- [ ] **Step 5 : Run toute la suite**
+- [ ] **Step 6 : Run toute la suite**
 
 Run:
 ```bash
@@ -1493,12 +1585,14 @@ Run:
 ```
 Expected: PASS.
 
-- [ ] **Step 6 : Commit**
+- [ ] **Step 7 : Commit**
 
 ```bash
 git add src/main/java/com/automation/instagram/service/reelverification/ReelVerificationService.java \
-        src/test/java/com/automation/instagram/service/reelverification/ReelVerificationServiceTest.java
-git commit -m "feat(reel-verification): add ReelVerificationService orchestrator"
+        src/main/java/com/automation/instagram/service/reelverification/ReelScanRunner.java \
+        src/test/java/com/automation/instagram/service/reelverification/ReelVerificationServiceTest.java \
+        src/test/java/com/automation/instagram/service/reelverification/ReelScanRunnerTest.java
+git commit -m "feat(reel-verification): add ReelVerificationService + async ReelScanRunner"
 ```
 
 ---
@@ -1665,6 +1759,9 @@ public record ScanRunSnapshot(
 }
 
 // MissingReelView.java
+// Note : le spec (ligne 237) mentionne un champ optionnel `device?`. Dropped ici : PostingHistoryEntry
+// n'a pas de deviceUdid, et la feature n'exige pas de l'exposer au MVP. À rajouter plus tard si le
+// besoin ressort, en joinant via AccountRepository.findByUsername → InstagramAccount.deviceUdid.
 public record MissingReelView(
     String entryId, String username, String baseVideo, LocalDateTime postedAt,
     VerificationStatus verificationStatus, LocalDateTime verifiedAt, String matchedShortcode
@@ -1692,14 +1789,127 @@ public record RecheckResponse(
 
 - [ ] **Step 2 : Écrire le test du controller avec MockMvc**
 
-Cas :
-1. `POST /api/automation/reel-verification/scan?hours=6` → 200 + JSON avec `scanId`, `total`.
-2. `GET /api/automation/reel-verification/scan/{id}` avec id inconnu → 404.
-3. `GET /api/automation/reel-verification/scan/{id}` avec id connu → 200 + snapshot.
-4. `GET /api/automation/reel-verification/missing?hours=6` → 200 + array.
-5. `POST /api/automation/reel-verification/recheck` avec entryId connu → 200.
-6. `POST /api/automation/reel-verification/recheck` avec entryId inconnu → 404.
-7. Idempotence : 2 appels successifs à `scan` → même `scanId`.
+Note convention : le projet n'a pas d'autre test de controller en `@WebMvcTest` à l'heure actuelle (`AccountControllerTest` est en pur Mockito). Utiliser `@WebMvcTest(ReelVerificationController.class)` + `@MockBean` pour ce test est acceptable et plus propre qu'un pur unit Mockito — on vérifie le wiring MVC complet (chemins, JSON, codes HTTP).
+
+Squelette complet :
+```java
+package com.automation.instagram.controller;
+
+import com.automation.instagram.dto.reelverification.*;
+import com.automation.instagram.model.mongo.PostingHistoryEntry;
+import com.automation.instagram.model.mongo.VerificationStatus;
+import com.automation.instagram.service.reelverification.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@WebMvcTest(ReelVerificationController.class)
+class ReelVerificationControllerTest {
+
+    @Autowired MockMvc mvc;
+    @Autowired ObjectMapper om;
+    @MockBean ReelVerificationService service;
+    @MockBean ScanRunRegistry registry;
+
+    @Test
+    void startScan_returnsScanStartResponse() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.startScan(6)).thenReturn(ScanRun.start(id, 3));
+        mvc.perform(post("/api/automation/reel-verification/scan?hours=6"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.scanId").value(id.toString()))
+           .andExpect(jsonPath("$.total").value(3));
+    }
+
+    @Test
+    void getScan_unknownId_returns404() throws Exception {
+        when(registry.get(any())).thenReturn(Optional.empty());
+        mvc.perform(get("/api/automation/reel-verification/scan/{id}", UUID.randomUUID()))
+           .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getScan_knownId_returnsSnapshot() throws Exception {
+        UUID id = UUID.randomUUID();
+        ScanRun r = new ScanRun(id, ScanStatus.COMPLETED, 5, 5, 0, 1,
+                Instant.now(), Instant.now(), null);
+        when(registry.get(id)).thenReturn(Optional.of(r));
+        mvc.perform(get("/api/automation/reel-verification/scan/{id}", id))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.status").value("COMPLETED"))
+           .andExpect(jsonPath("$.missingCount").value(1));
+    }
+
+    @Test
+    void missing_returnsArray() throws Exception {
+        PostingHistoryEntry e = PostingHistoryEntry.builder()
+                .id("e1").username("alice").baseVideo("vid1")
+                .postedAt(LocalDateTime.now())
+                .verificationStatus(VerificationStatus.MISSING)
+                .verifiedAt(LocalDateTime.now())
+                .build();
+        when(service.listMissing(6)).thenReturn(List.of(e));
+        mvc.perform(get("/api/automation/reel-verification/missing?hours=6"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$[0].entryId").value("e1"))
+           .andExpect(jsonPath("$[0].verificationStatus").value("MISSING"));
+    }
+
+    @Test
+    void recheck_knownEntry_returnsResponse() throws Exception {
+        PostingHistoryEntry updated = PostingHistoryEntry.builder()
+                .id("e42").username("alice")
+                .verificationStatus(VerificationStatus.VERIFIED)
+                .matchedShortcode("ABC123")
+                .verifiedAt(LocalDateTime.now())
+                .build();
+        when(service.verifyOneEntry("e42")).thenReturn(updated);
+        mvc.perform(post("/api/automation/reel-verification/recheck")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(om.writeValueAsString(new RecheckRequest("e42"))))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.verificationStatus").value("VERIFIED"))
+           .andExpect(jsonPath("$.matchedShortcode").value("ABC123"));
+    }
+
+    @Test
+    void recheck_unknownEntry_returns404() throws Exception {
+        when(service.verifyOneEntry("nope")).thenThrow(new java.util.NoSuchElementException("x"));
+        mvc.perform(post("/api/automation/reel-verification/recheck")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(om.writeValueAsString(new RecheckRequest("nope"))))
+           .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void startScan_idempotent_returnsExistingScanIdWhenOneIsRunning() throws Exception {
+        // Le comportement d'idempotence vit dans ScanRunRegistry, pas dans le controller.
+        // Ce test vérifie juste que le controller appelle service.startScan deux fois et retourne
+        // le scanId renvoyé à chaque fois (cohérent même si le même id revient).
+        UUID id = UUID.randomUUID();
+        when(service.startScan(6)).thenReturn(ScanRun.start(id, 1));
+        mvc.perform(post("/api/automation/reel-verification/scan?hours=6")).andExpect(status().isOk());
+        mvc.perform(post("/api/automation/reel-verification/scan?hours=6"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.scanId").value(id.toString()));
+    }
+}
+```
 
 - [ ] **Step 3 : Run — échec attendu**
 
@@ -1808,13 +2018,27 @@ git commit -m "feat(reel-verification): expose 4 REST endpoints for dashboard"
 
 Run:
 ```bash
-grep -n "ApplicationEventPublisher\|@Autowired\|final " src/main/java/com/automation/instagram/workflow/impl/PostReelWorkflow.java | head -20
+grep -n "ApplicationEventPublisher\|@Autowired\|@RequiredArgsConstructor\|private final" \
+  src/main/java/com/automation/instagram/workflow/impl/PostReelWorkflow.java | head -20
 ```
-Si `ApplicationEventPublisher` n'est pas déjà injecté, l'ajouter via le constructeur (Lombok `@RequiredArgsConstructor` si utilisé). Vérifier aussi avec quel framework d'injection travaille cette classe (pattern Spring vs pattern custom du projet workflow).
+D'après exploration : la classe est `@Component` + `@RequiredArgsConstructor` (Lombok génère le constructor depuis tous les `private final`). `ApplicationEventPublisher` n'est **pas** encore injecté.
 
-- [ ] **Step 2 : Modifier `onAfterExecute`**
+- [ ] **Step 2 : Ajouter l'injection de `ApplicationEventPublisher` AVANT de l'utiliser**
 
-Remplacer le bloc existant (lignes ~349-366) :
+Dans `PostReelWorkflow.java`, ajouter l'import et le champ :
+```java
+import org.springframework.context.ApplicationEventPublisher;
+import com.automation.instagram.event.ReelPostedEvent;
+import com.automation.instagram.model.mongo.PostingHistoryEntry;
+
+// ... dans la liste des champs final existants ...
+private final ApplicationEventPublisher applicationEventPublisher;
+```
+Grâce à `@RequiredArgsConstructor`, le constructor est régénéré automatiquement.
+
+- [ ] **Step 3 : Modifier `onAfterExecute` (bloc autour ligne 350)**
+
+Remplacer le bloc existant de l'étape `"PostReel"` (en préservant la logique `"PostStory"` juste après) :
 ```java
 result.getStepResults().stream()
         .filter(sr -> "PostReel".equals(sr.getStepName()) && sr.isSuccess())
@@ -1826,13 +2050,16 @@ result.getStepResults().stream()
             String driveFilename = context.get("driveFilename", String.class);
 
             if (postingUsername != null && baseVideoName != null) {
-                try {
-                    PostingHistoryEntry entry = postingHistoryService.markAsPosted(
-                            postingUsername, baseVideoName, postingTemplate, driveFilename);
-                    log.info("[{}] Vidéo marquée dans l'historique de posting: baseVideo={}",
-                            postingUsername, baseVideoName);
+                // markAsPosted peut toujours throw — comportement inchangé par rapport à la version actuelle.
+                PostingHistoryEntry entry = postingHistoryService.markAsPosted(
+                        postingUsername, baseVideoName, postingTemplate, driveFilename);
+                log.info("[{}] Vidéo marquée dans l'historique de posting: baseVideo={}",
+                        postingUsername, baseVideoName);
 
-                    // Publier l'event de vérification post-publication (best-effort)
+                // Publication de l'event — best-effort, JAMAIS bloquant pour le workflow.
+                // try/catch restreint uniquement à publishEvent : on NE swallow PAS les erreurs
+                // de markAsPosted (qui signalent un vrai problème de persistance Mongo).
+                try {
                     applicationEventPublisher.publishEvent(
                             new ReelPostedEvent(entry.getUsername(), entry.getId(), entry.getPostedAt()));
                 } catch (Exception ex) {
@@ -1842,10 +2069,6 @@ result.getStepResults().stream()
             }
         });
 ```
-
-- [ ] **Step 3 : Ajouter l'injection de `ApplicationEventPublisher` si absente**
-
-Ajouter le champ `private final ApplicationEventPublisher applicationEventPublisher;` + import. S'assurer que la classe est bien construite par Spring (vérifier `@Component` ou équivalent).
 
 - [ ] **Step 4 : Compile**
 
@@ -2218,7 +2441,7 @@ export default function ReelVerification() {
 }
 ```
 
-- [ ] **Step 2 : Commit**
+- [ ] **Step 3 : Commit**
 
 ```bash
 git add src/pages/ReelVerification.jsx

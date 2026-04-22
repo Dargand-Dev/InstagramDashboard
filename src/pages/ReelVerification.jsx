@@ -77,7 +77,10 @@ export default function ReelVerification() {
   }
 
   const scanRunning = scanStatus.data?.status === 'RUNNING'
-  const records = Array.isArray(missing.data) ? missing.data : (missing.data?.data || [])
+  const records = useMemo(
+    () => (Array.isArray(missing.data) ? missing.data : (missing.data?.data || [])),
+    [missing.data],
+  )
   const uniqueUsers = useMemo(
     () => new Set(records.map(r => r.username)).size,
     [records],

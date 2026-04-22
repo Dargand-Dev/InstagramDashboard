@@ -23,6 +23,7 @@ import {
   Menu,
   UserPlus,
   AlertOctagon,
+  ShieldCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -74,6 +75,7 @@ const NAV_SECTIONS = [
       { path: '/error-center', label: 'Error Center', icon: AlertTriangle },
       { path: '/notifications', label: 'Notifications', icon: Bell, showBadge: true },
       { path: '/activity-log', label: 'Activity Log', icon: ScrollText },
+      { path: '/reel-verification', label: 'Vérification Reels', icon: ShieldCheck },
     ],
   },
   {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   useStartScan, useScanStatus, useMissingReels, useRecheckOne,
@@ -24,12 +25,23 @@ export default function ReelVerification() {
   const [hours, setHours] = useState(6)
   const [scanId, setScanId] = useState(null)
 
+  const qc = useQueryClient()
   const startScan = useStartScan()
   const scanStatus = useScanStatus(scanId)
   const missing = useMissingReels(hours)
   const recheck = useRecheckOne()
 
-  // Gère la notification de fin + reset du scanId (pour masquer le spinner)
+  // Surface l'erreur de polling (scanId expiré / backend down) et reset le spinner.
+  // setScanId est différé via setTimeout pour éviter un setState synchrone dans l'effet.
+  useEffect(() => {
+    if (!scanId || !scanStatus.isError) return
+    toast.error('Impossible de suivre le scan — statut indisponible')
+    const id = setTimeout(() => setScanId(null), 0)
+    return () => clearTimeout(id)
+  }, [scanId, scanStatus.isError])
+
+  // Gère la notification de fin + reset du scanId (pour masquer le spinner) +
+  // invalide la liste MISSING pour qu'elle reflète les nouveaux résultats.
   useEffect(() => {
     const status = scanStatus.data?.status
     if (!scanId || !status) return
@@ -38,13 +50,16 @@ export default function ReelVerification() {
       const missingCount = scanStatus.data.missingCount ?? 0
       if (status === 'COMPLETED') {
         toast.success(`Scan terminé — ${missingCount} manquant(s)${errors > 0 ? `, ${errors} erreur(s)` : ''}`)
+        // Refresh la liste MISSING côté page — les entries ont été mises à jour en base
+        // pendant le scan async, donc invalider ici (et pas seulement onSuccess de startScan).
+        qc.invalidateQueries({ queryKey: ['reel-verification', 'missing'] })
       } else if (status === 'FAILED') {
         toast.error(`Scan échoué — ${scanStatus.data.error || 'erreur inconnue'}`)
       }
       const id = setTimeout(() => setScanId(null), 5000)
       return () => clearTimeout(id)
     }
-  }, [scanId, scanStatus.data?.status, scanStatus.data?.missingCount, scanStatus.data?.errors, scanStatus.data?.error])
+  }, [scanId, scanStatus.data?.status, scanStatus.data?.missingCount, scanStatus.data?.errors, scanStatus.data?.error, qc])
 
   const handleScan = async () => {
     try {

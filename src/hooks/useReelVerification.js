@@ -15,7 +15,9 @@ export function useStartScan() {
 
 /**
  * Poll le statut d'un scan toutes les 2s tant qu'il est RUNNING.
- * Stoppe automatiquement quand status != RUNNING ou quand scanId est falsy.
+ * Stoppe automatiquement quand status != RUNNING, quand scanId est falsy,
+ * ou quand la query a épuisé ses retries en erreur (scanId expiré/inconnu,
+ * backend down — sinon on polllerait toutes les 2s indéfiniment).
  */
 export function useScanStatus(scanId) {
   return useQuery({
@@ -23,6 +25,7 @@ export function useScanStatus(scanId) {
     queryFn: () => apiGet(`${BASE}/scan/${scanId}`),
     enabled: !!scanId,
     refetchInterval: (query) => {
+      if (query.state.status === 'error') return false
       const data = query.state.data
       if (!data || data.status === 'RUNNING') return 2000
       return false

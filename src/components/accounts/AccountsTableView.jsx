@@ -2,10 +2,11 @@ import { useState, useMemo } from 'react'
 import {
   SlidersHorizontal, X, Plus, Clock, Calendar, TrendingDown, TrendingUp,
   Ban, Link, ChevronDown, ChevronUp, Table2, Smartphone, CalendarOff, ExternalLink,
-  Target, CalendarClock, CheckCircle2, CalendarRange,
+  Target, CalendarClock, CheckCircle2, CalendarRange, AlertTriangle,
 } from 'lucide-react'
 import DataTable from '@/components/shared/DataTable'
 import StatusBadge from '@/components/shared/StatusBadge'
+import AccountWarnings from './AccountWarnings'
 import { Blur } from '@/contexts/IncognitoContext'
 import {
   FILTER_FIELDS, FILTER_PRESETS, applyFilters, formatFilterLabel, nextFilterId,
@@ -221,6 +222,7 @@ export default function AccountsTableView({
 }) {
   const [filters, setFilters] = useState([])
   const [panelOpen, setPanelOpen] = useState(false)
+  const [warningsOnly, setWarningsOnly] = useState(false)
 
   // Apply all filters (AND logic)
   const enrichment = useMemo(() => ({
@@ -230,10 +232,11 @@ export default function AccountsTableView({
     scraperByUsername: scraperByUsername || {},
   }), [postCounts, usernameToIdentity, accountDeviceMap, scraperByUsername])
 
-  const filteredData = useMemo(
-    () => applyFilters(accounts || [], filters, enrichment),
-    [accounts, filters, enrichment],
-  )
+  const filteredData = useMemo(() => {
+    const base = applyFilters(accounts || [], filters, enrichment)
+    if (!warningsOnly) return base
+    return base.filter(a => a.setupProfessionalFailed || a.twoFaFailed)
+  }, [accounts, filters, enrichment, warningsOnly])
 
   // Filter mutations
   function addFilter() {
@@ -317,8 +320,13 @@ export default function AccountsTableView({
     {
       accessorKey: 'status',
       header: 'Status',
-      cell: ({ row }) => <StatusBadge status={row.original.status} />,
-      size: 100,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1.5">
+          <StatusBadge status={row.original.status} />
+          <AccountWarnings account={row.original} />
+        </div>
+      ),
+      size: 120,
     },
     {
       id: 'identity',
@@ -528,16 +536,27 @@ export default function AccountsTableView({
       </div>
 
       {/* ── Summary bar ─────────────────────────────────────────── */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <Table2 size={14} className="text-[#555]" />
           <span className="text-sm text-white font-semibold">
             {filteredData.length}
             <span className="text-[#555] font-normal">
-              {hasFilters ? ` / ${(accounts || []).length} accounts` : ' accounts'}
+              {(hasFilters || warningsOnly) ? ` / ${(accounts || []).length} accounts` : ' accounts'}
             </span>
           </span>
         </div>
+
+        <label className="flex items-center gap-1.5 text-sm text-[#A1A1AA] cursor-pointer">
+          <input
+            type="checkbox"
+            checked={warningsOnly}
+            onChange={e => setWarningsOnly(e.target.checked)}
+            className="accent-[#F59E0B]"
+          />
+          <AlertTriangle size={13} className="text-[#F59E0B]" />
+          <span>Warnings only</span>
+        </label>
       </div>
 
       {/* ── Data Table ──────────────────────────────────────────── */}

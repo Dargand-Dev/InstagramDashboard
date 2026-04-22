@@ -248,6 +248,7 @@ function DeviceCard({ device, onEdit }) {
   const totalActive = device.identityProgress?.reduce((sum, ip) => sum + Math.min(ip.currentCount, ip.targetCount), 0) || 0
   const progress = totalTarget > 0 ? Math.round((totalActive / totalTarget) * 100) : 0
   const currentMode = device.mode || AUTO_CREATION_MODES.DISABLED
+  const containersToCreate = Math.max(0, totalTarget - totalActive)
 
   return (
     <Card className="bg-[#111111] border-[#1a1a1a]">
@@ -263,6 +264,15 @@ function DeviceCard({ device, onEdit }) {
               >
                 <Container className="w-2.5 h-2.5 mr-1" />
                 Existing
+              </Badge>
+            )}
+            {currentMode === AUTO_CREATION_MODES.AUTOMATIC_CONTAINER_CREATION && containersToCreate > 0 && (
+              <Badge
+                variant="outline"
+                className="text-[9px] px-1.5 py-0 border-[#3B82F6]/30 text-[#3B82F6] bg-[#3B82F6]/10"
+              >
+                <Sparkles className="w-2.5 h-2.5 mr-1" />
+                {containersToCreate} container{containersToCreate > 1 ? 's' : ''}
               </Badge>
             )}
           </div>

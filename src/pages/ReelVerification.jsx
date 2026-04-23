@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   useStartScan, useScanStatus, useMissingReels, useRecheckOne, useDismissOne,
 } from '@/hooks/useReelVerification'
+import { apiGet, apiPost } from '@/lib/api'
 import DataTable from '@/components/shared/DataTable'
 import EmptyState from '@/components/shared/EmptyState'
 import TimeAgo from '@/components/shared/TimeAgo'
@@ -15,7 +16,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import {
-  ShieldCheck, RefreshCw, CheckCircle2, AlertCircle, Clock, EyeOff, Smartphone,
+  ShieldCheck, RefreshCw, CheckCircle2, AlertCircle, Clock, EyeOff, Smartphone, Container,
 } from 'lucide-react'
 
 const ALL_DEVICES = '__all__'
@@ -38,6 +39,40 @@ export default function ReelVerification() {
   const missing = useMissingReels(hours)
   const recheck = useRecheckOne()
   const dismiss = useDismissOne()
+
+  // Comptes + devices pour résoudre containerId / craneContainer / rotatingUrl
+  // afin de permettre l'ouverture du conteneur directement depuis la ligne.
+  const accounts = useQuery({
+    queryKey: ['accounts'],
+    queryFn: () => apiGet('/api/accounts'),
+    staleTime: 30_000,
+  })
+  const devices = useQuery({
+    queryKey: ['devices'],
+    queryFn: () => apiGet('/api/devices'),
+    staleTime: 30_000,
+  })
+  // Historique utilisé comme dénominateur pour le taux de fail par device
+  // sur la fenêtre courante. limit=500 max côté backend.
+  const postingHistory = useQuery({
+    queryKey: ['posting-history', 500],
+    queryFn: () => apiGet('/api/automation/posting-history?limit=500'),
+    staleTime: 30_000,
+  })
+
+  const accountByUsername = useMemo(() => {
+    const list = Array.isArray(accounts.data) ? accounts.data : (accounts.data?.data || [])
+    const map = new Map()
+    for (const a of list) if (a.username) map.set(a.username, a)
+    return map
+  }, [accounts.data])
+
+  const deviceByUdid = useMemo(() => {
+    const list = Array.isArray(devices.data) ? devices.data : (devices.data?.data || [])
+    const map = new Map()
+    for (const d of list) if (d.udid) map.set(d.udid, d)
+    return map
+  }, [devices.data])
 
   // Surface l'erreur de polling (scanId expiré / backend down) et reset le spinner.
   // setScanId est différé via setTimeout pour éviter un setState synchrone dans l'effet.
@@ -108,6 +143,37 @@ export default function ReelVerification() {
     }
   }, [dismiss])
 
+  const handleOpenContainer = useCallback(async (row) => {
+    const account = accountByUsername.get(row.username)
+    if (!account) {
+      toast.error('Compte introuvable')
+      return
+    }
+    if (!account.deviceUdid || !account.containerId) {
+      toast.error('Aucun conteneur assigné à ce compte')
+      return
+    }
+    const device = deviceByUdid.get(account.deviceUdid)
+    try {
+      const resp = await apiPost('/api/automation/execute', {
+        actionName: 'SwitchCraneContainer',
+        deviceUdid: account.deviceUdid,
+        parameters: {
+          containerId: account.containerId,
+          containerName: account.craneContainer,
+          proxyRotateUrl: device?.rotatingUrl || undefined,
+        },
+      })
+      if (resp?.locked) {
+        toast.error('Système verrouillé, réessayer plus tard')
+        return
+      }
+      toast.success('Ouverture du conteneur en file')
+    } catch (e) {
+      toast.error(`Échec : ${e.message}`)
+    }
+  }, [accountByUsername, deviceByUdid])
+
   const scanRunning = scanStatus.data?.status === 'RUNNING'
   const allRecords = useMemo(
     () => (Array.isArray(missing.data) ? missing.data : (missing.data?.data || [])),
@@ -143,6 +209,56 @@ export default function ReelVerification() {
     () => new Set(records.map(r => r.username)).size,
     [records],
   )
+
+  // Taux de fail par device sur la fenêtre courante :
+  //   fail% = manquants_device / total_posté_device (sur `hours`).
+  // On utilise allRecords (pas records) pour ne pas dépendre du filtre device.
+  // Dénominateur via /posting-history (500 dernières entries) croisé avec
+  // accountByUsername pour résoudre username → deviceUdid.
+  // Borne basse de la fenêtre : on s'aligne sur dataUpdatedAt de React Query
+  // (timestamp stable qui change quand la data est rafraîchie) — évite d'appeler
+  // Date.now() dans un useMemo (règle react-hooks/purity). Si la query n'a pas
+  // encore fetché, dataUpdatedAt = 0 → cutoff très négatif → pas de filtrage
+  // (mais entries sera vide de toute façon, donc pas d'impact).
+  const cutoffMs = useMemo(
+    () => postingHistory.dataUpdatedAt - hours * 3600_000,
+    [postingHistory.dataUpdatedAt, hours],
+  )
+
+  const deviceFailStats = useMemo(() => {
+    const entries = postingHistory.data?.entries || []
+    const totalsByUdid = new Map() // udid → count posté sur la fenêtre
+    for (const e of entries) {
+      if (!e.postedAt) continue
+      const t = new Date(e.postedAt).getTime()
+      if (isNaN(t) || t < cutoffMs) continue
+      const acc = accountByUsername.get(e.username)
+      const udid = acc?.deviceUdid
+      if (!udid) continue
+      totalsByUdid.set(udid, (totalsByUdid.get(udid) || 0) + 1)
+    }
+    const missingByUdid = new Map()
+    const nameByUdid = new Map()
+    for (const r of allRecords) {
+      if (!r.deviceUdid) continue
+      missingByUdid.set(r.deviceUdid, (missingByUdid.get(r.deviceUdid) || 0) + 1)
+      if (r.deviceName) nameByUdid.set(r.deviceUdid, r.deviceName)
+    }
+    const list = []
+    for (const [udid, total] of totalsByUdid) {
+      const missingCount = missingByUdid.get(udid) || 0
+      const name = nameByUdid.get(udid) || deviceByUdid.get(udid)?.name || udid.slice(-8)
+      list.push({
+        udid,
+        name,
+        missing: missingCount,
+        total,
+        failPct: total > 0 ? (missingCount / total) * 100 : 0,
+      })
+    }
+    // Tri : fail% décroissant, puis nb de manquants décroissant
+    return list.sort((a, b) => b.failPct - a.failPct || b.missing - a.missing)
+  }, [postingHistory.data, allRecords, accountByUsername, deviceByUdid, cutoffMs])
 
   const columns = useMemo(() => [
     {
@@ -187,30 +303,44 @@ export default function ReelVerification() {
     {
       id: 'action',
       header: '',
-      cell: ({ row }) => (
-        <div className="flex gap-2 justify-end">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={recheck.isPending}
-            onClick={() => handleRecheck(row.original.entryId)}
-          >
-            <RefreshCw className="h-3 w-3 mr-1" />
-            Re-vérifier
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={dismiss.isPending}
-            onClick={() => handleDismiss(row.original.entryId)}
-          >
-            <EyeOff className="h-3 w-3 mr-1" />
-            Ignorer
-          </Button>
-        </div>
-      ),
+      cell: ({ row }) => {
+        const account = accountByUsername.get(row.original.username)
+        const canOpenContainer = !!(account?.containerId && account?.deviceUdid)
+        return (
+          <div className="flex gap-2 justify-end">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!canOpenContainer}
+              onClick={() => handleOpenContainer(row.original)}
+              title={canOpenContainer ? 'Rotate proxy & ouvrir le conteneur' : 'Aucun conteneur assigné à ce compte'}
+            >
+              <Container className="h-3 w-3 mr-1" />
+              Ouvrir conteneur
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={dismiss.isPending}
+              onClick={() => handleDismiss(row.original.entryId)}
+            >
+              <EyeOff className="h-3 w-3 mr-1" />
+              Ignorer
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={recheck.isPending}
+              onClick={() => handleRecheck(row.original.entryId)}
+            >
+              <RefreshCw className="h-3 w-3 mr-1" />
+              Re-vérifier
+            </Button>
+          </div>
+        )
+      },
     },
-  ], [recheck.isPending, dismiss.isPending, handleRecheck, handleDismiss])
+  ], [recheck.isPending, dismiss.isPending, handleRecheck, handleDismiss, handleOpenContainer, accountByUsername])
 
   return (
     <div className="p-6 space-y-6">
@@ -308,6 +438,56 @@ export default function ReelVerification() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Taux de fail par device sur la fenêtre courante */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+            <Smartphone className="h-4 w-4" /> Taux de fail par téléphone ({hours}h)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {postingHistory.isLoading ? (
+            <Skeleton className="h-16 w-full" />
+          ) : deviceFailStats.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Aucun post sur la fenêtre — rien à mesurer.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {deviceFailStats.map(d => {
+                const pctColor =
+                  d.failPct >= 50 ? 'text-red-400'
+                  : d.failPct >= 20 ? 'text-amber-400'
+                  : d.failPct > 0 ? 'text-yellow-400'
+                  : 'text-emerald-400'
+                const barColor =
+                  d.failPct >= 50 ? 'bg-red-500'
+                  : d.failPct >= 20 ? 'bg-amber-500'
+                  : d.failPct > 0 ? 'bg-yellow-500'
+                  : 'bg-emerald-500'
+                return (
+                  <div key={d.udid} className="flex items-center gap-3">
+                    <span className="text-sm font-medium w-[140px] truncate">{d.name}</span>
+                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${barColor}`}
+                        style={{ width: `${Math.min(d.failPct, 100)}%` }}
+                      />
+                    </div>
+                    <span className={`text-sm font-mono font-semibold w-[60px] text-right ${pctColor}`}>
+                      {d.failPct.toFixed(0)}%
+                    </span>
+                    <span className="text-xs text-muted-foreground font-mono w-[70px] text-right">
+                      {d.missing}/{d.total}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Table / empty state */}
       {missing.isLoading ? (

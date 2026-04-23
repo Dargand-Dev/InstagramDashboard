@@ -15,6 +15,13 @@ function formatDate(d) {
   })
 }
 
+function formatShortDate(d) {
+  if (!d) return null
+  return new Date(d).toLocaleDateString('fr-FR', {
+    day: '2-digit', month: '2-digit',
+  })
+}
+
 function computeKpis(suspended) {
   if (!Array.isArray(suspended)) return { total: 0, inGrace: 0, recent24h: 0 }
   const now = Date.now()
@@ -80,9 +87,9 @@ export default function AutoSuspended() {
 
   const kpis = computeKpis(suspended)
 
-  function handleReactivate3d(account) {
-    setPendingAction({ id: account.id, kind: 'reactivate3' })
-    reactivate.mutate({ id: account.id, graceDays: 3 })
+  function handleReactivate2d(account) {
+    setPendingAction({ id: account.id, kind: 'reactivate2' })
+    reactivate.mutate({ id: account.id, graceDays: 2 })
   }
 
   function handleReactivate10d(account) {
@@ -106,7 +113,7 @@ export default function AutoSuspended() {
         </div>
         <p className="text-xs text-[#555]">
           Comptes automatiquement suspendus par le système (moyenne des vues trop faible).
-          Réactive en grâce 3j, 10j, ou bannis-les.
+          Réactive en grâce 2j, 10j, ou bannis-les.
         </p>
       </div>
 
@@ -157,7 +164,7 @@ export default function AutoSuspended() {
               key={account.id}
               account={account}
               onOpenDetails={() => navigate(`/accounts?username=${encodeURIComponent(account.username)}`)}
-              onReactivate3d={() => handleReactivate3d(account)}
+              onReactivate2d={() => handleReactivate2d(account)}
               onReactivate10d={() => handleReactivate10d(account)}
               onBan={() => handleBan(account)}
               pending={pendingAction?.id === account.id ? pendingAction.kind : null}
@@ -169,13 +176,21 @@ export default function AutoSuspended() {
   )
 }
 
-function SuspendedCard({ account, onOpenDetails, onReactivate3d, onReactivate10d, onBan, pending }) {
+function SuspendedCard({ account, onOpenDetails, onReactivate2d, onReactivate10d, onBan, pending }) {
   const now = Date.now()
   const graceActive = account.autoSuspendGraceUntil
     && new Date(account.autoSuspendGraceUntil).getTime() > now
   const graceEndsInDays = graceActive
     ? Math.ceil((new Date(account.autoSuspendGraceUntil).getTime() - now) / 86400000)
     : 0
+
+  const currentGraceUntilMs = graceActive ? new Date(account.autoSuspendGraceUntil).getTime() : null
+  const pastGraces = Array.isArray(account.autoSuspendGraceHistory)
+    ? [...account.autoSuspendGraceHistory]
+        .filter(g => currentGraceUntilMs === null
+          || new Date(g.graceUntil).getTime() !== currentGraceUntilMs)
+        .sort((a, b) => new Date(b.grantedAt).getTime() - new Date(a.grantedAt).getTime())
+    : []
 
   return (
     <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded-[10px] overflow-hidden hover:border-[#333] transition-colors">
@@ -259,6 +274,26 @@ function SuspendedCard({ account, onOpenDetails, onReactivate3d, onReactivate10d
             </p>
           </div>
         </div>
+        {pastGraces.length > 0 && (
+          <div className="pt-1.5 border-t border-[#1a1a1a]">
+            <p className="text-[9px] text-[#555] uppercase tracking-wide mb-1">Grâces précédentes</p>
+            <div className="flex flex-wrap gap-1.5">
+              {pastGraces.slice(0, 3).map((g, i) => (
+                <span
+                  key={i}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-[#222] bg-[#0f0f0f] text-[10px] text-[#888]"
+                  title={`Grâce de ${g.graceDays}j accordée le ${formatDate(g.grantedAt)}`}
+                >
+                  <Clock size={9} className="text-[#666]" />
+                  {g.graceDays}j le {formatShortDate(g.grantedAt)}
+                </span>
+              ))}
+              {pastGraces.length > 3 && (
+                <span className="text-[10px] text-[#555] self-center">+{pastGraces.length - 3}</span>
+              )}
+            </div>
+          </div>
+        )}
         <div className="flex items-center gap-3 pt-1.5 text-[10px] text-[#555]">
           {account.autoSuspendedAt && (
             <span>Suspendu {formatRelative(account.autoSuspendedAt)} · {formatDate(account.autoSuspendedAt)}</span>
@@ -269,13 +304,13 @@ function SuspendedCard({ account, onOpenDetails, onReactivate3d, onReactivate10d
       {/* Actions */}
       <div className="px-5 py-3 border-t border-[#1a1a1a] grid grid-cols-3 gap-2">
         <button
-          onClick={onReactivate3d}
+          onClick={onReactivate2d}
           disabled={pending !== null}
           className="flex items-center justify-center gap-1.5 px-2 py-2 rounded-md text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition-colors disabled:opacity-50 disabled:cursor-wait"
-          title="Réactive le compte pendant 3 jours sans possibilité de ré-auto-suspension"
+          title="Réactive le compte pendant 2 jours sans possibilité de ré-auto-suspension"
         >
           <Clock size={12} />
-          {pending === 'reactivate3' ? '...' : 'Grâce 3j'}
+          {pending === 'reactivate2' ? '...' : 'Grâce 2j'}
         </button>
         <button
           onClick={onReactivate10d}

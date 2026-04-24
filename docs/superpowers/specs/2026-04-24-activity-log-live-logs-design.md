@@ -363,7 +363,7 @@ Frontend transition on "complete":
   - **Flush-first sites** (sync path): `DeviceQueueService` L430/L478/L488/L714/L732, `BatchExecutionService` L119/L434/L579. All in worker-thread `finally` blocks, after `flushRunLogs(runId, ...)`.
   - **Flush-later sites** (deferred path): `ExecutionManagementController#stopRun` L111 (IMMEDIATE only — GRACEFUL does not call `completeStream` from the HTTP thread), `DeviceQueueService#cancelTask` L210 (IMMEDIATE only).
 - Grep exhaustively for `completeStream(` across the module. Any new/unknown call site is safe to leave as-is because `RunLogLiveService.completeForRun` handles both cases at runtime — but the audit documents intent so reviewers can sanity-check ordering choices in PRs.
-- Modify `RunLogPersistenceService.flushRunLogs` to call `runLogLiveService.onFlushCompleted(runId)` at the end of a successful save (via an inner try/catch — failures to notify must never block persistence). This call happens unconditionally; it is a no-op when no pending completion exists.
+- Modify `RunLogPersistenceService.flushRunLogs` to call `runLogLiveService.onFlushCompleted(runId)` **in a `finally` block** so it fires whether or not `runLogRepository.save(...)` succeeded, wrapped in an inner try/catch that logs-and-swallows (failures to notify must never break `flushRunLogs`). This call happens unconditionally; it is a no-op when no pending completion exists.
 
 **Step 4 — `useLiveRunLogs` hook.** New file, `EventSource`-based, with rAF batching.
 

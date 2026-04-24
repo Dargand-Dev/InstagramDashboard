@@ -11,9 +11,10 @@ import EmptyState from '@/components/shared/EmptyState'
 import RunRow from '../RunRow'
 import {
   ScrollText, Loader2, StopCircle, User, CheckCircle, XCircle, Clock,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Terminal,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import RunLogModal from '../RunLogModal'
 
 const PAGE_SIZE = 20
 
@@ -22,6 +23,7 @@ export default function DeviceRunsTab({ device }) {
   const [page, setPage] = useState(0)
   const [retryingId, setRetryingId] = useState(null)
   const [stopping, setStopping] = useState(false)
+  const [logsModalOpen, setLogsModalOpen] = useState(false)
 
   const { activeRuns } = useActiveRuns()
   const deviceActiveRun = activeRuns.find(r => (r.deviceUdid || r.device) === device.udid)
@@ -97,16 +99,27 @@ export default function DeviceRunsTab({ device }) {
               <span className="text-sm font-medium text-[#FAFAFA]">{deviceActiveRun.workflowName || 'Running'}</span>
               <StatusBadge status="RUNNING" />
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs text-[#EF4444] hover:text-[#EF4444] hover:bg-[#EF4444]/10"
-              onClick={handleStop}
-              disabled={stopping}
-            >
-              <StopCircle className="w-3 h-3 mr-1" />
-              {stopping ? 'Stopping...' : 'Stop'}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-[#3B82F6] hover:text-[#3B82F6] hover:bg-[#3B82F6]/10"
+                onClick={() => setLogsModalOpen(true)}
+              >
+                <Terminal className="w-3 h-3 mr-1" />
+                Logs
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-[#EF4444] hover:text-[#EF4444] hover:bg-[#EF4444]/10"
+                onClick={handleStop}
+                disabled={stopping}
+              >
+                <StopCircle className="w-3 h-3 mr-1" />
+                {stopping ? 'Stopping...' : 'Stop'}
+              </Button>
+            </div>
           </div>
 
           {deviceActiveRun.elapsedSeconds && (
@@ -228,6 +241,14 @@ export default function DeviceRunsTab({ device }) {
             </Button>
           </div>
         </div>
+      )}
+
+      {logsModalOpen && deviceActiveRun?.runId && (
+        <RunLogModal
+          runId={deviceActiveRun.runId}
+          open={logsModalOpen}
+          onClose={() => setLogsModalOpen(false)}
+        />
       )}
     </div>
   )

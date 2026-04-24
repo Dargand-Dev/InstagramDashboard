@@ -93,38 +93,53 @@ No authentication required (matches current posture).
 
 2. **New: `RunLogLiveService`** (`.../workflow/streaming/RunLogLiveService.java`)
    - Singleton Spring `@Service`, dependencies: `RunLogCaptureAppender` (via `getInstance()`), `WorkflowLogService` (to consult `getActiveRuns()`), `ObjectMapper`.
-   - State: `ConcurrentHashMap<String, CopyOnWriteArrayList<SseEmitter>> emitters`, `ConcurrentHashMap<SseEmitter, Runnable> listenerUnsubscribers` (so each emitter releases its appender listener on close).
-   - `registerEmitter(String runId)`:
+   - State: `ConcurrentHashMap<String, CopyOnWriteArrayList<SseEmitter>> emitters`, `ConcurrentHashMap<SseEmitter, Runnable> listenerUnsubscribers` (so each emitter releases its appender listener on close), `ConcurrentHashMap<String, PendingComplete> pendingCompletions` (for IMMEDIATE-kill sites that need to wait for `flushRunLogs`), `ScheduledExecutorService` for the 25s timeout fallback.
+   - `registerEmitter(String runId)` — ordering is critical to avoid losing lines between the snapshot and the first live line:
      1. Create `SseEmitter(0L)`.
-     2. Check if the run is in `WorkflowLogService.getActiveRuns()` or if the appender still has a buffer for it (`RunLogCaptureAppender.getLogs(runId)` non-empty). If neither → send `complete` with status `"UNKNOWN"` and return the emitter closed. This is the **edge case E2** fallback.
-     3. Send `snapshot` event with the current buffer content.
-     4. Register an appender listener; on each new line, send `line` event. Store the returned `Runnable` in `listenerUnsubscribers`.
-     5. Add emitter to `emitters.get(runId)`.
-     6. Wire `onCompletion` / `onError` / `onTimeout` to invoke the listener's un-subscribe Runnable and remove the emitter from the map.
-   - `completeForRun(String runId, String status)`:
-     1. Look up emitters for `runId`.
-     2. For each: send `complete` event, call `emitter.complete()`, invoke the un-subscribe Runnable.
-     3. Remove the `runId` entry from `emitters`.
-   - `@PreDestroy`: close all emitters with status `"SHUTDOWN"`.
+     2. **Register the appender listener first** (into a local lock-free queue initially). This guarantees that no new line is missed from this point on.
+     3. Call `RunLogCaptureAppender.getLogs(runId)` to read the current buffer; send `snapshot` event.
+     4. Flush any lines that arrived between (2) and (3) to the emitter as `line` events (de-duplicating against the snapshot is not required because new lines are always appended to the buffer — if a line was in the buffer at snapshot time, the listener's pre-subscription queue won't contain it unless the appender added it after the snapshot read; the serial nature of `append()` guarantees consistent ordering per-thread but not across threads, so a tiny duplication window is possible and accepted).
+     5. Switch the listener from pre-subscription queue to direct emitter write.
+     6. Edge case **E2**: if `WorkflowLogService.getActiveRuns()` doesn't contain `runId` AND `appender.getLogs(runId)` is empty → un-subscribe the listener, send `complete` with status `"UNKNOWN"`, close the emitter. This covers runs that ended just before the subscribe.
+     7. Add emitter to `emitters.get(runId)`.
+     8. Wire `onCompletion` / `onError` / `onTimeout` to invoke the un-subscribe Runnable and remove the emitter from the map.
+   - `completeForRun(String runId, String status)` — split-path:
+     - **Synchronous path** (called from `WorkflowLogService.completeStream` *after* `flushRunLogs` has run — the normal case for COMPLETED / graceful FAILED / CANCELLED-from-worker-thread-finally): find emitters, send `complete`, close, un-subscribe.
+     - **Deferred path** (called from IMMEDIATE-kill sites where flush hasn't run yet — detected via `activeRuns` still containing `runId` OR an explicit `deferred=true` flag): register a `PendingComplete(runId, status)` entry; do not close emitters yet. Lines still stream to them. Schedule a 25s timeout that forces `complete` if `onFlushCompleted` never fires.
+   - `onFlushCompleted(String runId)` — called from `RunLogPersistenceService.flushRunLogs` after the Mongo save: if a `PendingComplete` exists for this runId, drain it by running the synchronous path; otherwise no-op.
+   - `@PreDestroy`: close all open emitters with `complete` event, status `"SHUTDOWN"`; cancel scheduled timeouts; shut down the executor. Note on destruction order: Spring destroys singleton beans in reverse dependency order. Since `WorkflowLogService` depends on `RunLogLiveService` (injected via constructor), Spring destroys `WorkflowLogService` first, so `completeStream` can no longer reach `runLogLiveService.completeForRun` during shutdown. This is fine: `RunLogLiveService.@PreDestroy` independently closes all emitters with `SHUTDOWN`, so clients unblock correctly without needing the forwarded notification.
 
 3. **`WorkflowLogService.completeStream()`** (`.../workflow/streaming/WorkflowLogService.java`)
    - Inject `RunLogLiveService` (constructor injection, matching Lombok `@RequiredArgsConstructor` style used here).
-   - At the end of `completeStream(...)`, after the existing `WebSocket broadcast` and `emitters.remove(runId)` logic, call `runLogLiveService.completeForRun(runId, finalStatus)`.
+   - At the end of `completeStream(...)`, after the existing `WebSocket broadcast` and `emitters.remove(runId)` logic, call `runLogLiveService.completeForRun(runId, finalStatus)`. The service internally detects whether to complete synchronously or defer (see service contract above).
+   - `RunLogPersistenceService.flushRunLogs()` gets a new call at the end: `runLogLiveService.onFlushCompleted(runId)`.
 
 4. **New: `RunLogLiveController`** (`.../workflow/streaming/RunLogLiveController.java`)
    - `@RestController @RequestMapping("/api/automation/runs")`
    - `@GetMapping(value = "/{runId}/logs/live", produces = MediaType.TEXT_EVENT_STREAM_VALUE) SseEmitter streamLive(@PathVariable String runId) → runLogLiveService.registerEmitter(runId)`.
-   - This path does **not** conflict with the existing `@GetMapping("/{runId}/logs")` in `ExecutionManagementController` — the Spring MVC router picks the most specific match.
+   - Two controllers now share the `/api/automation/runs` base (this one and `ExecutionManagementController`). Spring MVC PathPattern matching is exact, so `/{runId}/logs` and `/{runId}/logs/live` resolve to distinct handlers (different path segments, no ambiguity). No reordering or `@Order` annotation required. Both controllers are unit-discoverable and don't share state.
 
 #### Order guarantees (flush vs complete)
 
-The contract is: `RunLogPersistenceService.flushRunLogs(runId, udid)` must run **before** `WorkflowLogService.completeStream(runId, ...)` at every call site. This ensures:
+The ideal contract is: `RunLogPersistenceService.flushRunLogs(runId, udid)` runs **before** `WorkflowLogService.completeStream(runId, ...)` at every call site — so that when the SSE `complete` event is sent, `getAndClearLogs` has already happened and the persisted document exists.
 
-- When the SSE `complete` event is sent, `getAndClearLogs` has already happened → the buffer is drained.
-- When the frontend immediately refetches `GET /api/automation/runs/{runId}/logs`, the persisted document exists and contains every line that was streamed.
-- No log line exists in a limbo state (neither in the buffer nor in the persisted doc).
+Inspection of the current code shows the ordering is respected in the five call sites inside `DeviceQueueService` (L430, L478, L488, L714, L732) and three in `BatchExecutionService` (L119, L434, L579) that run in the worker thread's `finally` block.
 
-Inspection of the current code (as of this spec) shows the ordering is respected at all five call sites examined in `DeviceQueueService` (L430, L478, L488, L714, L732) and `BatchExecutionService` (L119, L434, L579). Implementation **must include an audit step** (see build plan step 3) to verify exhaustively and fix any out-of-order site discovered.
+**However, two sites explicitly invert this order by design — both on the IMMEDIATE-kill path:**
+- `ExecutionManagementController#stopRun` L111 calls `workflowLogService.completeStream(runId, null, 0, "CANCELLED")` directly from the HTTP request thread, **without** a preceding flush, then returns `202 Accepted`. The worker thread later runs its `finally` block (which calls `flushRunLogs` then `completeStream` again — but at that point the second `completeStream` is a no-op because `activeRuns.remove(runId)` happened the first time).
+- `DeviceQueueService#cancelTask` L210 does the same (synchronous completeStream from the cancel call), then `scheduleForceCleanupIfNeeded` kicks in if the worker doesn't finalize within 20 s.
+
+This pattern exists to make the run disappear from `activeRuns` immediately on IMMEDIATE kill, even before the worker thread wakes up from the interrupt. Reordering those sites to flush-first would require the HTTP request thread to wait for the worker — not acceptable.
+
+**Consequence for this feature**: on IMMEDIATE kill, the SSE `complete` event fires *before* the persisted document exists. `GET /api/automation/runs/{runId}/logs` returns 404 until the worker thread runs `flushRunLogs` (usually within 1-3 seconds, bounded by the 20 s `scheduleForceCleanupIfNeeded` fallback).
+
+**Resolution** — two layers:
+1. **Backend**: `RunLogLiveService.completeForRun(runId, status)` does NOT close the SSE emitter immediately on IMMEDIATE kill. Instead, it marks the emitter with a `pendingCompletion` flag and waits for the subsequent `flushRunLogs` callback to trigger the actual `complete` event + close. `RunLogPersistenceService.flushRunLogs` is extended to notify `runLogLiveService.onFlushCompleted(runId)` at the end. This guarantees that by the time the frontend receives `complete`, the persisted document has been written.
+   - For non-kill paths (`COMPLETED`, graceful `FAILED`), `flushRunLogs` runs before `completeStream` as today, so `onFlushCompleted` fires first and `completeForRun` can proceed synchronously.
+   - To handle the edge where `completeForRun` is called but `flushRunLogs` never happens (app shutdown mid-kill), a 25 s timeout in `RunLogLiveService` forces `complete` + close regardless (slightly longer than `scheduleForceCleanupIfNeeded`).
+2. **Frontend fallback**: `useRunLogsWithLive` uses `retry: 5, retryDelay: 500ms*(n+1)` on the `useRunLogs` query while `completed && !data`, and keeps the last live `text` visible during the retry window. This is defence-in-depth in case the backend coordination races.
+
+The build plan audit step (Step 3) focuses on confirming these two IMMEDIATE-kill sites are the only exceptions to the flush-first rule and that all other sites (existing + any new) respect it.
 
 ### Frontend
 
@@ -142,8 +157,10 @@ Inspection of the current code (as of this spec) shows the ordering is respected
    - Uses `useActiveRuns()` to derive `isActive`.
    - Calls `useLiveRunLogs(runId, { enabled: enabled && isActive })`.
    - Calls `useRunLogs(runId)` with `enabled = enabled && (!isActive || live.completed)` — so persisted data loads only when relevant.
-   - On `live.completed === true`, invalidates `['run-logs', runId]` once to force the persisted view to refetch fresh data.
+   - On `live.completed === true`, invalidates `['run-logs', runId]` and polls it briefly with a short retry policy: the `useRunLogs` query gets `retry: 5, retryDelay: (attempt) => 500 * (attempt + 1)` while `completed && !data`. Rationale: on IMMEDIATE kill, `completeStream` fires **before** the worker thread's `finally` block runs `flushRunLogs` — `GET /api/automation/runs/{runId}/logs` may briefly return 404. The retry loop covers that window (the worker thread finalizes within a few seconds).
+   - Also keeps the last live `text` visible until the persisted fetch resolves, so the modal never flickers to "No logs available" between `complete` and the first successful refetch.
    - Returns `{ text, isLoading, isError, isActive, showingLive, liveConnected, refresh }`.
+   - `isActive` derivation: `activeRuns.some(r => (r.runId || r.id) === runId)`. For the full-page `RunLogs.jsx` opened directly by URL, `useActiveRuns` is polled every 4s — before the first poll resolves, `activeRuns` is `[]` and `isActive` is `false`, so the page initially shows "persisted" mode (possibly empty). This is acceptable (page transiently matches the old behavior for up to 4s), and once the first poll resolves the state is correct.
 
 #### Component changes
 
@@ -158,10 +175,11 @@ Inspection of the current code (as of this spec) shows the ordering is respected
    - Keeps the existing Copy button, back button, and dynamic height measurement.
 
 3. **`DeviceRunsTab.jsx`** (`InstagramDashboard/src/components/activity-log/tabs/DeviceRunsTab.jsx`)
-   - In the active-run banner block (lines ~92-161), add a **Logs** button next to **Stop** (blue `#3B82F6`, `Terminal` icon from `lucide-react`).
+   - In the active-run banner block (lines ~92-161), add a **Logs** button next to the existing **Stop** button (blue `#3B82F6`, `Terminal` icon from `lucide-react`).
    - Local state `logsModalOpen`, renders `<RunLogModal runId={deviceActiveRun.runId} open={logsModalOpen} onClose={...} />`.
+   - Note: the banner's existing **Stop** button (L100-109) and the new Stop/Kill buttons inside `RunLogModal` both call `apiPost('/api/automation/runs/{runId}/stop', ...)`. They intentionally coexist — they provide the same action from two surfaces. Each surface manages its own local `stopping`/`killing` state; the active-runs invalidation on success keeps both in sync visually within 4s. No consolidation is needed.
 
-No changes to `ActivityLog.jsx`, `DeviceDetailSheet.jsx`, `DeviceCardGrid.jsx`, `DeviceCard.jsx`, `RunRow.jsx`, or any `ExecutionCenter` code.
+No changes to `ActivityLog.jsx`, `DeviceDetailSheet.jsx`, `DeviceCardGrid.jsx`, `DeviceCard.jsx`, `RunRow.jsx`, or any `ExecutionCenter` code. **Design rationale** for keeping two live-log streams on the same `runId`: `ExecutionCenter` and `DeviceLogsTab` use the structured `WorkflowLogEvent` stream (per-step progress, account names, status icons), which is semantically different from raw Spring Boot lines. Activity Log's `RunLogModal` needs the raw format for parity with the post-mortem view. The two streams serve different UIs and carry different payloads; they coexist on the same backend run but via distinct endpoints and code paths.
 
 ## Data flow
 
@@ -200,7 +218,8 @@ Frontend transition on "complete":
 | --- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | E1  | Run just registered, no lines yet                                                               | `snapshot` is empty, listener attached, future lines flow naturally.                                                                                                             |
 | E2  | Run just ended between `useActiveRuns` read and SSE register                                   | `registerEmitter` checks `getActiveRuns()` / `getLogs(runId)`; if neither → send `complete` immediately and close. Frontend bascules on persisted.                              |
-| E3  | Stop/Kill from modal                                                                           | `DeviceQueueService` finally → `flushRunLogs` → `completeStream` → `completeForRun` → SSE `complete` → frontend bascules. User sees all cleanup lines until termination.        |
+| E3a | Graceful Stop from modal                                                                       | Worker thread finally → `flushRunLogs` → `completeStream` → `completeForRun` runs synchronously (persisted doc exists) → SSE `complete` → frontend bascules. All cleanup lines visible. |
+| E3b | Kill (IMMEDIATE) from modal                                                                    | `ExecutionManagementController#stopRun` / `DeviceQueueService#cancelTask` → `completeStream` runs but `completeForRun` DEFERS (pending complete); emitter stays open, cleanup lines keep streaming → worker thread finally → `flushRunLogs` → `onFlushCompleted` fires the deferred complete → SSE `complete` → frontend refetches persisted doc (now exists) and bascules. 25s timeout force-completes if flush never happens. |
 | E4  | Client disconnects SSE (wifi loss, tab hidden)                                                 | `EventSource` auto-reconnects; server re-sends `snapshot` (may cause brief duplication). Accepted as graceful degradation.                                                      |
 | E5  | Multiple clients open the same runId                                                           | `CopyOnWriteArrayList<SseEmitter>` per runId, each emitter keeps its own appender listener. No contention.                                                                       |
 | E6  | App shutdown during an active run                                                              | `RunLogLiveService.@PreDestroy` closes all emitters with `status=SHUTDOWN`. Frontend receives `complete` and bascules on persisted (may be empty if `flushRunLogs` didn't run). |
@@ -213,9 +232,13 @@ Frontend transition on "complete":
 
 **Step 1 — Extend the appender.** Add listener registry + notification in `append()` + cleanup in `getAndClearLogs()`. Unit test: log event with MDC triggers listener; un-subscribe prevents further calls.
 
-**Step 2 — `RunLogLiveService` + `RunLogLiveController`.** New service handles snapshot + streaming + completion; new controller exposes the SSE route. Wire `WorkflowLogService.completeStream()` to call `runLogLiveService.completeForRun()`. `MockMvc` integration test: route returns `text/event-stream`; a log event with the matching MDC reaches the subscriber.
+**Step 2 — `RunLogLiveService` + `RunLogLiveController`.** New service handles snapshot + streaming + completion (sync + deferred paths); new controller exposes the SSE route. Wire `WorkflowLogService.completeStream()` to call `runLogLiveService.completeForRun()`, and `RunLogPersistenceService.flushRunLogs()` to call `onFlushCompleted()`. `MockMvc` integration tests cover: route returns `text/event-stream`; a log event with the matching MDC reaches the subscriber; E2 case (run not active and no buffer) returns `complete` immediately; deferred case (completeForRun called before onFlushCompleted) keeps emitter open until flush fires.
 
-**Step 3 — Audit flush/complete ordering.** Walk every call site where both `flushRunLogs` and `completeStream` are invoked (sites currently known: `DeviceQueueService` L430/L478/L488/L714/L732, `BatchExecutionService` L119/L434/L579). Verify `flushRunLogs` precedes `completeStream`. Patch any inverted site.
+**Step 3 — Audit flush/complete ordering; wire `onFlushCompleted`.**
+- Confirm the known flush-first sites: `DeviceQueueService` L430/L478/L488/L714/L732, `BatchExecutionService` L119/L434/L579.
+- Confirm the known deferred sites: `ExecutionManagementController#stopRun` L111, `DeviceQueueService#cancelTask` L210 (both IMMEDIATE kill — `completeStream` runs without preceding flush, `RunLogLiveService` DEFERS until `onFlushCompleted`).
+- Scan for any other `completeStream` call site and classify it accordingly.
+- Modify `RunLogPersistenceService.flushRunLogs` to call `runLogLiveService.onFlushCompleted(runId)` after the Mongo save (via an inner try/catch — failures to notify must never block persistence).
 
 **Step 4 — `useLiveRunLogs` hook.** New file, `EventSource`-based, with rAF batching.
 
@@ -239,8 +262,10 @@ Frontend transition on "complete":
 
 **Modified (backend)**:
 - `InstagramAutomation/src/main/java/com/automation/instagram/logging/RunLogCaptureAppender.java` (listener registry)
-- `InstagramAutomation/src/main/java/com/automation/instagram/workflow/streaming/WorkflowLogService.java` (hook `completeForRun` at the end of `completeStream`)
-- Potentially `InstagramAutomation/src/main/java/com/automation/instagram/service/DeviceQueueService.java` / `BatchExecutionService.java` if the audit reveals any inverted flush/complete order.
+- `InstagramAutomation/src/main/java/com/automation/instagram/workflow/streaming/WorkflowLogService.java` (call `completeForRun` at the end of `completeStream`)
+- `InstagramAutomation/src/main/java/com/automation/instagram/monitoring/service/RunLogPersistenceService.java` (call `onFlushCompleted` at the end of `flushRunLogs`)
+- Potentially `InstagramAutomation/src/main/java/com/automation/instagram/service/DeviceQueueService.java` / `BatchExecutionService.java` if the audit reveals a new unclassified call site.
+- `ExecutionManagementController.java` and `DeviceQueueService#cancelTask` are NOT reordered — the deferred-completion mechanism in `RunLogLiveService` absorbs the existing IMMEDIATE-kill pattern without needing to change those request-path flows.
 
 **Created (frontend)**:
 - `InstagramDashboard/src/hooks/useLiveRunLogs.js`

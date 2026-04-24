@@ -91,7 +91,8 @@ No authentication required (matches current posture).
    - New: `addListener(String runId, Consumer<String> listener) → Runnable` — returns the un-registration function. Adds to `listeners.get(runId)`; the returned runnable removes from the list.
    - New: `hasBufferBeenClearedFor(String runId) → boolean` — `Boolean.TRUE.equals(clearedFlags.get(runId))`.
    - New: `withBufferLock(String runId, Supplier<T> fn) → T` — synchronizes on the per-runId buffer list (creating it if absent) for the duration of `fn.get()`. Used by `RunLogLiveService.registerEmitter` for atomic snapshot+subscribe.
-   - `append()` modification: after `lines.add(formatted)` (which already executes under the list's intrinsic lock via the `synchronizedList` wrapper), iterate `listeners.get(runId)` and call each consumer inside a `try/catch` (a listener failure must never bubble up to the logging pipeline). The notification happens INSIDE the synchronized block so that `registerEmitter`'s atomic read+subscribe is observed.
+   - `append()` modification: after `lines.add(formatted)` (which already executes under the list's intrinsic lock via the `synchronizedList` wrapper), iterate `listeners.get(runId)` and call each consumer inside a `try/catch`. **Listeners must be non-blocking** (a slow consumer must not stall the logging pipeline). `RunLogLiveService`'s listener enqueues the line into a bounded per-emitter queue and returns; a small daemon executor drains the queue onto `SseEmitter.send`. This keeps the snapshot+subscribe atomicity intact (the enqueue is O(1) and non-blocking) while isolating slow SSE clients from the appender lock. The notification happens INSIDE the synchronized block so that `registerEmitter`'s atomic read+subscribe is observed.
+   - **JDK dependency note**: the buffer list MUST be created via `Collections.synchronizedList(new ArrayList<>())` (no explicit external mutex). `synchronizedList` defaults its internal `mutex` to the wrapper instance itself, so `synchronized (bufferList)` and `bufferList.add(...)` share the same monitor. The two-argument form (`synchronizedList(list, mutex)`) would silently break the atomicity invariant.
    - `getAndClearLogs()` modification: after clearing the buffer, set `clearedFlags.put(runId, Boolean.TRUE)` and call `listeners.remove(runId)` so orphan listeners are freed if no emitter un-registered them.
 
 2. **New: `RunLogLiveService`** (`.../workflow/streaming/RunLogLiveService.java`)
@@ -177,9 +178,10 @@ No authentication required (matches current posture).
    **`drainImmediately(runId, status)`** — single-path completion that closes all emitters:
    ```
    1.  list = emitters.remove(runId)   // atomic claim
-   2.  If list == null: return
-   3.  For each emitter: sendComplete(emitter, runId, status); emitter.complete()
-   4.  (cleanup callbacks then fire onCompletion → unsubscribe listeners, remove from listenerUnsubscribers)
+   2.  appender.resetCleared(runId)    // free the clearedFlags entry to avoid unbounded growth
+   3.  If list == null: return
+   4.  For each emitter: sendComplete(emitter, runId, status); emitter.complete()
+   5.  (cleanup callbacks then fire onCompletion → unsubscribe listeners, remove from listenerUnsubscribers)
    ```
    This is also the path invoked by the timeout (step 6 of `completeForRun`) and by `drainPending(runId, "TIMEOUT")`, which additionally removes the stale pending entry and logs at WARN level with a metric (operational signal: a timeout firing means `flushRunLogs` silently failed or was never called).
 
@@ -203,7 +205,8 @@ No authentication required (matches current posture).
 3. **`WorkflowLogService.completeStream()`** (`.../workflow/streaming/WorkflowLogService.java`)
    - Inject `RunLogLiveService` (constructor injection, matching Lombok `@RequiredArgsConstructor` style used here).
    - At the end of `completeStream(...)`, after the existing `WebSocket broadcast` and `emitters.remove(runId)` logic, call `runLogLiveService.completeForRun(runId, finalStatus)`. The service internally detects whether to complete synchronously or defer (see service contract above).
-   - `RunLogPersistenceService.flushRunLogs()` gets a new call at the end: `runLogLiveService.onFlushCompleted(runId)`.
+   - Add `public boolean isActive(String runId) { return activeRuns.containsKey(runId); }` — used by `RunLogLiveService.registerEmitter` step 7 (the existence check for edge case E2).
+   - `RunLogPersistenceService.flushRunLogs()` is modified to call `runLogLiveService.onFlushCompleted(runId)` in a `finally` block at the bottom of the method (wrapped in a try/catch that logs-and-swallows). The call fires regardless of whether `runLogRepository.save(...)` succeeded — if Mongo persistence fails, the emitters still drain (via the live buffer they already received) and the frontend's refetch will get a 404, which the retry policy handles gracefully. Without this `finally` placement, a Mongo blip would stall emitters until the 25s timeout.
 
 4. **New: `RunLogLiveController`** (`.../workflow/streaming/RunLogLiveController.java`)
    - `@RestController @RequestMapping("/api/automation/runs")`

@@ -144,14 +144,15 @@ class RunLogCaptureAppenderTest {
 
         t.join(5000);
 
-        // Union snapshot + listener doit couvrir toutes les lignes produites
-        // (pas besoin d'égalité exacte — on tolère duplicata nul car le snapshot est sous verrou
-        // et les premières notifications au listener arrivent après sortie du verrou)
+        // Invariant strict : snapshot et listener se partagent les lignes sans duplicata ni perte.
+        // Lignes avant withBufferLock → snapshot. Lignes après sortie du verrou → listener.
+        // append() tient le même moniteur que withBufferLock → exclusion mutuelle totale.
         int totalCaptured = snapshot.size() + listenerLines.size();
         int expected = 2 + concurrentLogs.get();
-        assertTrue(totalCaptured >= expected,
+        assertEquals(expected, totalCaptured,
                 "snapshot(" + snapshot.size() + ") + listener(" + listenerLines.size()
-                        + ") = " + totalCaptured + " doit couvrir au moins " + expected);
+                        + ") doit égaler exactement " + expected
+                        + " (aucun duplicata, aucune ligne manquante)");
     }
 
     @Test
@@ -384,9 +385,7 @@ class RunLogLiveServiceTest {
         LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
         appender = new RunLogCaptureAppender();
         appender.setContext(lc);
-        appender.start();
-        // Exposer l'instance statique attendue par le service
-        RunLogCaptureAppender.setInstanceForTest(appender);
+        appender.start(); // assigne instance = this → getInstance() retourne cet appender
 
         testLogger = lc.getLogger("test.run-log-live");
         testLogger.addAppender(appender);
@@ -510,7 +509,7 @@ class RunLogLiveServiceTest {
 }
 ```
 
-> **Note** : ce test nécessite un hook `RunLogCaptureAppender.setInstanceForTest(...)` et quelques accesseurs de test (`openEmitterCountForTest`, `hasPendingForTest`, `setPendingTimeoutMsForTest`, `initExecutor` public). On les ajoutera dans l'implémentation plutôt que d'utiliser la réflexion — ça reste simple et aligné avec les conventions du projet.
+> **Note** : `RunLogCaptureAppender.start()` assigne déjà `instance = this`, donc aucun hook `setInstanceForTest` n'est nécessaire — `appender.start()` dans le `@BeforeEach` suffit à exposer l'appender du test comme instance statique. Les accesseurs de test `openEmitterCountForTest`, `hasPendingForTest`, `setPendingTimeoutMsForTest`, et `initExecutor` public sont ajoutés à `RunLogLiveService` plutôt que d'utiliser la réflexion — ça reste simple et aligné avec les conventions du projet.
 
 - [ ] **Step 3 : Lancer le test — il doit échouer (classes absentes)**
 
@@ -521,14 +520,19 @@ cd /Users/samyhne/IG-bot/InstagramAutomation
 ```
 Expected: **FAIL** — `cannot find symbol: class RunLogLiveService`, `setInstanceForTest` inconnu.
 
-- [ ] **Step 4 : Ajouter le hook `setInstanceForTest` à l'appender**
+- [ ] **Step 4 : Ajouter `isActive(String)` à `WorkflowLogService` AVANT de créer `RunLogLiveService`**
 
-Modifier `RunLogCaptureAppender.java`. Juste après la méthode `getInstance()` existante :
+(Ordre d'implémentation inversé vs le spec pour éviter un fichier qui ne compile pas en isolation — le nouveau service référence `workflowLogService.isActive(runId)` qui doit exister d'abord.)
+
+Modifier `InstagramAutomation/src/main/java/com/automation/instagram/workflow/streaming/WorkflowLogService.java`. Ajouter juste après la méthode `getActiveRuns()` (ligne ~78) :
 
 ```java
-    /** Test-only : forcer l'instance statique pour les tests unitaires. */
-    static void setInstanceForTest(RunLogCaptureAppender appenderForTest) {
-        instance = appenderForTest;
+    /**
+     * Indique si le runId est actuellement enregistré comme actif.
+     * Utilisé par RunLogLiveService pour les checks d'existence.
+     */
+    public boolean isActive(String runId) {
+        return runId != null && activeRuns.containsKey(runId);
     }
 ```
 
@@ -611,17 +615,24 @@ public class RunLogLiveService {
             return emitter;
         }
 
-        // Queue + worker non-bloquant pour ce emitter
+        // Queue non-bloquante pour ce emitter (le worker sera submit APRÈS l'envoi du snapshot
+        // pour garantir l'ordre snapshot → lignes sur le fil)
         BlockingQueue<String> queue = new LinkedBlockingQueue<>(1024);
         emitterQueues.put(emitter, queue);
-        sendExecutor.submit(() -> drainQueue(emitter, queue));
 
-        // Snapshot + addListener sous le moniteur du buffer
+        // Snapshot + addListener sous le moniteur du buffer (atomicité garantie par withBufferLock)
         final Runnable[] unsubscribeHolder = new Runnable[1];
-        final List<String>[] snapshotHolder = new List[1];
+        @SuppressWarnings("unchecked")
+        final List<String>[] snapshotHolder = (List<String>[]) new List<?>[1];
         appender.withBufferLock(runId, () -> {
             snapshotHolder[0] = appender.getLogs(runId);
-            unsubscribeHolder[0] = appender.addListener(runId, queue::offer);
+            unsubscribeHolder[0] = appender.addListener(runId, line -> {
+                if (!queue.offer(line)) {
+                    // Queue saturée — signal opérationnel (dropped_lines). Le client verra un gap
+                    // que la vue persistée comblera ensuite.
+                    log.debug("Queue SSE saturée pour runId={} — ligne droppée", runId);
+                }
+            });
             return null;
         });
         List<String> snapshot = snapshotHolder[0];
@@ -630,14 +641,16 @@ public class RunLogLiveService {
         // Edge E2 : run inconnu ET snapshot vide → complete immédiat
         if (snapshot.isEmpty() && !workflowLogService.isActive(runId)) {
             unsubscribe.run();
+            emitterQueues.remove(emitter);
             sendComplete(emitter, runId, "UNKNOWN");
             try { emitter.complete(); } catch (Exception ignored) {}
-            cleanupEmitter(emitter, runId);
             return emitter;
         }
 
-        // Envoyer le snapshot
+        // Envoyer le snapshot depuis le thread HTTP AVANT de démarrer le worker drainQueue.
+        // Garantit l'ordre snapshot → line sur le fil pour respecter le contrat SSE du spec.
         sendSnapshot(emitter, snapshot);
+        sendExecutor.submit(() -> drainQueue(emitter, queue));
 
         // Enregistrer l'emitter
         listenerUnsubscribers.put(emitter, unsubscribe);
@@ -791,21 +804,7 @@ public class RunLogLiveService {
 }
 ```
 
-- [ ] **Step 6 : Ajouter `isActive(String)` à `WorkflowLogService`**
-
-Modifier `InstagramAutomation/src/main/java/com/automation/instagram/workflow/streaming/WorkflowLogService.java`. Ajouter juste après la méthode `getActiveRuns()` (ligne ~78) :
-
-```java
-    /**
-     * Indique si le runId est actuellement enregistré comme actif.
-     * Utilisé par RunLogLiveService pour les checks d'existence.
-     */
-    public boolean isActive(String runId) {
-        return runId != null && activeRuns.containsKey(runId);
-    }
-```
-
-- [ ] **Step 7 : Lancer le test `RunLogLiveServiceTest` — il doit passer**
+- [ ] **Step 6 : Lancer le test `RunLogLiveServiceTest` — il doit passer**
 
 Run:
 ```bash
@@ -814,7 +813,7 @@ cd /Users/samyhne/IG-bot/InstagramAutomation
 ```
 Expected: `Tests run: 7, Failures: 0, Errors: 0, Skipped: 0`.
 
-- [ ] **Step 8 : Commit**
+- [ ] **Step 7 : Commit**
 
 Run:
 ```bash
@@ -883,7 +882,16 @@ cd /Users/samyhne/IG-bot/InstagramAutomation
 ```
 Expected: pas d'erreur.
 
-- [ ] **Step 3 : Commit**
+- [ ] **Step 3 : Smoke test du controller avec `curl` (optionnel mais recommandé)**
+
+Une fois le backend démarré en local (voir Chunk 7 Step 1), vérifier que le endpoint est joignable et retourne bien `text/event-stream` pour un runId bidon :
+
+```bash
+curl -sv -N -H 'Accept: text/event-stream' http://localhost:8081/api/automation/runs/fake-run-id/logs/live --max-time 2
+```
+Expected: header `Content-Type: text/event-stream`, puis un event `event: complete\ndata: {"runId":"fake-run-id","status":"UNKNOWN"}` (edge case E2 — le run n'existe pas), puis fermeture propre de la connexion. Si ce test passe, la route est bien enregistrée et ne collisionne pas avec `GET /{runId}/logs` existant.
+
+- [ ] **Step 4 : Commit**
 
 Run:
 ```bash
@@ -944,22 +952,40 @@ cd /Users/samyhne/IG-bot/InstagramAutomation
 ```
 Expected: pas d'erreur. Il peut y avoir une dépendance circulaire si `RunLogLiveService` injecte `WorkflowLogService` ET vice-versa — on la résout en Step 5 si besoin.
 
-- [ ] **Step 5 : Si dépendance circulaire détectée, utiliser `@Lazy`**
+- [ ] **Step 5 : Résoudre la dépendance circulaire en marquant l'injection `@Lazy` (constructeur manuel)**
 
-Si Spring refuse de démarrer à cause d'un cycle (`RunLogLiveService` → `WorkflowLogService` → `RunLogLiveService`), marquer l'injection comme `@Lazy` dans `WorkflowLogService` :
+`RunLogLiveService` dépend de `WorkflowLogService` (pour `isActive`) ET `WorkflowLogService` dépend désormais de `RunLogLiveService` (pour `completeForRun`). Spring Boot 2.6+ rejette les cycles par défaut (`spring.main.allow-circular-references=false`).
+
+Comme `@RequiredArgsConstructor` de Lombok ne propage pas l'annotation field-level `@Lazy` sur le paramètre constructeur, on remplace `@RequiredArgsConstructor` par un constructeur manuel avec `@Lazy` sur le paramètre. Dans `WorkflowLogService.java` :
+
+1. Retirer `@RequiredArgsConstructor` de la classe (garder `@Slf4j` et `@Service`).
+2. Ajouter le constructeur manuel juste avant les méthodes existantes (après la déclaration des champs `final`) :
 
 ```java
-    @org.springframework.context.annotation.Lazy
-    private final RunLogLiveService runLogLiveService;
+    public WorkflowLogService(
+            SimpMessagingTemplate messagingTemplate,
+            @org.springframework.context.annotation.Lazy RunLogLiveService runLogLiveService) {
+        this.messagingTemplate = messagingTemplate;
+        this.runLogLiveService = runLogLiveService;
+    }
 ```
 
-(Note : avec `@RequiredArgsConstructor`, Lombok peut ne pas propager `@Lazy` au paramètre constructeur — dans ce cas, retirer `@RequiredArgsConstructor` et écrire le constructeur à la main avec `@Lazy` sur le paramètre.)
+(Les autres champs `final` sont initialisés inline — `ConcurrentHashMap`, `ObjectMapper`, `ScheduledExecutorService` — donc ils ne sont pas paramètres du constructeur.)
+
+3. Vérifier que tous les champs précédemment fournis par `@RequiredArgsConstructor` (uniquement `messagingTemplate` dans le code actuel) sont bien dans le constructeur.
 
 Run une fois corrigé :
 ```bash
+cd /Users/samyhne/IG-bot/InstagramAutomation
 ./mvnw -q -DskipTests package
 ```
-Expected: build OK. Lancer aussi les tests existants : `./mvnw test -q -Dtest='RunLogLiveServiceTest,RunLogCaptureAppenderTest,WorkflowEngineTest'`.
+Expected: build OK. Lancer aussi les tests :
+```bash
+./mvnw test -q -Dtest='RunLogLiveServiceTest,RunLogCaptureAppenderTest,WorkflowEngineTest'
+```
+Expected: tous verts.
+
+> **Alternative envisageable** (pas adoptée ici pour minimiser les changements) : inverser la dépendance en passant `Supplier<Boolean> isActive` à `registerEmitter(runId, isActive)` au lieu d'injecter `WorkflowLogService` dans `RunLogLiveService`. Cela supprime le cycle mais contamine l'API du service. Le `@Lazy` est plus discret.
 
 - [ ] **Step 6 : Commit**
 
@@ -1070,7 +1096,7 @@ Run:
 cd /Users/samyhne/IG-bot/InstagramAutomation
 grep -rn "completeStream(" src/main/java --include="*.java"
 ```
-Expected: apparaître dans `WorkflowLogService.java` (définition + appel shutdown), `ExecutionManagementController.java:111`, `DeviceQueueService.java:210`, `DeviceQueueService.java:431/479/489/715/733`, `BatchExecutionService.java:120/435/580`. Si un nouveau site apparaît :
+Expected: apparaître dans `WorkflowLogService.java` (définition + appel shutdown), `ExecutionManagementController.java` (~L111, IMMEDIATE kill path), `DeviceQueueService.java` (~L210 cancelTask IMMEDIATE, plus les sites dans le worker finally ~L431/L479/L489/L733/L743), `BatchExecutionService.java` (sites dans les worker finally). Les numéros de ligne peuvent avoir drifté de ±5 lignes — utiliser le grep pour vérifier plutôt que les numéros littéraux. Si un nouveau site apparaît :
 - Site dans un `finally` worker après `flushRunLogs` → catégorie **flush-first** (sync path) → OK.
 - Site dans un thread HTTP sans flush préalable → catégorie **deferred** (le service détecte via `hasBufferBeenClearedFor`) → OK.
 - Cas bizarre (flush-first mais oublie d'updater `activeRuns`) → à documenter mais rare et non-bloquant car `hasBufferBeenClearedFor` est la vraie clé de décision.
@@ -1082,6 +1108,55 @@ Si l'audit révèle un site non-documenté, ajouter un commentaire dans le spec 
 ---
 
 ## Chunk 4 : Frontend — `useLiveRunLogs` + `useRunLogsWithLive`
+
+### Task 4.0 — Attacher `status` à l'Error lancée par `api.js` (prérequis retry 404)
+
+**Context:** `src/lib/api.js::handleResponse` lance aujourd'hui `new Error(message)` sans attacher `res.status`. La policy retry de `useRunLogsWithLive` (task 4.2) a besoin de distinguer un 404 (gap IMMEDIATE-kill — à retry) d'un 401/500 (à ne PAS retry). Sans ce prérequis, le predicate de retry ne fonctionnera jamais.
+
+**Files:**
+- Modify: `InstagramDashboard/src/lib/api.js`
+
+- [ ] **Step 1 : Lire le fichier**
+
+Run:
+```bash
+cd /Users/samyhne/IG-bot/InstagramDashboard
+cat src/lib/api.js
+```
+Expected: repérer le `throw new Error(...)` à la ligne 23.
+
+- [ ] **Step 2 : Attacher `status` à l'Error**
+
+Modifier la branche `!res.ok` dans `handleResponse` :
+
+```js
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    const err = new Error(body.message || body.error || `${res.status} ${res.statusText}`)
+    err.status = res.status
+    throw err
+  }
+```
+
+(Le reste de la fonction inchangé.)
+
+- [ ] **Step 3 : Vérifier lint + build**
+
+Run:
+```bash
+npm run lint -- --max-warnings=0 && npm run build
+```
+Expected: build OK.
+
+- [ ] **Step 4 : Commit**
+
+```bash
+git add src/lib/api.js
+git commit -m "feat(api): attach status code to Error thrown by handleResponse
+
+Allows callers (e.g. React Query retry predicates) to distinguish
+between response statuses without parsing the message string."
+```
 
 ### Task 4.1 — Créer `useLiveRunLogs` (hook EventSource avec batching rAF)
 
@@ -1917,8 +1992,8 @@ Ouvrir `http://localhost:5173/actions`, se logger si besoin, et démarrer un wor
 Dans la modale ouverte à l'étape précédente, cliquer **Stop Gracefully**.
 **Attendu** :
 - Toast "Arrêt demandé…".
-- Les logs continuent à défiler (étapes de cleanup).
-- Au bout de quelques secondes, le badge passe de `Live` à `Completed`, les boutons Stop/Kill disparaissent.
+- Les logs continuent à défiler (étapes de cleanup — peut prendre plusieurs secondes selon la durée de l'étape en cours, car `GRACEFUL` attend que le worker observe le signal).
+- **Dans les 4s qui suivent la fin effective du run** (temps de latence du poll `useActiveRuns` toutes les 4s), le badge passe de `Live` à `Completed` et les boutons Stop/Kill disparaissent.
 - Recharger la modale (fermer + rouvrir depuis `RunRow` du run terminé) → contenu identique à ce qui vient d'être vu.
 
 - [ ] **Step 5 : Scénario C — Kill depuis la modale**
@@ -1926,9 +2001,9 @@ Dans la modale ouverte à l'étape précédente, cliquer **Stop Gracefully**.
 Redéclencher un nouveau workflow. Rouvrir les logs en live depuis le banner. Cliquer **Kill** → dialog de confirmation → **Kill Now**.
 **Attendu** :
 - Dialog se ferme, toast "Run killed".
-- Les logs continuent à défiler brièvement (cleanup thread).
-- Au bout de 1-3 s, badge passe à `Completed`, boutons disparaissent.
-- Les logs visibles sont identiques à ceux persistés (fermer + rouvrir la modale via `RunRow` du run killed doit montrer exactement le même texte).
+- Les logs continuent à défiler brièvement (cleanup thread du worker, 1-3s typiquement).
+- **Dans les 4s** qui suivent, le badge passe à `Completed` et les boutons disparaissent.
+- Les logs visibles sont identiques à ceux persistés (fermer + rouvrir la modale via `RunRow` du run killed doit montrer exactement le même texte). Le gap 404 éventuel est couvert par le retry automatique du hook composite (jusqu'à 5 retries espacés de 500ms à 2.5s).
 
 - [ ] **Step 6 : Scénario D — Run terminé (régression test)**
 

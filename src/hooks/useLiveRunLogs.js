@@ -16,15 +16,14 @@ export function useLiveRunLogs(runId, { enabled = true } = {}) {
   // Références persistantes pour le batching
   const pendingLinesRef = useRef([])
   const rafRef = useRef(null)
-  const cleanupDoneRef = useRef(false)
 
   useEffect(() => {
     if (!enabled || !runId) return
 
-    // Flag pour démarrage de ce run
-    cleanupDoneRef.current = false
-
-    // Réinitialiser refs pour un nouveau run
+    // Reset state pour un nouveau run
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setText('')
+    setCompleted(false)
     pendingLinesRef.current = []
     if (rafRef.current) {
       cancelAnimationFrame(rafRef.current)
@@ -39,12 +38,10 @@ export function useLiveRunLogs(runId, { enabled = true } = {}) {
         rafRef.current = null
         return
       }
-      if (!cleanupDoneRef.current) {
-        const toAppend = pendingLinesRef.current.join('\n') + '\n'
-        pendingLinesRef.current = []
-        setText(prev => prev + toAppend)
-      }
+      const toAppend = pendingLinesRef.current.join('\n') + '\n'
+      pendingLinesRef.current = []
       rafRef.current = null
+      setText(prev => prev + toAppend)
     }
 
     const scheduleFlush = () => {
@@ -53,12 +50,9 @@ export function useLiveRunLogs(runId, { enabled = true } = {}) {
       }
     }
 
-    es.addEventListener('open', () => {
-      if (!cleanupDoneRef.current) setConnected(true)
-    })
+    es.addEventListener('open', () => setConnected(true))
 
     es.addEventListener('snapshot', (e) => {
-      if (cleanupDoneRef.current) return
       try {
         const { lines } = JSON.parse(e.data)
         if (Array.isArray(lines) && lines.length > 0) {
@@ -68,7 +62,6 @@ export function useLiveRunLogs(runId, { enabled = true } = {}) {
     })
 
     es.addEventListener('line', (e) => {
-      if (cleanupDoneRef.current) return
       try {
         const { line } = JSON.parse(e.data)
         if (typeof line === 'string') {
@@ -79,22 +72,16 @@ export function useLiveRunLogs(runId, { enabled = true } = {}) {
     })
 
     es.addEventListener('complete', () => {
-      if (cleanupDoneRef.current) return
       // Flush tout pending avant de marquer completed
       flushPending()
-      if (!cleanupDoneRef.current) {
-        setCompleted(true)
-        setConnected(false)
-      }
+      setCompleted(true)
+      setConnected(false)
       es.close()
     })
 
-    es.addEventListener('error', () => {
-      if (!cleanupDoneRef.current) setConnected(false)
-    })
+    es.addEventListener('error', () => setConnected(false))
 
     return () => {
-      cleanupDoneRef.current = true
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current)
         rafRef.current = null

@@ -20,7 +20,9 @@ async function handleResponse(res) {
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body.message || body.error || `${res.status} ${res.statusText}`)
+    const err = new Error(body.message || body.error || `${res.status} ${res.statusText}`)
+    err.status = res.status
+    throw err
   }
   return res.json().catch(() => ({}))
 }

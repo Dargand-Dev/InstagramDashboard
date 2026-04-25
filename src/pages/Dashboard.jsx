@@ -156,7 +156,7 @@ function RecentRunRow({ run }) {
           <div className="rounded-lg border border-[#1a1a1a] bg-[#0A0A0A] divide-y divide-[#1a1a1a]">
             {results.map((r, i) => (
               <div key={i} className="flex items-center justify-between px-3 py-2 text-xs">
-                <span className="text-[#A1A1AA]">{r.username || r.accountName || r.account || `Account ${i + 1}`}</span>
+                <span className="text-[#A1A1AA]">{r.username || r.accountName || r.account || r.containerName || r.container || `Account ${i + 1}`}</span>
                 <div className="flex items-center gap-2">
                   {r.failureReason && <span className="text-[#EF4444] truncate max-w-[200px]">{r.failureReason}</span>}
                   <StatusBadge status={r.status || (r.success ? 'SUCCESS' : 'FAILED')} />

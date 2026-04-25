@@ -1,20 +1,27 @@
 import { useState, useMemo, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { apiGet, apiPost } from '@/lib/api'
 import { formatDuration } from '@/utils/format'
 import { useActiveRuns } from '@/hooks/useActiveRuns'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import StatusBadge from '@/components/shared/StatusBadge'
 import EmptyState from '@/components/shared/EmptyState'
 import RunRow from '../RunRow'
 import {
-  ScrollText, Loader2, StopCircle, User, CheckCircle, XCircle, Clock,
+  ScrollText, Loader2, StopCircle, CheckCircle, XCircle, Clock, ExternalLink,
   ChevronLeft, ChevronRight, Terminal,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import RunLogModal from '../RunLogModal'
+
+function entryDurationMs(entry) {
+  if (!entry.startedAt) return 0
+  const start = new Date(entry.startedAt).getTime()
+  const end = entry.completedAt ? new Date(entry.completedAt).getTime() : Date.now()
+  return Math.max(0, end - start)
+}
 
 const PAGE_SIZE = 20
 
@@ -130,27 +137,68 @@ export default function DeviceRunsTab({ device }) {
           )}
 
           {/* Per-account progress */}
-          {deviceActiveRun.accountEntries && (
-            <div className="space-y-1">
-              {deviceActiveRun.accountEntries.map((entry, i) => (
-                <div key={i} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <User className="w-3 h-3 text-[#52525B]" />
-                    <span className="text-[#A1A1AA]">{entry.username || entry.account || `Account ${i + 1}`}</span>
+          {deviceActiveRun.accountEntries && deviceActiveRun.accountEntries.length > 0 && (
+            <div className="rounded-lg border border-[#1a1a1a] bg-[#0A0A0A] divide-y divide-[#1a1a1a]">
+              {deviceActiveRun.accountEntries.map((entry, i) => {
+                const name = entry.username || entry.containerName || entry.container || entry.account || `Account ${i + 1}`
+                const isSuccess = entry.status === 'SUCCESS' || entry.status === 'COMPLETED'
+                const isFailed = entry.status === 'FAILED' || entry.status === 'ERROR'
+                const isRunning = entry.status === 'RUNNING' || entry.status === 'IN_PROGRESS'
+                const isSkipped = entry.status === 'SKIPPED'
+                const isPending = entry.status === 'PENDING' || !entry.status
+                const durationMs = entryDurationMs(entry)
+                const realUsername = entry.username && entry.username !== 'unknown' ? entry.username : null
+
+                return (
+                  <div key={i} className="px-3 py-2 text-xs space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {isSuccess && <CheckCircle className="w-3 h-3 text-[#22C55E] shrink-0" />}
+                        {isFailed && <XCircle className="w-3 h-3 text-[#EF4444] shrink-0" />}
+                        {isRunning && <Loader2 className="w-3 h-3 text-[#3B82F6] animate-spin shrink-0" />}
+                        {isSkipped && <span className="w-3 h-3 rounded-full bg-[#52525B] shrink-0" />}
+                        {isPending && <span className="w-3 h-3 rounded-full bg-[#1a1a1a] shrink-0" />}
+                        {realUsername ? (
+                          <span className="inline-flex items-center gap-1">
+                            <Link
+                              to={`/accounts?username=${encodeURIComponent(realUsername)}`}
+                              className="text-[#A1A1AA] hover:text-[#3B82F6] hover:underline transition-colors"
+                            >
+                              {name}
+                            </Link>
+                            <a
+                              href={`https://instagram.com/${realUsername}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[#52525B] hover:text-[#3B82F6] transition-colors"
+                              title="Open Instagram profile"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </span>
+                        ) : (
+                          <span className="text-[#A1A1AA]">{name}</span>
+                        )}
+                        {entry.lastStepName && isRunning && (
+                          <span className="text-[10px] text-[#52525B] truncate max-w-[180px]">· {entry.lastStepName}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {durationMs > 0 && (isRunning || isSuccess || isFailed) && (
+                          <span className="flex items-center gap-1 text-[#52525B] font-mono">
+                            <Clock className="w-3 h-3 text-[#333]" />
+                            {formatDuration(durationMs)}
+                          </span>
+                        )}
+                        {entry.errorMessage && (
+                          <span className="text-[#EF4444] truncate max-w-[300px]">{entry.errorMessage}</span>
+                        )}
+                        <StatusBadge status={entry.status || 'PENDING'} />
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    {entry.status === 'SUCCESS' || entry.status === 'COMPLETED' ? (
-                      <CheckCircle className="w-3 h-3 text-[#22C55E]" />
-                    ) : entry.status === 'FAILED' || entry.status === 'ERROR' ? (
-                      <XCircle className="w-3 h-3 text-[#EF4444]" />
-                    ) : entry.status === 'RUNNING' || entry.status === 'IN_PROGRESS' ? (
-                      <Loader2 className="w-3 h-3 text-[#3B82F6] animate-spin" />
-                    ) : (
-                      <span className="w-3 h-3 rounded-full bg-[#1a1a1a]" />
-                    )}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
 

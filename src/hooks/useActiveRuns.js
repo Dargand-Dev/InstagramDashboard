@@ -11,7 +11,7 @@ export function useActiveRuns(pollInterval = 4000) {
     async function poll() {
       try {
         const baseUrl = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '')
-        const res = await fetch(`${baseUrl}/api/automation/workflow/logs/active-runs`, {
+        const res = await fetch(`${baseUrl}/api/automation/runs/active`, {
           signal: controller.signal,
         })
         if (res.ok) {

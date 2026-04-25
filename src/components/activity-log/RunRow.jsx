@@ -9,12 +9,9 @@ import {
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import RunLogModal from './RunLogModal'
 
-const CREATION_TYPES = ['CreateAccount', 'CreateAccountFromExistingContainer', 'CreateAccountNoReel']
-
 function getAccountDisplayName(detail, run, index) {
   if (detail.username && detail.username !== 'unknown') return detail.username
-  if (CREATION_TYPES.includes(run?.workflowType) && (detail.containerName || detail.container))
-    return detail.containerName || detail.container
+  if (detail.containerName || detail.container) return detail.containerName || detail.container
   return detail.account || detail.accountName || `Account ${index + 1}`
 }
 
@@ -99,7 +96,7 @@ export default function RunRow({ run, onRetry, retryingId }) {
               {failCount > 0 && <span className="text-[#EF4444]">{failCount} fail</span>}
             </div>
           )}
-          {run.workflowRunId && (
+          {(run.workflowRunId || (runId && String(runId).startsWith('wf-'))) && (
             <button
               onClick={e => { e.stopPropagation(); setShowLogs(true) }}
               className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-md border bg-[#3B82F6]/8 text-[#3B82F6] border-[#3B82F6]/15 hover:bg-[#3B82F6]/15 transition-colors"
@@ -209,7 +206,7 @@ export default function RunRow({ run, onRetry, retryingId }) {
       {/* Run logs modal */}
       {showLogs && (
         <RunLogModal
-          runId={run.workflowRunId}
+          runId={run.workflowRunId || runId}
           open={showLogs}
           onClose={() => setShowLogs(false)}
         />

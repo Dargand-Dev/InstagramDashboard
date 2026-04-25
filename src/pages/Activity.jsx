@@ -49,12 +49,9 @@ const RUN_TYPE_CONFIG = {
 
 const DEFAULT_RUN_TYPE = { label: 'Unknown', icon: Send, cls: 'bg-[#141414] text-[#555] border-[#1a1a1a]' }
 
-const CREATION_TYPES = ['CreateAccount', 'CreateAccountFromExistingContainer', 'CreateAccountNoReel']
-
 function getAccountDisplayName(detail, run, index) {
   if (detail.username && detail.username !== 'unknown') return detail.username
-  if (CREATION_TYPES.includes(run?.workflowType) && (detail.containerName || detail.container))
-    return detail.containerName || detail.container
+  if (detail.containerName || detail.container) return detail.containerName || detail.container
   return detail.account || detail.accountName || `Account ${index + 1}`
 }
 

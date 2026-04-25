@@ -32,6 +32,7 @@ export default function ReelVerification() {
   const [hours, setHours] = useState(6)
   const [scanId, setScanId] = useState(null)
   const [deviceFilter, setDeviceFilter] = useState(ALL_DEVICES)
+  const [bulkRecheck, setBulkRecheck] = useState(null) // { done, total } pendant un re-check global
 
   const qc = useQueryClient()
   const startScan = useStartScan()
@@ -131,6 +132,45 @@ export default function ReelVerification() {
       }
     } catch (e) {
       toast.error(`Re-vérif KO — ${e.message}`)
+    }
+  }, [recheck])
+
+  // Re-vérifie en masse toutes les entries actuellement listées (après filtre device).
+  // Concurrence limitée (3) pour ne pas saturer le backend / RapidAPI côté scraper.
+  const handleRecheckAll = useCallback(async (entryIds) => {
+    if (entryIds.length === 0) return
+    const CONCURRENCY = 3
+    let done = 0
+    let verified = 0
+    let stillMissing = 0
+    let errors = 0
+    setBulkRecheck({ done: 0, total: entryIds.length })
+
+    const queue = entryIds.slice()
+    const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+      while (queue.length > 0) {
+        const id = queue.shift()
+        if (!id) break
+        try {
+          const resp = await recheck.mutateAsync(id)
+          if (resp?.verificationStatus === 'VERIFIED') verified++
+          else stillMissing++
+        } catch {
+          errors++
+        }
+        done++
+        setBulkRecheck({ done, total: entryIds.length })
+      }
+    })
+    await Promise.all(workers)
+    setBulkRecheck(null)
+
+    if (errors > 0) {
+      toast.error(`Re-vérif terminée — ${verified} retrouvé(s), ${stillMissing} introuvable(s), ${errors} erreur(s)`)
+    } else if (verified > 0) {
+      toast.success(`Re-vérif terminée — ${verified} retrouvé(s), ${stillMissing} toujours introuvable(s)`)
+    } else {
+      toast.info(`Re-vérif terminée — ${stillMissing} toujours introuvable(s)`)
     }
   }, [recheck])
 
@@ -395,15 +435,31 @@ export default function ReelVerification() {
             </Select>
           </div>
 
-          <Button
-            onClick={handleScan}
-            disabled={scanRunning || startScan.isPending}
-            className="ml-auto"
-          >
-            {scanRunning
-              ? `Scan en cours… (${scanStatus.data?.done ?? 0}/${scanStatus.data?.total ?? 0})`
-              : 'Scanner maintenant'}
-          </Button>
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => handleRecheckAll(records.map(r => r.entryId))}
+              disabled={
+                !!bulkRecheck
+                || scanRunning
+                || records.length === 0
+              }
+              title="Re-vérifie toutes les entries actuellement listées"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${bulkRecheck ? 'animate-spin' : ''}`} />
+              {bulkRecheck
+                ? `Re-vérif… (${bulkRecheck.done}/${bulkRecheck.total})`
+                : `Tout re-vérifier${records.length > 0 ? ` (${records.length})` : ''}`}
+            </Button>
+            <Button
+              onClick={handleScan}
+              disabled={scanRunning || startScan.isPending || !!bulkRecheck}
+            >
+              {scanRunning
+                ? `Scan en cours… (${scanStatus.data?.done ?? 0}/${scanStatus.data?.total ?? 0})`
+                : 'Scanner maintenant'}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

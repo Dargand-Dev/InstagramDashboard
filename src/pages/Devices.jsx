@@ -624,6 +624,7 @@ export default function Devices() {
         currentAccount: live.currentAccount,
         currentRunId: live.currentRunId,
         lastActivityAt: live.lastActivityAt,
+        manualMode: !!live.manualMode,
         port: d.ports?.appium || d.port,
       }
     })
@@ -636,6 +637,8 @@ export default function Devices() {
   const [confirmTakeoverDevice, setConfirmTakeoverDevice] = useState(null)
 
   const handleTakeControlClick = (device) => {
+    // Évite les double-clics pendant qu'une requête est en vol
+    if (isTaking) return
     // Si une session est déjà active sur un AUTRE device, refuser (1 seule session à la fois)
     if (activeManualSession && activeManualSession.udid !== device.udid) {
       toast.error(`Manual mode déjà actif sur ${activeManualSession.deviceName} — release-le d'abord`)

@@ -90,6 +90,7 @@ export default function ManualControlOverlay() {
               Annuler
             </AlertDialogCancel>
             <AlertDialogAction
+              disabled={isReleasing}
               onClick={() => {
                 release(active.udid)
                 setConfirmOpen(false)

@@ -44,6 +44,8 @@ import { Badge } from '@/components/ui/badge'
 import { useAuthStore } from '@/stores/authStore'
 import { useNotificationStore } from '@/stores/notificationStore'
 import CommandPalette from '@/components/CommandPalette'
+import ManualControlOverlay from '@/components/manual-control/ManualControlOverlay'
+import ManualControlBootstrapper from '@/components/manual-control/ManualControlBootstrapper'
 
 const NAV_SECTIONS = [
   {
@@ -238,6 +240,8 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-screen bg-[#0A0A0A]">
+      <ManualControlBootstrapper />
+      <ManualControlOverlay />
       {/* Mobile overlay */}
       {mobileOpen && (
         <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={() => setMobileOpen(false)} />

@@ -32,8 +32,21 @@ import {
   Loader2,
   Settings,
   History,
+  Hand,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useManualControl } from '@/hooks/useManualControl'
+import { useManualControlStore } from '@/stores/manualControlStore'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 const STATUS_DOT = {
   IDLE: 'bg-[#22C55E]',
@@ -69,11 +82,12 @@ function proxyExpiryColor(iso) {
   return null
 }
 
-function DeviceCard({ device, onSelect, onToggle }) {
+function DeviceCard({ device, onSelect, onToggle, onTakeControl }) {
   const statusColor = STATUS_DOT[device.status] || STATUS_DOT.OFFLINE
   const isRunning = device.status === 'RUNNING'
   const isError = device.status === 'ERROR'
   const isDisconnected = device.status === 'DISCONNECTED'
+  const isManual = device.manualMode === true
 
   return (
     <div
@@ -147,7 +161,25 @@ function DeviceCard({ device, onSelect, onToggle }) {
           )}
           <span>{(device.port || device.ports?.appium) ? `Port ${device.port || device.ports?.appium}` : 'No port'}</span>
         </div>
-        <div onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          {isManual ? (
+            <span className="flex items-center gap-1 text-xs text-[#EF4444] font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444] animate-pulse" />
+              Manual
+            </span>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs text-[#A1A1AA] hover:text-[#FAFAFA]"
+              onClick={() => onTakeControl(device)}
+              disabled={device.status === 'OFFLINE'}
+              title="Prendre le contrôle manuel via TrollVNC"
+            >
+              <Hand className="w-3 h-3 mr-1" />
+              Take Control
+            </Button>
+          )}
           <Switch
             checked={device.enabled !== false}
             onCheckedChange={() => onToggle(device)}
@@ -592,12 +624,32 @@ export default function Devices() {
         currentAccount: live.currentAccount,
         currentRunId: live.currentRunId,
         lastActivityAt: live.lastActivityAt,
+        manualMode: !!live.manualMode,
         port: d.ports?.appium || d.port,
       }
     })
   }, [staticDevices, liveStatuses])
 
   const isLoading = loadingStatic || loadingLive
+
+  const { takeControl, isTaking } = useManualControl()
+  const activeManualSession = useManualControlStore((s) => s.active)
+  const [confirmTakeoverDevice, setConfirmTakeoverDevice] = useState(null)
+
+  const handleTakeControlClick = (device) => {
+    // Évite les double-clics pendant qu'une requête est en vol
+    if (isTaking) return
+    // Si une session est déjà active sur un AUTRE device, refuser (1 seule session à la fois)
+    if (activeManualSession && activeManualSession.udid !== device.udid) {
+      toast.error(`Manual mode déjà actif sur ${activeManualSession.deviceName} — release-le d'abord`)
+      return
+    }
+    if (device.status === 'RUNNING') {
+      setConfirmTakeoverDevice(device)
+      return
+    }
+    takeControl({ udid: device.udid, deviceName: device.name })
+  }
 
   useEffect(() => {
     if (!isConnected) return
@@ -699,6 +751,7 @@ export default function Devices() {
                 setSheetOpen(true)
               }}
               onToggle={(d) => toggleMutation.mutate(d)}
+              onTakeControl={handleTakeControlClick}
             />
           ))}
         </div>
@@ -706,6 +759,42 @@ export default function Devices() {
 
       <DeviceDetailSheet device={selectedDevice} open={sheetOpen} onOpenChange={setSheetOpen} />
       <AddDeviceDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />
+
+      <AlertDialog
+        open={!!confirmTakeoverDevice}
+        onOpenChange={(open) => !open && setConfirmTakeoverDevice(null)}
+      >
+        <AlertDialogContent className="bg-[#0A0A0A] border-[#1a1a1a]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[#FAFAFA]">
+              Prendre la main sur {confirmTakeoverDevice?.name} ?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[#A1A1AA]">
+              Une tâche est en cours sur ce device. La prendre en main va l'arrêter
+              immédiatement (kill propre, la session Appium est fermée et le run
+              passe en CANCELLED).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-[#111111] border-[#1a1a1a] text-[#A1A1AA]">
+              Annuler
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isTaking}
+              onClick={() => {
+                takeControl({
+                  udid: confirmTakeoverDevice.udid,
+                  deviceName: confirmTakeoverDevice.name,
+                })
+                setConfirmTakeoverDevice(null)
+              }}
+            >
+              <Hand className="w-3.5 h-3.5 mr-1.5" />
+              Take Control
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

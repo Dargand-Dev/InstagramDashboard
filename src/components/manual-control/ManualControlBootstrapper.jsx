@@ -6,22 +6,18 @@ import { useManualControlStore } from '@/stores/manualControlStore'
 import { useAuthStore } from '@/stores/authStore'
 
 /**
- * Composant invisible : restaure l'état manual control au mount, et
- * synchronise via WebSocket les events MANUAL_CONTROL_TAKEN/RELEASED.
+ * Composant invisible : restaure les sessions manual au mount, et synchronise
+ * via WebSocket les events MANUAL_CONTROL_TAKEN / MANUAL_CONTROL_RELEASED.
  *
  * Doit être monté UNE SEULE FOIS, à l'intérieur de la zone authentifiée
  * (sinon useWebSocket plante sans token).
  */
 export default function ManualControlBootstrapper() {
-  const setActive = useManualControlStore((s) => s.setActive)
-  const clear = useManualControlStore((s) => s.clear)
+  const setSession = useManualControlStore((s) => s.setSession)
+  const removeSession = useManualControlStore((s) => s.removeSession)
   const token = useAuthStore((s) => s.token)
   const { subscribe, isConnected } = useWebSocket()
 
-  // Restore au mount — `select` doit rester pur (appelé à chaque re-render),
-  // donc on déporte la mise à jour du store dans un useEffect.
-  // `enabled: !!token` évite un 401-loop si le composant est jamais monté
-  // hors zone authentifiée.
   const { data: sessions } = useQuery({
     queryKey: ['manual-control-active'],
     queryFn: () => apiGet('/api/devices/manual-control/active'),
@@ -30,32 +26,27 @@ export default function ManualControlBootstrapper() {
     select: (res) => (Array.isArray(res) ? res : (res?.data ?? [])),
   })
 
+  // Restore au mount
   useEffect(() => {
     if (!sessions) return
-    // Pour l'instant on suppose 0 ou 1 session active à la fois
-    if (sessions.length > 0) {
-      const s = sessions[0]
-      setActive({
+    sessions.forEach((s) => {
+      setSession(s.udid, {
         udid: s.udid,
         deviceName: s.deviceName || s.udid,
         vncUrl: s.vncUrl,
         deviceIp: s.deviceIp,
         since: s.since,
       })
-    } else {
-      clear()
-    }
-  }, [sessions, setActive, clear])
+    })
+  }, [sessions, setSession])
 
-  // Sync WS
+  // Sync WS sur le topic devices/status (events single-session)
   useEffect(() => {
     if (!isConnected) return
     const unsub = subscribe('/topic/devices/status', (raw) => {
-      // Le payload peut être : (a) le DeviceStatus DTO direct (markRunning, etc.),
-      // ou (b) notre Map { eventType, deviceUdid, ... } envoyé par ManualControlService.
       if (!raw || typeof raw !== 'object') return
       if (raw.eventType === 'MANUAL_CONTROL_TAKEN') {
-        setActive({
+        setSession(raw.deviceUdid, {
           udid: raw.deviceUdid,
           deviceName: raw.deviceName || raw.deviceUdid,
           vncUrl: raw.vncUrl,
@@ -63,14 +54,11 @@ export default function ManualControlBootstrapper() {
           since: raw.since,
         })
       } else if (raw.eventType === 'MANUAL_CONTROL_RELEASED') {
-        const current = useManualControlStore.getState().active
-        if (current && current.udid === raw.deviceUdid) {
-          clear()
-        }
+        removeSession(raw.deviceUdid)
       }
     })
     return unsub
-  }, [isConnected, subscribe, setActive, clear])
+  }, [isConnected, subscribe, setSession, removeSession])
 
   return null
 }

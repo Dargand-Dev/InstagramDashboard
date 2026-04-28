@@ -17,6 +17,10 @@ export const useManualControlStore = create((set) => ({
   walling: {},
   wallActive: false,
   wallSessionId: null,
+  // Flipped to true by ManualControlBootstrapper quand la subscription STOMP au
+  // topic /topic/wall/status est confirmée. VncWall l'attend avant le POST /start
+  // pour éviter de perdre les events publiés trop tôt par le backend.
+  wallTopicSubscribed: false,
 
   setSession: (udid, session) =>
     set((s) => ({ sessions: { ...s.sessions, [udid]: session } })),
@@ -32,9 +36,18 @@ export const useManualControlStore = create((set) => ({
   setWalling: (udid, status, extras = {}) =>
     set((s) => ({ walling: { ...s.walling, [udid]: { status, ...extras } } })),
 
+  setWallTopicSubscribed: (v) => set({ wallTopicSubscribed: v }),
+
+  // Préserve walling pour ne pas perdre les events STARTING/READY/FAILED
+  // qui ont pu arriver avant le retour HTTP du POST /start (race STOMP vs REST).
   startWallSession: (sessionId) =>
-    set({ wallActive: true, wallSessionId: sessionId, walling: {} }),
+    set((s) => ({ wallActive: true, wallSessionId: sessionId, walling: s.walling })),
 
   endWallSession: () =>
     set({ wallActive: false, wallSessionId: null, walling: {} }),
 }))
+
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
+  // Exposé en dev pour debug : window.__manualControlStore.getState()
+  window.__manualControlStore = useManualControlStore
+}

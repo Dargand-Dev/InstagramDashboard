@@ -21,6 +21,7 @@ export default function ManualControlBootstrapper() {
   const setSession = useManualControlStore((s) => s.setSession)
   const removeSession = useManualControlStore((s) => s.removeSession)
   const setWalling = useManualControlStore((s) => s.setWalling)
+  const setWallTopicSubscribed = useManualControlStore((s) => s.setWallTopicSubscribed)
   const token = useAuthStore((s) => s.token)
   const { subscribe, isConnected } = useWebSocket()
 
@@ -68,7 +69,10 @@ export default function ManualControlBootstrapper() {
 
   // Sync WS sur le topic wall/status (events wall multi-session)
   useEffect(() => {
-    if (!isConnected) return
+    if (!isConnected) {
+      setWallTopicSubscribed(false)
+      return
+    }
     const unsub = subscribe('/topic/wall/status', (event) => {
       if (!event || typeof event !== 'object' || !event.eventType) return
 
@@ -103,8 +107,12 @@ export default function ManualControlBootstrapper() {
           break
       }
     })
-    return unsub
-  }, [isConnected, subscribe, setWalling, setSession, queryClient])
+    setWallTopicSubscribed(true)
+    return () => {
+      setWallTopicSubscribed(false)
+      unsub()
+    }
+  }, [isConnected, subscribe, setWalling, setSession, queryClient, setWallTopicSubscribed])
 
   return null
 }

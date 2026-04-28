@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { useManualControlStore } from '@/stores/manualControlStore'
 import { useManualControl } from '@/hooks/useManualControl'
 import { useWallControl } from '@/hooks/useWallControl'
+import { useWebSocket } from '@/hooks/useWebSocket'
 import WallTile from '@/components/wall/WallTile'
 import WallFocusModal from '@/components/wall/WallFocusModal'
 
@@ -31,8 +32,10 @@ export default function VncWall() {
   const walling = useManualControlStore((s) => s.walling)
   const setWalling = useManualControlStore((s) => s.setWalling)
   const wallActive = useManualControlStore((s) => s.wallActive)
+  const wallTopicSubscribed = useManualControlStore((s) => s.wallTopicSubscribed)
   const { startWall, releaseAll, isStarting, isReleasing } = useWallControl()
   const { takeControl } = useManualControl()
+  const { isConnected } = useWebSocket()
 
   // Liste des devices enabled depuis le backend
   const { data: staticDevices = [] } = useQuery({
@@ -72,8 +75,21 @@ export default function VncWall() {
   // Au mount : démarre la wall une seule fois quand on a la liste des devices.
   // autoStartedRef évite de re-démarrer si tilesData.length oscille à cause
   // des refetch /live-status, ou si l'utilisateur fait release-all puis revient.
+  // Garde-fou critique : isConnected ET wallTopicSubscribed DOIVENT être true
+  // avant de POST /start. Sinon le backend publie WALL_DEVICE_STARTING/READY
+  // avant que la subscription STOMP soit enregistrée → events perdus → tiles
+  // coincées sur "Démarrage TrollVNC...".
   useEffect(() => {
-    if (autoStartedRef.current || wallActive || isStarting || tilesData.length === 0) return
+    if (
+      autoStartedRef.current ||
+      !isConnected ||
+      !wallTopicSubscribed ||
+      wallActive ||
+      isStarting ||
+      tilesData.length === 0
+    ) {
+      return
+    }
     const reachableUdids = tilesData
       .filter((d) => d.status !== 'OFFLINE' && d.status !== 'DISCONNECTED')
       .map((d) => d.udid)
@@ -81,7 +97,7 @@ export default function VncWall() {
       autoStartedRef.current = true
       startWall(reachableUdids)
     }
-  }, [tilesData, wallActive, isStarting, startWall])
+  }, [tilesData, wallActive, isStarting, startWall, isConnected, wallTopicSubscribed])
 
   // Retry pour un device en FAILED : passe par le hook useManualControl pour
   // que le store soit correctement mis à jour (sessions[udid] + walling cleared).

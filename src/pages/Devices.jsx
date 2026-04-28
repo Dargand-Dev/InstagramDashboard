@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, apiPut } from '@/lib/api'
 import { useWebSocket } from '@/hooks/useWebSocket'
@@ -33,20 +34,10 @@ import {
   Settings,
   History,
   Hand,
+  LayoutGrid,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useManualControl } from '@/hooks/useManualControl'
-import { useManualControlStore } from '@/stores/manualControlStore'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 
 const STATUS_DOT = {
   IDLE: 'bg-[#22C55E]',
@@ -555,6 +546,7 @@ function AddDeviceDialog({ open, onOpenChange }) {
 
 export default function Devices() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [selectedDevice, setSelectedDevice] = useState(null)
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -633,21 +625,10 @@ export default function Devices() {
   const isLoading = loadingStatic || loadingLive
 
   const { takeControl, isTaking } = useManualControl()
-  const activeManualSession = useManualControlStore((s) => s.active)
-  const [confirmTakeoverDevice, setConfirmTakeoverDevice] = useState(null)
 
   const handleTakeControlClick = (device) => {
     // Évite les double-clics pendant qu'une requête est en vol
     if (isTaking) return
-    // Si une session est déjà active sur un AUTRE device, refuser (1 seule session à la fois)
-    if (activeManualSession && activeManualSession.udid !== device.udid) {
-      toast.error(`Manual mode déjà actif sur ${activeManualSession.deviceName} — release-le d'abord`)
-      return
-    }
-    if (device.status === 'RUNNING') {
-      setConfirmTakeoverDevice(device)
-      return
-    }
     takeControl({ udid: device.udid, deviceName: device.name })
   }
 
@@ -693,9 +674,19 @@ export default function Devices() {
           <h1 className="text-xl font-semibold text-[#FAFAFA]">Devices</h1>
           <p className="text-sm text-[#52525B] mt-0.5">{devices.length} device{devices.length !== 1 ? 's' : ''} registered</p>
         </div>
-        <Button size="sm" onClick={() => setAddDialogOpen(true)}>
-          <Plus className="w-4 h-4 mr-1.5" /> Add Device
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-[#1a1a1a] text-[#A1A1AA] hover:text-[#FAFAFA]"
+            onClick={() => navigate('/devices/wall')}
+          >
+            <LayoutGrid className="w-4 h-4 mr-1.5" /> VNC Wall
+          </Button>
+          <Button size="sm" onClick={() => setAddDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-1.5" /> Add Device
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -759,44 +750,6 @@ export default function Devices() {
 
       <DeviceDetailSheet device={selectedDevice} open={sheetOpen} onOpenChange={setSheetOpen} />
       <AddDeviceDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />
-
-      <AlertDialog
-        open={!!confirmTakeoverDevice}
-        onOpenChange={(open) => !open && setConfirmTakeoverDevice(null)}
-      >
-        <AlertDialogContent className="bg-[#0A0A0A] border-[#1a1a1a]">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-[#FAFAFA]">
-              Prendre la main sur {confirmTakeoverDevice?.name} ?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-[#A1A1AA]">
-              Une tâche est en cours sur ce device. La prise en main démarre
-              TrollVNC en parallèle de la session Appium : le run continue, et
-              les tâches suivantes seront dispatchées normalement même pendant
-              que vous regardez. Attention : si vous touchez l'écran via le
-              VNC pendant qu'Appium agit, les inputs concurrents peuvent faire
-              planter le run en cours.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="bg-[#111111] border-[#1a1a1a] text-[#A1A1AA]">
-              Annuler
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                takeControl({
-                  udid: confirmTakeoverDevice.udid,
-                  deviceName: confirmTakeoverDevice.name,
-                })
-                setConfirmTakeoverDevice(null)
-              }}
-            >
-              <Hand className="w-3.5 h-3.5 mr-1.5" />
-              Take Control
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

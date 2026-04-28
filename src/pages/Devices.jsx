@@ -780,7 +780,6 @@ export default function Devices() {
               Annuler
             </AlertDialogCancel>
             <AlertDialogAction
-              disabled={isTaking}
               onClick={() => {
                 takeControl({
                   udid: confirmTakeoverDevice.udid,

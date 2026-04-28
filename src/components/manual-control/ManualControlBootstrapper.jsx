@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { apiGet } from '@/lib/api'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useManualControlStore } from '@/stores/manualControlStore'
+import { useAuthStore } from '@/stores/authStore'
 
 /**
  * Composant invisible : restaure l'état manual control au mount, et
@@ -14,14 +15,18 @@ import { useManualControlStore } from '@/stores/manualControlStore'
 export default function ManualControlBootstrapper() {
   const setActive = useManualControlStore((s) => s.setActive)
   const clear = useManualControlStore((s) => s.clear)
+  const token = useAuthStore((s) => s.token)
   const { subscribe, isConnected } = useWebSocket()
 
   // Restore au mount — `select` doit rester pur (appelé à chaque re-render),
   // donc on déporte la mise à jour du store dans un useEffect.
+  // `enabled: !!token` évite un 401-loop si le composant est jamais monté
+  // hors zone authentifiée.
   const { data: sessions } = useQuery({
     queryKey: ['manual-control-active'],
     queryFn: () => apiGet('/api/devices/manual-control/active'),
     refetchOnWindowFocus: false,
+    enabled: !!token,
     select: (res) => (Array.isArray(res) ? res : (res?.data ?? [])),
   })
 

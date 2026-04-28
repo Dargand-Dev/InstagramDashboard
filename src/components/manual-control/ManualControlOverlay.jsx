@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Hand, X, AlertTriangle } from 'lucide-react'
+import { Hand, X } from 'lucide-react'
 import { useManualControlStore } from '@/stores/manualControlStore'
 import { useManualControl } from '@/hooks/useManualControl'
 import { Button } from '@/components/ui/button'
@@ -17,15 +17,20 @@ import {
 import TimeAgo from '@/components/shared/TimeAgo'
 
 /**
- * Overlay plein écran affiché tant qu'une session de contrôle manuel est active.
- * Monté à la racine de l'app (App.jsx), persiste à travers les navigations.
+ * Overlay plein écran affiché tant qu'**exactement une** session est active et
+ * que la VNC Wall n'est pas en cours. Si plusieurs sessions existent OU si la
+ * wall est active, on laisse la page Wall (ou son banner) gérer l'UI.
  */
 export default function ManualControlOverlay() {
-  const active = useManualControlStore((s) => s.active)
+  const sessions = useManualControlStore((s) => s.sessions)
+  const wallActive = useManualControlStore((s) => s.wallActive)
+  const sessionList = Object.values(sessions)
   const { release, isReleasing } = useManualControl()
   const [confirmOpen, setConfirmOpen] = useState(false)
 
-  if (!active) return null
+  // Affiché uniquement quand une seule session est active, hors wall
+  if (wallActive || sessionList.length !== 1) return null
+  const active = sessionList[0]
 
   return (
     <>
@@ -66,12 +71,6 @@ export default function ManualControlOverlay() {
             className="flex-1 w-full border-0 bg-black"
             allow="clipboard-read; clipboard-write"
           />
-
-          {/* Footer */}
-          <div className="border-t border-[#1a1a1a] px-5 py-2 shrink-0 flex items-center gap-2 text-xs text-[#A1A1AA]">
-            <AlertTriangle className="w-3 h-3 text-[#F59E0B]" />
-            <span>La queue de ce device est gelée jusqu'au release.</span>
-          </div>
         </DialogContent>
       </Dialog>
 
@@ -81,8 +80,7 @@ export default function ManualControlOverlay() {
           <AlertDialogHeader>
             <AlertDialogTitle className="text-[#FAFAFA]">Release manual control ?</AlertDialogTitle>
             <AlertDialogDescription className="text-[#A1A1AA]">
-              La queue de {active.deviceName} reprendra automatiquement et de nouvelles tâches
-              pourront être dispatchées sur ce device.
+              La connexion VNC sera fermée. La queue n'est pas affectée — elle continue à dispatcher des tâches normalement.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -92,8 +90,6 @@ export default function ManualControlOverlay() {
             <AlertDialogAction
               disabled={isReleasing}
               onClick={() => {
-                // On ne ferme la confirmation qu'au succès — sinon la modale
-                // se referme silencieusement même si le release a échoué.
                 release(active.udid, {
                   onSuccess: () => setConfirmOpen(false),
                 })

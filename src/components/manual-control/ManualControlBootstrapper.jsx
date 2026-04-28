@@ -16,29 +16,31 @@ export default function ManualControlBootstrapper() {
   const clear = useManualControlStore((s) => s.clear)
   const { subscribe, isConnected } = useWebSocket()
 
-  // Restore au mount
-  useQuery({
+  // Restore au mount — `select` doit rester pur (appelé à chaque re-render),
+  // donc on déporte la mise à jour du store dans un useEffect.
+  const { data: sessions } = useQuery({
     queryKey: ['manual-control-active'],
     queryFn: () => apiGet('/api/devices/manual-control/active'),
     refetchOnWindowFocus: false,
-    select: (res) => {
-      const sessions = Array.isArray(res) ? res : (res?.data ?? [])
-      // Pour l'instant on suppose 0 ou 1 session active à la fois
-      if (sessions.length > 0) {
-        const s = sessions[0]
-        setActive({
-          udid: s.udid,
-          deviceName: s.deviceName || s.udid,
-          vncUrl: s.vncUrl,
-          deviceIp: s.deviceIp,
-          since: s.since,
-        })
-      } else {
-        clear()
-      }
-      return sessions
-    },
+    select: (res) => (Array.isArray(res) ? res : (res?.data ?? [])),
   })
+
+  useEffect(() => {
+    if (!sessions) return
+    // Pour l'instant on suppose 0 ou 1 session active à la fois
+    if (sessions.length > 0) {
+      const s = sessions[0]
+      setActive({
+        udid: s.udid,
+        deviceName: s.deviceName || s.udid,
+        vncUrl: s.vncUrl,
+        deviceIp: s.deviceIp,
+        since: s.since,
+      })
+    } else {
+      clear()
+    }
+  }, [sessions, setActive, clear])
 
   // Sync WS
   useEffect(() => {

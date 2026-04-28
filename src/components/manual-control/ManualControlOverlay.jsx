@@ -92,8 +92,11 @@ export default function ManualControlOverlay() {
             <AlertDialogAction
               disabled={isReleasing}
               onClick={() => {
-                release(active.udid)
-                setConfirmOpen(false)
+                // On ne ferme la confirmation qu'au succès — sinon la modale
+                // se referme silencieusement même si le release a échoué.
+                release(active.udid, {
+                  onSuccess: () => setConfirmOpen(false),
+                })
               }}
             >
               <Hand className="w-3.5 h-3.5 mr-1.5" />

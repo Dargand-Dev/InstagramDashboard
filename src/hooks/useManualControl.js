@@ -15,6 +15,15 @@ export function useManualControl() {
   const takeControl = useMutation({
     mutationFn: ({ udid }) => apiPost(`/api/devices/${udid}/take-control`, {}),
     onSuccess: (data, { udid, deviceName }) => {
+      // api.js convertit un 423 en { locked: true, ... } sans throw.
+      if (data?.locked) {
+        toast.error(data.message || 'Device verrouillé par une autre opération')
+        return
+      }
+      if (!data?.vncUrl) {
+        toast.error('Réponse take-control invalide (vncUrl manquant)')
+        return
+      }
       setActive({
         udid,
         deviceName: deviceName || udid,
@@ -47,7 +56,9 @@ export function useManualControl() {
 
   return {
     takeControl: takeControl.mutate,
-    release: release.mutate,
+    // mutate accepte (vars, options) — on propage le 2e arg pour permettre
+    // un onSuccess per-call (utile pour ne fermer la modale qu'au succès).
+    release: (udid, options) => release.mutate(udid, options),
     isTaking: takeControl.isPending,
     isReleasing: release.isPending,
   }

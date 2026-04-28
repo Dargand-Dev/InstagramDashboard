@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, LayoutGrid } from 'lucide-react'
-import { apiGet, apiPost } from '@/lib/api'
+import { apiGet } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { useManualControlStore } from '@/stores/manualControlStore'
+import { useManualControl } from '@/hooks/useManualControl'
 import { useWallControl } from '@/hooks/useWallControl'
 import WallTile from '@/components/wall/WallTile'
 import WallFocusModal from '@/components/wall/WallFocusModal'
@@ -22,11 +23,16 @@ export default function VncWall() {
   const navigate = useNavigate()
   const [columns, setColumns] = useState(4)
   const [focusUdid, setFocusUdid] = useState(null)
+  // Garde-fou : auto-start ne doit s'exécuter qu'une fois par mount,
+  // même si tilesData.length oscille à cause des refetch live-status.
+  const autoStartedRef = useRef(false)
 
   const sessions = useManualControlStore((s) => s.sessions)
   const walling = useManualControlStore((s) => s.walling)
+  const setWalling = useManualControlStore((s) => s.setWalling)
   const wallActive = useManualControlStore((s) => s.wallActive)
   const { startWall, releaseAll, isStarting, isReleasing } = useWallControl()
+  const { takeControl } = useManualControl()
 
   // Liste des devices enabled depuis le backend
   const { data: staticDevices = [] } = useQuery({
@@ -63,24 +69,26 @@ export default function VncWall() {
       }))
   }, [staticDevices, liveStatuses])
 
-  // Au mount : si la wall n'est pas déjà active, on la démarre
+  // Au mount : démarre la wall une seule fois quand on a la liste des devices.
+  // autoStartedRef évite de re-démarrer si tilesData.length oscille à cause
+  // des refetch /live-status, ou si l'utilisateur fait release-all puis revient.
   useEffect(() => {
-    if (!wallActive && tilesData.length > 0) {
-      const reachableUdids = tilesData
-        .filter((d) => d.status !== 'OFFLINE' && d.status !== 'DISCONNECTED')
-        .map((d) => d.udid)
-      if (reachableUdids.length > 0) {
-        startWall(reachableUdids)
-      }
+    if (autoStartedRef.current || wallActive || isStarting || tilesData.length === 0) return
+    const reachableUdids = tilesData
+      .filter((d) => d.status !== 'OFFLINE' && d.status !== 'DISCONNECTED')
+      .map((d) => d.udid)
+    if (reachableUdids.length > 0) {
+      autoStartedRef.current = true
+      startWall(reachableUdids)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tilesData.length])
+  }, [tilesData, wallActive, isStarting, startWall])
 
+  // Retry pour un device en FAILED : passe par le hook useManualControl pour
+  // que le store soit correctement mis à jour (sessions[udid] + walling cleared).
   const handleRetry = (udid) => {
-    // Re-take-control just this udid (uses single-session endpoint)
-    apiPost(`/api/devices/${udid}/take-control`, {}).catch(() => {
-      // toast already handled by error path of /take-control
-    })
+    const device = tilesData.find((d) => d.udid === udid)
+    setWalling(udid, 'STARTING', { deviceName: device?.name })
+    takeControl({ udid, deviceName: device?.name })
   }
 
   // Compute per-device state

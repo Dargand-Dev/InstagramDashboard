@@ -12,20 +12,29 @@ export default function WallBanner() {
   const navigate = useNavigate()
   const location = useLocation()
   const sessions = useManualControlStore((s) => s.sessions)
+  const walling = useManualControlStore((s) => s.walling)
   const wallActive = useManualControlStore((s) => s.wallActive)
   const { releaseAll, isReleasing } = useWallControl()
 
   const sessionCount = Object.keys(sessions).length
+  const wallingCount = Object.keys(walling).length
   const onWallPage = location.pathname === '/devices/wall'
 
-  if (!wallActive || sessionCount === 0 || onWallPage) return null
+  // Affichage pendant TOUT le cycle (incl. STARTING avant que les sessions arrivent),
+  // mais évidemment pas sur la page wall elle-même.
+  if (!wallActive || (sessionCount === 0 && wallingCount === 0) || onWallPage) return null
+
+  const totalCount = Math.max(sessionCount, wallingCount)
+  const isStartingPhase = sessionCount === 0
 
   return (
     <div className="bg-[#3B82F6]/10 border-b border-[#3B82F6]/20 px-4 py-2 flex items-center justify-between">
       <div className="flex items-center gap-2">
         <span className="w-2 h-2 rounded-full bg-[#3B82F6] animate-pulse" />
-        <span className="text-xs font-medium text-[#FAFAFA]">VNC Wall actif</span>
-        <span className="text-xs text-[#A1A1AA]">· {sessionCount} device{sessionCount !== 1 ? 's' : ''}</span>
+        <span className="text-xs font-medium text-[#FAFAFA]">
+          VNC Wall {isStartingPhase ? 'démarrage' : 'actif'}
+        </span>
+        <span className="text-xs text-[#A1A1AA]">· {totalCount} device{totalCount !== 1 ? 's' : ''}</span>
       </div>
       <div className="flex items-center gap-2">
         <Button

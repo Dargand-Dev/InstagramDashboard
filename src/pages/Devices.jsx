@@ -770,9 +770,12 @@ export default function Devices() {
               Prendre la main sur {confirmTakeoverDevice?.name} ?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-[#A1A1AA]">
-              Une tâche est en cours sur ce device. La prendre en main va l'arrêter
-              immédiatement (kill propre, la session Appium est fermée et le run
-              passe en CANCELLED).
+              Une tâche est en cours sur ce device. La prise en main démarre
+              TrollVNC en parallèle de la session Appium : le run continue
+              jusqu'au bout. Les nouvelles tâches restent en file d'attente
+              tant que vous ne relâcherez pas. Attention : si vous touchez
+              l'écran via le VNC pendant qu'Appium agit, les inputs concurrents
+              peuvent faire planter le run en cours.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

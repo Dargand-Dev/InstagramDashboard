@@ -32,10 +32,6 @@ export function useManualControl() {
         since: data.since,
       })
       queryClient.invalidateQueries({ queryKey: ['devices-live'] })
-      if (data.killed) {
-        queryClient.invalidateQueries({ queryKey: ['queue'] })
-        toast.warning(`Tâche ${data.killed.actionName || ''} arrêtée pour prendre la main`)
-      }
     },
     onError: (err) => {
       toast.error(err.message || 'Take control échoué')

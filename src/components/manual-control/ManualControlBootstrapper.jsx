@@ -1,27 +1,29 @@
 import { useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiGet } from '@/lib/api'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useManualControlStore } from '@/stores/manualControlStore'
 import { useAuthStore } from '@/stores/authStore'
 
 /**
- * Composant invisible : restaure l'état manual control au mount, et
- * synchronise via WebSocket les events MANUAL_CONTROL_TAKEN/RELEASED.
+ * Composant invisible : restaure les sessions manual au mount, et synchronise
+ * via WebSocket les events de deux topics :
+ *  - /topic/devices/status — single-session events (MANUAL_CONTROL_TAKEN/RELEASED)
+ *  - /topic/wall/status    — wall session events (WALL_DEVICE_STARTING/READY/FAILED)
  *
  * Doit être monté UNE SEULE FOIS, à l'intérieur de la zone authentifiée
- * (sinon useWebSocket plante sans token).
+ * (sinon useWebSocket plante sans token). Centraliser ici les subscriptions
+ * évite les double-subscribes quand plusieurs composants utilisent
+ * useWallControl().
  */
 export default function ManualControlBootstrapper() {
-  const setActive = useManualControlStore((s) => s.setActive)
-  const clear = useManualControlStore((s) => s.clear)
+  const queryClient = useQueryClient()
+  const setSession = useManualControlStore((s) => s.setSession)
+  const removeSession = useManualControlStore((s) => s.removeSession)
+  const setWalling = useManualControlStore((s) => s.setWalling)
   const token = useAuthStore((s) => s.token)
   const { subscribe, isConnected } = useWebSocket()
 
-  // Restore au mount — `select` doit rester pur (appelé à chaque re-render),
-  // donc on déporte la mise à jour du store dans un useEffect.
-  // `enabled: !!token` évite un 401-loop si le composant est jamais monté
-  // hors zone authentifiée.
   const { data: sessions } = useQuery({
     queryKey: ['manual-control-active'],
     queryFn: () => apiGet('/api/devices/manual-control/active'),
@@ -30,32 +32,27 @@ export default function ManualControlBootstrapper() {
     select: (res) => (Array.isArray(res) ? res : (res?.data ?? [])),
   })
 
+  // Restore au mount
   useEffect(() => {
     if (!sessions) return
-    // Pour l'instant on suppose 0 ou 1 session active à la fois
-    if (sessions.length > 0) {
-      const s = sessions[0]
-      setActive({
+    sessions.forEach((s) => {
+      setSession(s.udid, {
         udid: s.udid,
         deviceName: s.deviceName || s.udid,
         vncUrl: s.vncUrl,
         deviceIp: s.deviceIp,
         since: s.since,
       })
-    } else {
-      clear()
-    }
-  }, [sessions, setActive, clear])
+    })
+  }, [sessions, setSession])
 
-  // Sync WS
+  // Sync WS sur le topic devices/status (events single-session)
   useEffect(() => {
     if (!isConnected) return
     const unsub = subscribe('/topic/devices/status', (raw) => {
-      // Le payload peut être : (a) le DeviceStatus DTO direct (markRunning, etc.),
-      // ou (b) notre Map { eventType, deviceUdid, ... } envoyé par ManualControlService.
       if (!raw || typeof raw !== 'object') return
       if (raw.eventType === 'MANUAL_CONTROL_TAKEN') {
-        setActive({
+        setSession(raw.deviceUdid, {
           udid: raw.deviceUdid,
           deviceName: raw.deviceName || raw.deviceUdid,
           vncUrl: raw.vncUrl,
@@ -63,14 +60,51 @@ export default function ManualControlBootstrapper() {
           since: raw.since,
         })
       } else if (raw.eventType === 'MANUAL_CONTROL_RELEASED') {
-        const current = useManualControlStore.getState().active
-        if (current && current.udid === raw.deviceUdid) {
-          clear()
-        }
+        removeSession(raw.deviceUdid)
       }
     })
     return unsub
-  }, [isConnected, subscribe, setActive, clear])
+  }, [isConnected, subscribe, setSession, removeSession])
+
+  // Sync WS sur le topic wall/status (events wall multi-session)
+  useEffect(() => {
+    if (!isConnected) return
+    const unsub = subscribe('/topic/wall/status', (event) => {
+      if (!event || typeof event !== 'object' || !event.eventType) return
+
+      // Filtre par sessionId : on ignore les events d'une wall précédente
+      const currentSessionId = useManualControlStore.getState().wallSessionId
+      if (currentSessionId && event.sessionId && event.sessionId !== currentSessionId) {
+        return
+      }
+
+      switch (event.eventType) {
+        case 'WALL_DEVICE_STARTING':
+          setWalling(event.udid, 'STARTING', { deviceName: event.deviceName, deviceIp: event.deviceIp })
+          break
+        case 'WALL_DEVICE_READY':
+          setWalling(event.udid, 'READY')
+          setSession(event.udid, {
+            udid: event.udid,
+            deviceName: event.deviceName || event.udid,
+            vncUrl: event.vncUrl,
+            deviceIp: event.deviceIp,
+            since: event.since,
+          })
+          queryClient.invalidateQueries({ queryKey: ['devices-live'] })
+          break
+        case 'WALL_DEVICE_FAILED':
+          setWalling(event.udid, 'FAILED', {
+            deviceName: event.deviceName,
+            error: event.error || 'Erreur inconnue',
+          })
+          break
+        default:
+          break
+      }
+    })
+    return unsub
+  }, [isConnected, subscribe, setWalling, setSession, queryClient])
 
   return null
 }

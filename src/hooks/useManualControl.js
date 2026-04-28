@@ -4,13 +4,17 @@ import { apiPost } from '@/lib/api'
 import { useManualControlStore } from '@/stores/manualControlStore'
 
 /**
- * Hook React Query pour les actions take/release.
- * - takeControl({ udid, deviceName }) : POST + peuple le store en cas de succès.
- * - release(udid) : POST + vide le store en cas de succès.
+ * Hook React Query pour les actions take/release individuelles.
+ *
+ * - takeControl({ udid, deviceName }) : POST + ajoute la session au store.
+ * - release(udid, options?) : POST + retire la session du store.
+ *
+ * Plusieurs sessions peuvent coexister — pas de single-active enforcement ici.
  */
 export function useManualControl() {
   const queryClient = useQueryClient()
-  const { setActive, clear } = useManualControlStore()
+  const setSession = useManualControlStore((s) => s.setSession)
+  const removeSession = useManualControlStore((s) => s.removeSession)
 
   const takeControl = useMutation({
     mutationFn: ({ udid }) => apiPost(`/api/devices/${udid}/take-control`, {}),
@@ -24,7 +28,7 @@ export function useManualControl() {
         toast.error('Réponse take-control invalide (vncUrl manquant)')
         return
       }
-      setActive({
+      setSession(udid, {
         udid,
         deviceName: deviceName || udid,
         vncUrl: data.vncUrl,
@@ -40,8 +44,8 @@ export function useManualControl() {
 
   const release = useMutation({
     mutationFn: (udid) => apiPost(`/api/devices/${udid}/release-control`, {}),
-    onSuccess: () => {
-      clear()
+    onSuccess: (_data, udid) => {
+      removeSession(udid)
       queryClient.invalidateQueries({ queryKey: ['devices-live'] })
       queryClient.invalidateQueries({ queryKey: ['queue'] })
     },
@@ -52,8 +56,6 @@ export function useManualControl() {
 
   return {
     takeControl: takeControl.mutate,
-    // mutate accepte (vars, options) — on propage le 2e arg pour permettre
-    // un onSuccess per-call (utile pour ne fermer la modale qu'au succès).
     release: (udid, options) => release.mutate(udid, options),
     isTaking: takeControl.isPending,
     isReleasing: release.isPending,

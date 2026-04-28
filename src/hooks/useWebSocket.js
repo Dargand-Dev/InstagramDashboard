@@ -3,6 +3,19 @@ import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import { useAuthStore } from '@/stores/authStore'
 
+// Reconnaît les rejets backend pour token absent/invalide/expiré.
+// Quand on les voit → logout, sinon le client retry indéfiniment et l'UI
+// reste bloquée sans feedback (ex: tiles wall coincées sur "Démarrage...").
+function isAuthFailure(frame) {
+  const message = frame?.headers?.message || frame?.body || ''
+  const lower = String(message).toLowerCase()
+  return (
+    lower.includes('authorization') ||
+    lower.includes('invalid or expired jwt') ||
+    lower.includes('jwt')
+  )
+}
+
 const WS_URL = import.meta.env.VITE_WS_URL || '/ws'
 
 const CONNECTION_STATUS = {
@@ -58,8 +71,16 @@ export function useWebSocket() {
       onDisconnect: () => {
         setStatus(CONNECTION_STATUS.DISCONNECTED)
       },
-      onStompError: () => {
+      onStompError: (frame) => {
         setStatus(CONNECTION_STATUS.DISCONNECTED)
+        // Backend a rejeté le CONNECT (typiquement JWT expiré/invalide).
+        // On force un logout au lieu de retry indéfiniment — sinon UI silencieusement KO.
+        if (isAuthFailure(frame)) {
+          // eslint-disable-next-line no-console
+          console.warn('[ws] STOMP auth failure, forcing logout:', frame?.headers?.message || frame?.body)
+          useAuthStore.getState().logout()
+          return
+        }
         // Exponential backoff reconnect
         reconnectTimeoutRef.current = setTimeout(() => {
           if (clientRef.current) {

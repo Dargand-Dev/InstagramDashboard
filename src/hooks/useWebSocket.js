@@ -128,5 +128,19 @@ export function useWebSocket() {
     }
   }, [dispatch])
 
-  return { status, subscribe, isConnected: status === CONNECTION_STATUS.CONNECTED }
+  const publish = useCallback((destination, body = {}) => {
+    const client = clientRef.current
+    if (!client?.connected) {
+      // eslint-disable-next-line no-console
+      console.warn('[ws] publish ignoré — client non connecté:', destination)
+      return false
+    }
+    client.publish({
+      destination,
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    })
+    return true
+  }, [])
+
+  return { status, subscribe, publish, isConnected: status === CONNECTION_STATUS.CONNECTED }
 }

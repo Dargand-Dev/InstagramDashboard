@@ -9,10 +9,9 @@ import { Button } from '@/components/ui/button'
  *  - state: 'OFFLINE' | 'STARTING' | 'READY' | 'FAILED'
  *  - vncUrl?: string
  *  - error?: string
- *  - onFocus?: () => void
  *  - onRetry?: () => void
  */
-export default function WallTile({ device, state, vncUrl, error, onFocus, onRetry }) {
+export default function WallTile({ device, state, vncUrl, error, onRetry }) {
   const baseCls = 'relative w-full aspect-[9/19.5] rounded-lg overflow-hidden border'
 
   if (state === 'OFFLINE') {
@@ -52,23 +51,16 @@ export default function WallTile({ device, state, vncUrl, error, onFocus, onRetr
 
   // READY
   return (
-    <div
-      className={`${baseCls} bg-black border-[#1a1a1a] hover:border-[#3B82F6]/50 cursor-pointer group`}
-      onClick={onFocus}
-    >
+    <div className={`${baseCls} bg-black border-[#1a1a1a] hover:border-[#3B82F6]/50 group`}>
       <iframe
         src={vncUrl}
         title={`noVNC ${device.name || device.udid}`}
-        className="w-full h-full border-0 pointer-events-none"
+        className="w-full h-full border-0"
         allow="clipboard-read; clipboard-write"
       />
-      {/* Overlay with name */}
-      <div className="absolute top-0 inset-x-0 px-3 py-1.5 bg-gradient-to-b from-black/70 to-transparent">
+      {/* Overlay with name (pointer-events-none pour ne pas bloquer les clics VNC) */}
+      <div className="absolute top-0 inset-x-0 px-3 py-1.5 bg-gradient-to-b from-black/70 to-transparent pointer-events-none">
         <p className="text-xs font-medium text-[#FAFAFA] truncate">{device.name || device.udid}</p>
-      </div>
-      {/* Click hint */}
-      <div className="absolute inset-0 bg-[#3B82F6]/0 group-hover:bg-[#3B82F6]/10 transition-colors flex items-end justify-center pb-3 opacity-0 group-hover:opacity-100">
-        <span className="text-xs font-medium text-[#FAFAFA] bg-black/70 px-2 py-1 rounded">Cliquer pour focus</span>
       </div>
     </div>
   )

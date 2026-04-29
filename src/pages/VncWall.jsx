@@ -9,7 +9,6 @@ import { useManualControl } from '@/hooks/useManualControl'
 import { useWallControl } from '@/hooks/useWallControl'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import WallTile from '@/components/wall/WallTile'
-import WallFocusModal from '@/components/wall/WallFocusModal'
 
 const COLUMN_OPTIONS = [2, 3, 4, 5, 6]
 const COLUMN_GRID_CLASSES = {
@@ -23,7 +22,6 @@ const COLUMN_GRID_CLASSES = {
 export default function VncWall() {
   const navigate = useNavigate()
   const [columns, setColumns] = useState(4)
-  const [focusUdid, setFocusUdid] = useState(null)
   // Garde-fou : auto-start ne doit s'exécuter qu'une fois par mount,
   // même si tilesData.length oscille à cause des refetch live-status.
   const autoStartedRef = useRef(false)
@@ -127,8 +125,6 @@ export default function VncWall() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tilesData, sessions, walling])
 
-  const focusedSession = focusUdid ? sessions[focusUdid] : null
-
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -191,29 +187,18 @@ export default function VncWall() {
             const state = stateFor(device)
             const session = sessions[device.udid]
             const wallingEntry = walling[device.udid]
-            const isFocused = focusUdid === device.udid
             return (
-              <div key={device.udid} className={isFocused ? 'opacity-30' : ''}>
-                <WallTile
-                  device={device}
-                  state={isFocused ? 'STARTING' : state}
-                  vncUrl={session?.vncUrl}
-                  error={wallingEntry?.error}
-                  onFocus={state === 'READY' ? () => setFocusUdid(device.udid) : undefined}
-                  onRetry={state === 'FAILED' ? () => handleRetry(device.udid) : undefined}
-                />
-              </div>
+              <WallTile
+                key={device.udid}
+                device={device}
+                state={state}
+                vncUrl={session?.vncUrl}
+                error={wallingEntry?.error}
+                onRetry={state === 'FAILED' ? () => handleRetry(device.udid) : undefined}
+              />
             )
           })}
         </div>
-      )}
-
-      {/* Focus modal */}
-      {focusedSession && (
-        <WallFocusModal
-          session={focusedSession}
-          onClose={() => setFocusUdid(null)}
-        />
       )}
     </div>
   )

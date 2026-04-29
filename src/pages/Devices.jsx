@@ -35,6 +35,7 @@ import {
   History,
   Hand,
   LayoutGrid,
+  Terminal,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useManualControl } from '@/hooks/useManualControl'
@@ -73,7 +74,7 @@ function proxyExpiryColor(iso) {
   return null
 }
 
-function DeviceCard({ device, onSelect, onToggle, onTakeControl }) {
+function DeviceCard({ device, onSelect, onToggle, onTakeControl, onOpenTerminal }) {
   const statusColor = STATUS_DOT[device.status] || STATUS_DOT.OFFLINE
   const isRunning = device.status === 'RUNNING'
   const isError = device.status === 'ERROR'
@@ -171,6 +172,17 @@ function DeviceCard({ device, onSelect, onToggle, onTakeControl }) {
               Take Control
             </Button>
           )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-xs text-[#A1A1AA] hover:text-[#FAFAFA]"
+            onClick={() => onOpenTerminal(device)}
+            disabled={!device.deviceIp}
+            title={device.deviceIp ? 'Ouvrir un terminal SSH' : 'IP non configurée'}
+          >
+            <Terminal className="w-3 h-3 mr-1" />
+            Terminal
+          </Button>
           <Switch
             checked={device.enabled !== false}
             onCheckedChange={() => onToggle(device)}
@@ -743,6 +755,7 @@ export default function Devices() {
               }}
               onToggle={(d) => toggleMutation.mutate(d)}
               onTakeControl={handleTakeControlClick}
+              onOpenTerminal={(d) => navigate(`/devices/${d.udid}/terminal`)}
             />
           ))}
         </div>

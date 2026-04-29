@@ -17,6 +17,7 @@ const Queue = lazy(() => import('@/pages/Queue'))
 const Actions = lazy(() => import('@/pages/Actions'))
 const Devices = lazy(() => import('@/pages/Devices'))
 const VncWall = lazy(() => import('@/pages/VncWall'))
+const DeviceTerminal = lazy(() => import('@/pages/DeviceTerminal'))
 const Accounts = lazy(() => import('@/pages/Accounts'))
 const AutoSuspended = lazy(() => import('@/pages/AutoSuspended'))
 const ErrorCenter = lazy(() => import('@/pages/ErrorCenter'))
@@ -58,6 +59,7 @@ export default function App() {
                 <Route path="/actions" element={<LazyPage><Actions /></LazyPage>} />
                 <Route path="/devices" element={<LazyPage><Devices /></LazyPage>} />
                 <Route path="/devices/wall" element={<LazyPage><VncWall /></LazyPage>} />
+                <Route path="/devices/:udid/terminal" element={<LazyPage><DeviceTerminal /></LazyPage>} />
                 <Route path="/accounts" element={<LazyPage><Accounts /></LazyPage>} />
                 <Route path="/auto-suspended" element={<LazyPage><AutoSuspended /></LazyPage>} />
                 <Route path="/error-center" element={<LazyPage><ErrorCenter /></LazyPage>} />

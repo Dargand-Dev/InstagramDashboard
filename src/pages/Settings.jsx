@@ -425,7 +425,7 @@ export default function Settings() {
             <Button
               size="sm"
               className="bg-[#EF4444] hover:bg-[#DC2626] text-white"
-              onClick={() => deleteIdentity.mutate(deleteTarget.id)}
+              onClick={() => deleteIdentity.mutate(deleteTarget.identityId)}
               disabled={deleteIdentity.isPending}
             >
               {deleteIdentity.isPending ? 'Deleting...' : 'Delete'}

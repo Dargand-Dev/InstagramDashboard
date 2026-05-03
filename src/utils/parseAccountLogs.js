@@ -5,6 +5,11 @@ const END_RE = /■■ ACCOUNT_END (\S+)/
  * Filtre les lignes de log d'un run pour ne garder que celles d'un compte donné,
  * en préfixant les lignes hors-compte avec "[run] " comme contexte.
  *
+ * Cas pathologique : un BEGIN qui arrive alors qu'un compte précédent n'a pas
+ * été clos par END (crash JVM, kill brutal, etc.). On émet un marqueur de
+ * désynchronisation côté target uniquement quand le orphelin précède le target,
+ * pour que le user voie qu'il manque potentiellement des logs en amont.
+ *
  * @param {string} text - Texte complet des logs du run (lignes séparées par \n)
  * @param {string} targetUsername - Username du compte à isoler
  * @param {{ includeContext?: boolean }} [opts]
@@ -19,6 +24,12 @@ export function extractAccountLog(text, targetUsername, { includeContext = true 
   for (const line of lines) {
     const beginMatch = line.match(BEGIN_RE)
     if (beginMatch) {
+      // Implicit close : si un compte précédent n'a pas été clos, on signale
+      // la désynchronisation dans le flux du target seulement (ailleurs, les
+      // lignes orphelines appartenaient légitimement à un autre compte).
+      if (currentAccount !== null && beginMatch[1] === targetUsername) {
+        out.push(`[run] ⚠ Bloc précédent non clos (${currentAccount}) — logs antérieurs potentiellement incomplets`)
+      }
       currentAccount = beginMatch[1]
       if (currentAccount === targetUsername) out.push(line)
       continue
@@ -36,6 +47,8 @@ export function extractAccountLog(text, targetUsername, { includeContext = true 
     } else if (currentAccount === null && includeContext) {
       out.push(`[run] ${line}`)
     }
+    // Sinon : ligne d'un autre compte (currentAccount !== target) — exclue
+    // volontairement du filtre target (sinon les modaux par compte se mélangeraient).
   }
 
   return out.join('\n')

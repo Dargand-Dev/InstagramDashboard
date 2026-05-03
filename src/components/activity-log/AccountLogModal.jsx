@@ -26,7 +26,10 @@ export default function AccountLogModal({ runId, username, open, onClose }) {
   )
 
   // Run pré-fonctionnalité : pas de sentinelles → on ne peut pas filtrer.
-  const noSentinels = !!text && !hasAccountSentinels(text)
+  // On suppress le banner pendant un run live tant qu'aucune sentinelle n'est
+  // arrivée (le BEGIN peut juste ne pas avoir streamé encore — le banner
+  // apparaîtrait à tort dans cette fenêtre courte).
+  const noSentinels = !!text && !hasAccountSentinels(text) && !showingLive
 
   const stopGraceful = useMutation({
     mutationFn: () => apiPost(`/api/automation/runs/${encodeURIComponent(runId)}/stop`, { mode: 'GRACEFUL' }),

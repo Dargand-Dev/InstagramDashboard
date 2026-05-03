@@ -32,6 +32,8 @@ export default function DeviceRunsTab({ device }) {
   const [retryingId, setRetryingId] = useState(null)
   const [stopping, setStopping] = useState(false)
   const [logsModalOpen, setLogsModalOpen] = useState(false)
+  // { username, runId } figé au moment du clic — sinon le modal se ferme
+  // brusquement quand deviceActiveRun disparaît (run complétée pendant la consultation).
   const [accountLogsFor, setAccountLogsFor] = useState(null)
 
   const { activeRuns } = useActiveRuns()
@@ -195,9 +197,12 @@ export default function DeviceRunsTab({ device }) {
                         {entry.errorMessage && (
                           <span className="text-[#EF4444] truncate max-w-[300px]">{entry.errorMessage}</span>
                         )}
-                        {realUsername && (
+                        {realUsername && deviceActiveRun?.runId && (
                           <button
-                            onClick={(e) => { e.stopPropagation(); setAccountLogsFor(realUsername) }}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setAccountLogsFor({ username: realUsername, runId: deviceActiveRun.runId })
+                            }}
                             className="text-[#3B82F6] hover:text-[#60A5FA] inline-flex items-center"
                             title="Logs de ce compte uniquement"
                           >
@@ -310,10 +315,10 @@ export default function DeviceRunsTab({ device }) {
         />
       )}
 
-      {accountLogsFor && deviceActiveRun?.runId && (
+      {accountLogsFor && (
         <AccountLogModal
-          runId={deviceActiveRun.runId}
-          username={accountLogsFor}
+          runId={accountLogsFor.runId}
+          username={accountLogsFor.username}
           open={!!accountLogsFor}
           onClose={() => setAccountLogsFor(null)}
         />

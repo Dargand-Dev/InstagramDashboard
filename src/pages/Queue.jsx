@@ -36,6 +36,7 @@ import {
   AlertCircle,
   Loader2,
   Timer,
+  PauseCircle,
 } from 'lucide-react'
 
 function formatDuration(startStr) {
@@ -250,12 +251,14 @@ function TaskCard({ task, onCancel, onReprioritize }) {
                 key={entry.containerName || i}
                 className="flex items-center gap-1.5 px-2 py-1 rounded text-xs hover:bg-[#0A0A0A]"
               >
-                {entry.status === 'COMPLETED' && <CheckCircle2 className="w-3 h-3 text-[#22C55E] shrink-0" />}
-                {entry.status === 'FAILED' && <AlertCircle className="w-3 h-3 text-[#EF4444] shrink-0" />}
+                {entry.skipCode === 'AUTO_SUSPENDED' && <PauseCircle className="w-3 h-3 text-[#A855F7] shrink-0" />}
+                {entry.status === 'COMPLETED' && entry.skipCode !== 'AUTO_SUSPENDED' && <CheckCircle2 className="w-3 h-3 text-[#22C55E] shrink-0" />}
+                {entry.status === 'FAILED' && entry.skipCode !== 'AUTO_SUSPENDED' && <AlertCircle className="w-3 h-3 text-[#EF4444] shrink-0" />}
                 {entry.status === 'RUNNING' && <Loader2 className="w-3 h-3 text-[#3B82F6] animate-spin shrink-0" />}
                 {entry.status === 'PENDING' && <Clock className="w-3 h-3 text-[#52525B] shrink-0" />}
-                {entry.status === 'SKIPPED' && <XCircle className="w-3 h-3 text-[#52525B] shrink-0" />}
+                {entry.status === 'SKIPPED' && entry.skipCode !== 'AUTO_SUSPENDED' && <XCircle className="w-3 h-3 text-[#52525B] shrink-0" />}
                 <span className={`truncate ${
+                  entry.skipCode === 'AUTO_SUSPENDED' ? 'text-[#A855F7]' :
                   entry.status === 'RUNNING' ? 'text-[#3B82F6]' :
                   entry.status === 'COMPLETED' ? 'text-[#22C55E]' :
                   entry.status === 'FAILED' ? 'text-[#EF4444]' :

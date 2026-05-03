@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom'
 import { formatDuration } from '@/utils/format'
 import StatusBadge from '@/components/shared/StatusBadge'
 import TimeAgo from '@/components/shared/TimeAgo'
+import { deriveDisplayStatus } from '@/utils/status'
 import {
-  ChevronRight, ChevronDown, RotateCw, Loader2, Image, CheckCircle, XCircle, Clock, Terminal, Download, ExternalLink,
+  ChevronRight, ChevronDown, RotateCw, Loader2, Image, CheckCircle, XCircle, Clock, Terminal, Download, ExternalLink, PauseCircle,
 } from 'lucide-react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import RunLogModal from './RunLogModal'
@@ -53,6 +54,7 @@ export default function RunRow({ run, onRetry, retryingId }) {
   const results = run.results || run.accountResults || []
   const successCount = results.filter(r => r.status === 'SUCCESS' || r.success).length
   const failCount = results.filter(r => ['FAILED', 'ERROR', 'ABORTED'].includes(r.status) || r.failed).length
+  const autoSuspendCount = results.filter(r => r.skipCode === 'AUTO_SUSPENDED').length
   const runId = run.runId || run.id
   const isRetrying = retryingId === runId
 
@@ -90,10 +92,11 @@ export default function RunRow({ run, onRetry, retryingId }) {
           </div>
         </div>
         <div className="flex items-center gap-4 shrink-0">
-          {(successCount > 0 || failCount > 0) && (
+          {(successCount > 0 || failCount > 0 || autoSuspendCount > 0) && (
             <div className="flex items-center gap-2 text-xs">
               {successCount > 0 && <span className="text-[#22C55E]">{successCount} ok</span>}
               {failCount > 0 && <span className="text-[#EF4444]">{failCount} fail</span>}
+              {autoSuspendCount > 0 && <span className="text-[#A855F7]">{autoSuspendCount} auto-suspend</span>}
             </div>
           )}
           {(run.workflowRunId || (runId && String(runId).startsWith('wf-'))) && (
@@ -123,13 +126,16 @@ export default function RunRow({ run, onRetry, retryingId }) {
           <div className="rounded-lg border border-[#1a1a1a] bg-[#0A0A0A] divide-y divide-[#1a1a1a]">
             {results.map((r, i) => {
               const isSuccess = r.status === 'SUCCESS' || r.success
+              const isAutoSuspend = r.skipCode === 'AUTO_SUSPENDED'
               return (
               <div key={i} className="px-3 py-2 text-xs space-y-1">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    {isSuccess
-                      ? <CheckCircle className="w-3 h-3 text-[#22C55E] shrink-0" />
-                      : <XCircle className="w-3 h-3 text-[#EF4444] shrink-0" />
+                    {isAutoSuspend
+                      ? <PauseCircle className="w-3 h-3 text-[#A855F7] shrink-0" />
+                      : isSuccess
+                        ? <CheckCircle className="w-3 h-3 text-[#22C55E] shrink-0" />
+                        : <XCircle className="w-3 h-3 text-[#EF4444] shrink-0" />
                     }
                     <AccountNameLink username={getRealUsername(r)} displayName={getAccountDisplayName(r, run, i)} />
                   </div>
@@ -159,9 +165,9 @@ export default function RunRow({ run, onRetry, retryingId }) {
                       </a>
                     )}
                     {r.failureReason && (
-                      <span className="text-[#EF4444] truncate max-w-[300px]">{r.failureReason}</span>
+                      <span className={`truncate max-w-[300px] ${isAutoSuspend ? 'text-[#A855F7]' : 'text-[#EF4444]'}`}>{r.failureReason}</span>
                     )}
-                    <StatusBadge status={r.status || (r.success ? 'SUCCESS' : 'FAILED')} />
+                    <StatusBadge status={deriveDisplayStatus(r) || r.status || (r.success ? 'SUCCESS' : 'FAILED')} />
                   </div>
                 </div>
                 {r.fullErrorMessage && expanded && (

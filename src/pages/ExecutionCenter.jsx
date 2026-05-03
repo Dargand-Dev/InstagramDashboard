@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dialog'
 import { Collapsible } from '@/components/ui/collapsible'
 import StatusBadge from '@/components/shared/StatusBadge'
+import { deriveDisplayStatus } from '@/utils/status'
 import LogViewer from '@/components/shared/LogViewer'
 import TimeAgo from '@/components/shared/TimeAgo'
 import EmptyState from '@/components/shared/EmptyState'
@@ -80,6 +81,7 @@ const STATUS_COLORS = {
   ERROR: '#EF4444',
   QUEUED: '#8B5CF6',
   DISCONNECTED: '#F59E0B',
+  AUTO_SUSPENDED: '#A855F7',
 }
 
 function formatTimeLabel(ms) {
@@ -357,7 +359,7 @@ function ExecutionCard({ run, onStopGraceful, onKill, wsSubscribe, wsConnected }
                   {filteredAccounts.map((account, i) => (
                     <div key={account.id || i} className="flex items-center justify-between px-2 py-1.5 rounded hover:bg-[#0A0A0A]">
                       <span className="text-xs text-[#A1A1AA]">{account.name || account.username}</span>
-                      <StatusBadge status={account.status || 'PENDING'} />
+                      <StatusBadge status={deriveDisplayStatus(account) || 'PENDING'} />
                     </div>
                   ))}
                 </div>

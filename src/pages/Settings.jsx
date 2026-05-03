@@ -158,7 +158,7 @@ export default function Settings() {
   })
 
   const updateIdentity = useMutation({
-    mutationFn: (data) => apiPut(`/api/identities/${data.id}`, data),
+    mutationFn: (data) => apiPut(`/api/identities/${data.identityId}`, data),
     onSuccess: () => {
       toast.success('Identity updated')
       queryClient.invalidateQueries({ queryKey: ['identities'] })

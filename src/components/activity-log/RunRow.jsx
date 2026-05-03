@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import RunLogModal from './RunLogModal'
+import AccountLogModal from './AccountLogModal'
 
 function getAccountDisplayName(detail, run, index) {
   if (detail.username && detail.username !== 'unknown') return detail.username
@@ -51,6 +52,7 @@ export default function RunRow({ run, onRetry, retryingId }) {
   const [expanded, setExpanded] = useState(false)
   const [screenshotOpen, setScreenshotOpen] = useState(null)
   const [showLogs, setShowLogs] = useState(false)
+  const [accountLogsFor, setAccountLogsFor] = useState(null)
   const results = run.results || run.accountResults || []
   const successCount = results.filter(r => r.status === 'SUCCESS' || r.success).length
   const failCount = results.filter(r => ['FAILED', 'ERROR', 'ABORTED'].includes(r.status) || r.failed).length
@@ -164,6 +166,15 @@ export default function RunRow({ run, onRetry, retryingId }) {
                         <Download className="w-3 h-3" /> DOM
                       </a>
                     )}
+                    {getRealUsername(r) && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setAccountLogsFor(getRealUsername(r)) }}
+                        className="text-[#3B82F6] hover:text-[#60A5FA] inline-flex items-center"
+                        title="Logs de ce compte uniquement"
+                      >
+                        <Terminal className="w-3 h-3" />
+                      </button>
+                    )}
                     {r.failureReason && (
                       <span className={`truncate max-w-[300px] ${isAutoSuspend ? 'text-[#A855F7]' : 'text-[#EF4444]'}`}>{r.failureReason}</span>
                     )}
@@ -215,6 +226,16 @@ export default function RunRow({ run, onRetry, retryingId }) {
           runId={run.workflowRunId || runId}
           open={showLogs}
           onClose={() => setShowLogs(false)}
+        />
+      )}
+
+      {/* Per-account logs modal */}
+      {accountLogsFor && (
+        <AccountLogModal
+          runId={run.workflowRunId || runId}
+          username={accountLogsFor}
+          open={!!accountLogsFor}
+          onClose={() => setAccountLogsFor(null)}
         />
       )}
     </div>

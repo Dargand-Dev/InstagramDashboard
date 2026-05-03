@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import RunLogModal from '../RunLogModal'
+import AccountLogModal from '../AccountLogModal'
 
 function entryDurationMs(entry) {
   if (!entry.startedAt) return 0
@@ -31,6 +32,7 @@ export default function DeviceRunsTab({ device }) {
   const [retryingId, setRetryingId] = useState(null)
   const [stopping, setStopping] = useState(false)
   const [logsModalOpen, setLogsModalOpen] = useState(false)
+  const [accountLogsFor, setAccountLogsFor] = useState(null)
 
   const { activeRuns } = useActiveRuns()
   const deviceActiveRun = activeRuns.find(r => (r.deviceUdid || r.device) === device.udid)
@@ -193,6 +195,15 @@ export default function DeviceRunsTab({ device }) {
                         {entry.errorMessage && (
                           <span className="text-[#EF4444] truncate max-w-[300px]">{entry.errorMessage}</span>
                         )}
+                        {realUsername && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setAccountLogsFor(realUsername) }}
+                            className="text-[#3B82F6] hover:text-[#60A5FA] inline-flex items-center"
+                            title="Logs de ce compte uniquement"
+                          >
+                            <Terminal className="w-3 h-3" />
+                          </button>
+                        )}
                         <StatusBadge status={entry.status || 'PENDING'} />
                       </div>
                     </div>
@@ -296,6 +307,15 @@ export default function DeviceRunsTab({ device }) {
           runId={deviceActiveRun.runId}
           open={logsModalOpen}
           onClose={() => setLogsModalOpen(false)}
+        />
+      )}
+
+      {accountLogsFor && deviceActiveRun?.runId && (
+        <AccountLogModal
+          runId={deviceActiveRun.runId}
+          username={accountLogsFor}
+          open={!!accountLogsFor}
+          onClose={() => setAccountLogsFor(null)}
         />
       )}
     </div>

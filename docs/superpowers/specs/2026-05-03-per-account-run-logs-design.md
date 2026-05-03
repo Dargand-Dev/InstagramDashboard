@@ -61,8 +61,15 @@ The frontend parses the log text, walks lines top-to-bottom, and maintains a "cu
 │    Props: runId, username, open, onClose                         │
 │    Reuses useRunLogsWithLive(runId) for text + isActive state    │
 │    Applies extractAccountLog on text before passing to LogViewer │
-│    Title: "Logs — {runId} · {username}"                          │
-│    Same Stop/Kill/Full Page actions as RunLogModal               │
+│    Title: "Logs — {username} · {runId}"                          │
+│    Stop/Kill actions only when isActive (same as RunLogModal).   │
+│    No Full Page button — account-scoped logs are small enough    │
+│    that the modal viewport suffices; revisit if users ask.       │
+│    If filtered output has no account-specific lines (only [run]  │
+│    context), show a small banner above LogViewer:                │
+│    "Aucun log spécifique à ce compte. Affichage du contexte du   │
+│    run uniquement (ce run est antérieur à la fonctionnalité ou   │
+│    le compte n'a pas encore démarré)."                           │
 │                                                                  │
 │  src/components/activity-log/RunRow.jsx  (MODIFIED)              │
 │    For each account row in the expanded run, add a small         │
@@ -135,7 +142,7 @@ If the target account is the one currently being processed, the user sees lines 
 - **Username collision within a run**: not possible — `WorkflowEngine.execute()` is called once per account per run, and account identities are unique.
 - **Runs older than this feature**: no sentinels in their persisted log. Opening AccountLogModal on such a run would show only `[run]`-prefixed lines (everything is "context" because no BEGIN was ever emitted). Acceptable degradation; no migration.
 - **Workflow throws before BEGIN is emitted**: if `WorkflowEngine.execute()` is interrupted before its first line, the account has no logs. The modal shows only run-context lines from before. Fine — the failure cause is in those context lines anyway.
-- **Workflow killed (IMMEDIATE) mid-account**: the `finally` runs because we're inside the worker thread until the kill handler completes the join — END is emitted before flush. If join times out, END may be missing; the next BEGIN (next account) closes the previous one implicitly. The parser handles this: when a new BEGIN arrives while `currentAccount != null`, treat it as an implicit END for the previous account.
+- **Workflow killed (IMMEDIATE) mid-account**: the `finally` runs because we're inside the worker thread until the kill handler completes the join — END is emitted before flush. If join times out, END may be missing; the next BEGIN (next account) closes the previous one implicitly. The parser handles this naturally: the `if (beginMatch)` branch unconditionally overwrites `currentAccount` with the new username, so an unclosed previous account is silently dropped. No explicit warning needed — the user sees their target account either has lines or doesn't, no broken state.
 - **Context lines emitted between two account blocks** (cleanup of account N, before BEGIN of N+1): correctly classified as `[run]` since `currentAccount` is null after the END.
 
 ## Components & files

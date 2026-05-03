@@ -11,6 +11,9 @@ import { Separator } from '@/components/ui/separator'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
+import {
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+} from '@/components/ui/select'
 import EmptyState from '@/components/shared/EmptyState'
 import { toast } from 'sonner'
 import {
@@ -20,12 +23,24 @@ import {
 } from 'lucide-react'
 
 function IdentityRow({ identity, onEdit, onDelete }) {
+  const hairLabel = identity.hairColor === 'BLONDE'
+    ? 'Blonde'
+    : identity.hairColor === 'BRUNETTE'
+      ? 'Brune'
+      : null
   return (
     <div className="flex items-center justify-between p-3 rounded-lg bg-[#0A0A0A] border border-[#1a1a1a] group">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-[#FAFAFA]">{identity.identityId || identity.name || identity.identityName}</p>
-        {(identity.driveFolderId || identity.driveFolder) && (
-          <p className="text-xs text-[#52525B] mt-0.5 truncate">{identity.driveFolderId || identity.driveFolder}</p>
+      <div className="min-w-0 flex items-center gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-[#FAFAFA]">{identity.identityId || identity.name || identity.identityName}</p>
+          {(identity.driveFolderId || identity.driveFolder) && (
+            <p className="text-xs text-[#52525B] mt-0.5 truncate">{identity.driveFolderId || identity.driveFolder}</p>
+          )}
+        </div>
+        {hairLabel && (
+          <Badge variant="outline" className="bg-[#1a1a1a] text-[#A1A1AA] border-[#27272A] text-[10px] uppercase">
+            {hairLabel}
+          </Badge>
         )}
       </div>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -43,12 +58,18 @@ function IdentityRow({ identity, onEdit, onDelete }) {
 function IdentityDialog({ open, onOpenChange, identity, onSave, isPending }) {
   const [name, setName] = useState(identity?.identityId || identity?.name || identity?.identityName || '')
   const [driveFolder, setDriveFolder] = useState(identity?.driveFolderId || identity?.driveFolder || '')
+  const [hairColor, setHairColor] = useState(identity?.hairColor || '')
 
   const isEdit = !!identity?.id
 
   const handleSave = () => {
     if (!name.trim()) { toast.error('Name is required'); return }
-    onSave({ ...identity, identityId: name.trim(), driveFolderId: driveFolder.trim() })
+    onSave({
+      ...identity,
+      identityId: name.trim(),
+      driveFolderId: driveFolder.trim(),
+      hairColor: hairColor || null,
+    })
   }
 
   return (
@@ -75,6 +96,19 @@ function IdentityDialog({ open, onOpenChange, identity, onSave, isPending }) {
               placeholder="Google Drive folder ID or path"
               className="bg-[#0A0A0A] border-[#1a1a1a] text-[#FAFAFA]"
             />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs text-[#A1A1AA]">Couleur de cheveux</Label>
+            <Select value={hairColor || 'NONE'} onValueChange={(v) => setHairColor(v === 'NONE' ? '' : v)}>
+              <SelectTrigger className="bg-[#0A0A0A] border-[#1a1a1a] text-[#FAFAFA]">
+                <SelectValue placeholder="Non défini" />
+              </SelectTrigger>
+              <SelectContent className="bg-[#111111] border-[#1a1a1a] text-[#FAFAFA]">
+                <SelectItem value="NONE">— Non défini —</SelectItem>
+                <SelectItem value="BLONDE">Blonde</SelectItem>
+                <SelectItem value="BRUNETTE">Brune</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <DialogFooter>

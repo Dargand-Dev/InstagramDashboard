@@ -229,11 +229,35 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
   }, [device])
 
   const updateMutation = useMutation({
-    mutationFn: (body) => apiPut(`/api/devices/${device.id}`, {
-      ...body,
-      proxyPort: body.proxyPort ? Number(body.proxyPort) : null,
-      proxyExpiresAt: body.proxyExpiresAt ? new Date(body.proxyExpiresAt).toISOString() : null,
-    }),
+    // Le PUT backend remplace le document complet : on doit donc renvoyer toutes
+    // les données du device existant (udid, ports, presets, trollvnc, type, priority,
+    // xcode*, deviceIp, enabled, ...) et n'écraser que les champs édités dans le form,
+    // sinon Mongo perd toutes les infos non présentes dans le payload.
+    mutationFn: (body) => {
+      // On retire les champs runtime injectés par le merge live-status
+      // (ils ne font pas partie du DeviceConfigDocument et n'ont rien à faire dans le PUT).
+      const {
+        status: _status,
+        currentAction: _currentAction,
+        currentAccount: _currentAccount,
+        currentRunId: _currentRunId,
+        lastActivityAt: _lastActivityAt,
+        manualMode: _manualMode,
+        port: _port, // alias scalaire injecté par le useMemo, le vrai stockage est `ports.appium`
+        ...persisted
+      } = device
+      return apiPut(`/api/devices/${device.id}`, {
+        ...persisted,
+        name: body.name,
+        proxyHost: body.proxyHost || null,
+        proxyPort: body.proxyPort ? Number(body.proxyPort) : null,
+        proxyUsername: body.proxyUsername || null,
+        proxyPassword: body.proxyPassword || null,
+        proxyUrl: body.proxyUrl || null,
+        rotatingUrl: body.rotatingUrl || null,
+        proxyExpiresAt: body.proxyExpiresAt ? new Date(body.proxyExpiresAt).toISOString() : null,
+      })
+    },
     onSuccess: () => {
       toast.success('Device updated')
       queryClient.invalidateQueries({ queryKey: ['devices-config'] })

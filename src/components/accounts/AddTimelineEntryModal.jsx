@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 import { LIFECYCLE_EVENT_TYPES } from '@/api/accountTimeline'
 
@@ -29,6 +29,14 @@ export default function AddTimelineEntryModal({ open, onClose, onSubmitNote, onS
   const [linkUrl, setLinkUrl] = useState('')
   const [lifecycleNote, setLifecycleNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  // Fermer la modal sur Escape (a11y clavier).
+  useEffect(() => {
+    if (!open) return
+    const handler = e => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [open, onClose])
 
   if (!open) return null
 

@@ -1,18 +1,19 @@
-import { Link, AlertOctagon, BarChart3, Pencil, Hash, XCircle, Settings, Trash2, CheckCircle2 } from 'lucide-react'
+import { Link, AlertOctagon, BarChart3, Pencil, Hash, XCircle, Settings, Trash2 } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { Blur } from '../../contexts/IncognitoContext'
 
 const HIDDEN_ATTRIBUTES = new Set(['noteId', 'authorJwtSubject', 'addedBy'])
 
-function iconForEntry(entry, chipKey) {
+function IconForEntry({ chipKey, ...rest }) {
   switch (chipKey) {
-    case 'links': return Link
-    case 'status': return AlertOctagon
-    case 'posts': return BarChart3
-    case 'highlight': return Hash
-    case 'notes': return Pencil
-    case 'errors': return XCircle
-    default: return Settings
+    case 'links': return <Link {...rest} />
+    case 'status': return <AlertOctagon {...rest} />
+    case 'posts': return <BarChart3 {...rest} />
+    case 'highlight': return <Hash {...rest} />
+    case 'notes': return <Pencil {...rest} />
+    case 'errors': return <XCircle {...rest} />
+    default: return <Settings {...rest} />
   }
 }
 
@@ -41,7 +42,6 @@ function isManual(entry) {
 }
 
 export default function TimelineEntryRow({ entry, chipKey, onDelete }) {
-  const Icon = iconForEntry(entry, chipKey)
   const ts = formatTimestamp(entry)
   const attrs = formatAttributes(entry.attributes)
   const manual = isManual(entry)
@@ -49,12 +49,14 @@ export default function TimelineEntryRow({ entry, chipKey, onDelete }) {
 
   return (
     <div className="flex items-start gap-3 py-2 border-b border-[#141414] last:border-0">
-      <Icon size={14} className="text-[#666] mt-1 shrink-0" />
+      <IconForEntry chipKey={chipKey} size={14} className="text-[#666] mt-1 shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 flex-wrap">
           <span className="text-[#888] text-xs font-mono">{ts.primary}</span>
           {ts.secondary && <span className="text-[#555] text-xs">{ts.secondary}</span>}
-          <span className="text-white text-sm">{entry.summary || entry.eventType}</span>
+          <span className="text-white text-sm">
+            <Blur>{entry.summary || entry.eventType}</Blur>
+          </span>
           {entry.outcome === 'SUCCESS' && (
             <span className="text-emerald-500 text-[10px] uppercase font-semibold">SUCCESS</span>
           )}
@@ -65,7 +67,11 @@ export default function TimelineEntryRow({ entry, chipKey, onDelete }) {
             <span className="text-[#666] text-[10px] uppercase border border-[#222] rounded px-1">manuel</span>
           )}
         </div>
-        {attrs && <div className="text-[#555] text-xs mt-0.5 break-all">{attrs}</div>}
+        {attrs && (
+          <div className="text-[#555] text-xs mt-0.5 break-all">
+            <Blur>{attrs}</Blur>
+          </div>
+        )}
       </div>
       {canDelete && (
         <button

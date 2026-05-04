@@ -9,6 +9,7 @@ import { scraperGet } from '@/api/scraperClient'
 import AccountDailyViewsChart from '../components/AccountDailyViewsChart'
 import { Blur } from '../contexts/IncognitoContext'
 import AccountsTableView from '../components/accounts/AccountsTableView'
+import AccountHistory from '../components/accounts/AccountHistory'
 import ReelStatsView from '../components/accounts/stats/ReelStatsView'
 import { latestSnapshotPerUsername } from '../utils/analyticsScoring'
 
@@ -824,6 +825,13 @@ export default function Accounts() {
                   snapshots={snapshots}
                 />
               </div>
+
+              {/* Account History */}
+              {selectedAccount?.username && (
+                <div className="px-8 py-5 border-b border-[#1a1a1a]">
+                  <AccountHistory username={selectedAccount.username} />
+                </div>
+              )}
 
               {/* Story Link */}
               <div className="px-8 py-5 border-b border-[#1a1a1a]">

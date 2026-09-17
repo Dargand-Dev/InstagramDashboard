@@ -278,10 +278,13 @@ function ContentTab() {
         <p className="text-xs text-[#333] col-span-full">No identity data available</p>
       ) : (
         identities.map((identity, i) => {
+          // availableReels: -1 + status ERROR = Drive injoignable, pas un stock reel.
+          // Sans ce garde-fou la barre tombait a 0% avec la couleur "OK" (vert).
+          const errored = identity.status === 'ERROR' || identity.availableReels < 0
           const count = identity.availableReels ?? identity.reelCount ?? identity.count ?? 0
           const max = identity.maxReels ?? identity.capacity ?? 200
-          const pct = Math.min((count / max) * 100, 100)
-          const barColor = identity.status === 'EMPTY' || identity.alert === 'EMPTY'
+          const pct = Math.min(Math.max((count / max) * 100, 0), 100)
+          const barColor = errored || identity.status === 'EMPTY' || identity.alert === 'EMPTY'
             ? 'bg-red-500'
             : identity.status === 'LOW_STOCK' || identity.alert === 'LOW_STOCK'
               ? 'bg-amber-500'
@@ -298,11 +301,22 @@ function ContentTab() {
               <div className="mb-3">
                 <div className="flex justify-between text-xs mb-1.5">
                   <span className="text-[#555]">Reels available</span>
-                  <span className="text-white font-mono font-semibold">{count} / {max}</span>
+                  {errored ? (
+                    <span className="text-red-400 font-medium flex items-center gap-1" title={identity.error || 'Drive unavailable'}>
+                      <AlertTriangle size={10} />
+                      Drive error
+                    </span>
+                  ) : (
+                    <span className="text-white font-mono font-semibold">{count} / {max}</span>
+                  )}
                 </div>
-                <div className="w-full h-1.5 bg-[#1a1a1a] rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
-                </div>
+                {errored ? (
+                  <div className="w-full h-1.5 rounded-full border border-dashed border-red-500/30 bg-red-500/5" aria-label="Stock unknown" />
+                ) : (
+                  <div className="w-full h-1.5 bg-[#1a1a1a] rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+                  </div>
+                )}
               </div>
               {/* Story media pool alerts */}
               {identity.storyMediaPool && identity.storyMediaPool.length > 0 && (

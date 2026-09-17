@@ -344,10 +344,27 @@ export default function Dashboard() {
   // Backend returns identities as array: [{ identityId, availableReels, ... }]
   // Convert to { name: { reelCount, status, ... } } for display
   const rawIdentities = content.identities || content.byIdentity || {}
+  // Le backend renvoie availableReels: -1 avec status ERROR quand Drive est injoignable
+  // (refresh token OAuth expire, quota, reseau). Ce n'est pas un stock : on le garde
+  // comme etat d'erreur distinct au lieu d'afficher "-1 reels" en rouge.
   const contentIdentities = Array.isArray(rawIdentities)
-    ? Object.fromEntries(rawIdentities.map(i => [i.identityId, { reelCount: i.availableReels ?? 0, status: i.warning || i.status }]))
+    ? Object.fromEntries(rawIdentities.map(i => {
+        const errored = i.status === 'ERROR' || i.availableReels < 0
+        return [i.identityId, {
+          reelCount: errored ? null : (i.availableReels ?? 0),
+          status: errored ? 'ERROR' : (i.warning || i.status),
+          error: errored ? (i.error || 'Drive unavailable') : null,
+        }]
+      }))
     : rawIdentities
-  const totalReels = content.totalReels ?? content.total ?? Object.values(contentIdentities).reduce((sum, v) => sum + (v.reelCount || v.count || 0), 0)
+
+  const contentEntries = Object.entries(contentIdentities)
+  const erroredIdentities = contentEntries.filter(([, v]) => v.status === 'ERROR')
+  const countableIdentities = contentEntries.filter(([, v]) => v.status !== 'ERROR')
+  // Si aucune identite n'est lisible, le total n'a pas de sens : on affiche un tiret.
+  const totalReels = contentEntries.length > 0 && countableIdentities.length === 0
+    ? null
+    : content.totalReels ?? content.total ?? countableIdentities.reduce((sum, [, v]) => sum + (v.reelCount || v.count || 0), 0)
 
   const sched = schedule?.data || schedule || {}
   // Backend returns Java ZonedDateTime like "2026-03-30T12:15:22-07:00[America/Los_Angeles]"
@@ -380,7 +397,7 @@ export default function Dashboard() {
   }, [allAccounts])
 
   // Alert conditions
-  const lowStockIdentities = Object.entries(contentIdentities).filter(
+  const lowStockIdentities = countableIdentities.filter(
     ([, v]) => v.status === 'LOW_STOCK' || v.status === 'EMPTY' || (v.reelCount || v.count || 0) < 3
   )
   const activeAccountIds = useMemo(() => {
@@ -396,7 +413,7 @@ export default function Dashboard() {
   const avgPostReel = avgData.postreel || null
   const avgCreateAccount = avgData.createaccount || avgData.createaccountfromexistingcontainer || null
 
-  const showAlert = lowStockIdentities.length > 0 || lowHealthAccounts > 0
+  const showAlert = lowStockIdentities.length > 0 || lowHealthAccounts > 0 || erroredIdentities.length > 0
 
   // Operations chart data
   const opsRaw = operationsData?.data || operationsData || {}
@@ -435,6 +452,12 @@ export default function Dashboard() {
         <div className="rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 px-4 py-3 flex items-start gap-3">
           <AlertTriangle className="w-4 h-4 text-[#F59E0B] mt-0.5 shrink-0" />
           <div className="space-y-1">
+            {erroredIdentities.length > 0 && (
+              <p className="text-sm text-[#EF4444]">
+                Google Drive unreachable — stock unknown for {erroredIdentities.length} identit{erroredIdentities.length > 1 ? 'ies' : 'y'}
+                {erroredIdentities[0][1].error ? `: ${String(erroredIdentities[0][1].error).split('\n')[0].slice(0, 120)}` : ''}
+              </p>
+            )}
             {lowStockIdentities.length > 0 && (
               <p className="text-sm text-[#F59E0B]">
                 Low content stock: {lowStockIdentities.map(([name]) => name).join(', ')}
@@ -507,8 +530,12 @@ export default function Dashboard() {
         <MetricCard
           icon={Film}
           label="Content Stock"
-          value={totalReels}
-          subtitle="Total reels across identities"
+          value={totalReels ?? '—'}
+          subtitle={
+            erroredIdentities.length > 0
+              ? `Drive unreachable (${erroredIdentities.length} identit${erroredIdentities.length > 1 ? 'ies' : 'y'})`
+              : 'Total reels across identities'
+          }
           loading={contentLoading}
           color="#8B5CF6"
         />
@@ -660,29 +687,53 @@ export default function Dashboard() {
               <CardTitle className="text-sm text-[#A1A1AA]">Content Stock</CardTitle>
             </CardHeader>
             <CardContent>
-              {Object.keys(contentIdentities).length > 0 ? (
+              {contentEntries.length > 0 ? (
                 <div className="space-y-3">
-                  {Object.entries(contentIdentities).map(([name, data]) => {
-                    const count = data.reelCount || data.count || 0
-                    const max = Math.max(...Object.values(contentIdentities).map(d => d.reelCount || d.count || 0), 1)
-                    return (
-                      <div key={name}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-[#A1A1AA] truncate">{name}</span>
-                          <span className="text-xs text-[#52525B] tabular-nums">{count}</span>
+                  {/* L'echelle des barres ne doit dependre que des identites lisibles */}
+                  {(() => {
+                    const max = Math.max(...countableIdentities.map(([, d]) => d.reelCount || d.count || 0), 1)
+                    return contentEntries.map(([name, data]) => {
+                      if (data.status === 'ERROR') {
+                        return (
+                          <div key={name}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs text-[#A1A1AA] truncate">{name}</span>
+                              <span
+                                className="text-xs text-[#EF4444] flex items-center gap-1 shrink-0"
+                                title={data.error || 'Drive unavailable'}
+                              >
+                                <AlertTriangle className="w-3 h-3" />
+                                Drive error
+                              </span>
+                            </div>
+                            {/* Pas de barre de progression : on ne connait pas le stock */}
+                            <div
+                              className="h-1.5 rounded-full border border-dashed border-[#EF4444]/30 bg-[#EF4444]/5"
+                              aria-label="Stock unknown"
+                            />
+                          </div>
+                        )
+                      }
+                      const count = data.reelCount || data.count || 0
+                      return (
+                        <div key={name}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-[#A1A1AA] truncate">{name}</span>
+                            <span className="text-xs text-[#52525B] tabular-nums">{count}</span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-[#1a1a1a] overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{
+                                width: `${(count / max) * 100}%`,
+                                background: count < 3 ? '#EF4444' : count < 10 ? '#F59E0B' : '#8B5CF6',
+                              }}
+                            />
+                          </div>
                         </div>
-                        <div className="h-1.5 rounded-full bg-[#1a1a1a] overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-500"
-                            style={{
-                              width: `${(count / max) * 100}%`,
-                              background: count < 3 ? '#EF4444' : count < 10 ? '#F59E0B' : '#8B5CF6',
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })
+                  })()}
                 </div>
               ) : (
                 <p className="text-xs text-[#52525B] text-center py-4">No content data</p>

@@ -90,7 +90,11 @@ export default function SmsProvidersCard() {
     )
   }
 
-  if (error) {
+  // Erreur bloquante uniquement quand il n'y a rien à afficher. Si une config est déjà
+  // en cache, un refetch en échec (retour sur l'onglet après 30 s, backend redémarré)
+  // ne doit pas faire disparaître le formulaire ni la saisie en cours : on dégrade en
+  // bandeau au-dessus de la carte.
+  if (!form) {
     return (
       <Card className="bg-[#111111] border-[#1a1a1a] lg:col-span-2">
         <CardHeader>
@@ -172,6 +176,12 @@ export default function SmsProvidersCard() {
       </CardHeader>
 
       <CardContent className="space-y-5">
+        {error && (
+          <p className="text-xs text-[#EF4444]">
+            Dernière synchronisation en échec : {error.message} — affichage de la dernière config connue.
+          </p>
+        )}
+
         {/* Chaîne effectivement appliquée */}
         <div className="p-3 rounded-lg bg-[#0A0A0A] border border-[#1a1a1a]">
           <p className="text-xs text-[#52525B] mb-2">
@@ -258,9 +268,13 @@ export default function SmsProvidersCard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <div className="space-y-2">
               <Label className="text-xs text-[#A1A1AA]">Provider principal</Label>
-              <Select value={form.primaryProvider || undefined} onValueChange={setPrimary}>
+              <Select value={form.primaryProvider ?? null} onValueChange={setPrimary}>
                 <SelectTrigger className="bg-[#0A0A0A] border-[#1a1a1a] text-[#FAFAFA]">
-                  <SelectValue placeholder="Choisir un provider" />
+                  {/* Base UI (pas Radix) : sans enfant, SelectValue sérialise la valeur brute
+                      et afficherait "smsbower" au lieu de "SMSBower". */}
+                  <SelectValue placeholder="Choisir un provider">
+                    {(value) => (value ? byName[value]?.label || value : 'Choisir un provider')}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="bg-[#111111] border-[#1a1a1a] text-[#FAFAFA]">
                   {providers.map(p => (

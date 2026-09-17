@@ -40,15 +40,19 @@ function LineChartTooltip({ active, payload, label, isIncognito, colorMap, top15
 }
 
 export default function InteractiveLineChart({ title, snapshots, dataKey, colorMap }) {
+  // Le cycle 3h du Scraper laisse certains champs null (ex: followerCount n'est rempli
+  // que par le job nocturne). On ignore ces snapshots pour ce dataKey afin que connectNulls
+  // relie les vraies valeurs au lieu de produire des pics 0 → val → 0.
   const top15 = useMemo(() => {
     if (!snapshots?.length) return []
-    const latest = {}
+    const latestWithValue = {}
     for (const snap of snapshots) {
-      if (!latest[snap.username] || snap.snapshotAt > latest[snap.username].snapshotAt) {
-        latest[snap.username] = snap
+      if (snap[dataKey] == null) continue
+      if (!latestWithValue[snap.username] || snap.snapshotAt > latestWithValue[snap.username].snapshotAt) {
+        latestWithValue[snap.username] = snap
       }
     }
-    return Object.values(latest)
+    return Object.values(latestWithValue)
       .sort((a, b) => (b[dataKey] || 0) - (a[dataKey] || 0))
       .slice(0, 15)
       .map(s => s.username)
@@ -82,7 +86,10 @@ export default function InteractiveLineChart({ title, snapshots, dataKey, colorM
     for (const snap of snapshots) {
       const slot = getSlot(snap.snapshotAt)
       if (!slot) continue
-      const val = snap[dataKey] ?? 0
+      const val = snap[dataKey]
+      // Snapshot sans valeur pour ce dataKey (ex: cycle 3h sans followerCount) → on saute.
+      // connectNulls reliera les vrais points entre eux au lieu de tomber à 0.
+      if (val == null) continue
       if (top15Set.has(snap.username)) {
         if (!bySlot[slot]) bySlot[slot] = {}
         // Au cas (rare) où 2 snapshots auraient exactement la même minute, on garde la max.

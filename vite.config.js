@@ -25,6 +25,18 @@ export default defineConfig(({ mode }) => {
           target: env.VITE_SCRAPER_URL || 'http://localhost:8082',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/scraper/, ''),
+          // Le hop proxy est serveur -> serveur : l'Origin du navigateur
+          // (http://localhost:5173) n'a plus de sens cote Scraper. Or Vite le
+          // reforwarde tel quel (changeOrigin ne reecrit que Host), et Spring
+          // Security rejette alors la requete en 403 "Invalid CORS request"
+          // avant meme l'authentification, puisque CORS_ALLOWED_ORIGINS ne
+          // contient que l'origine de prod. On le supprime : le backend voit
+          // une requete same-origin, comme prevu par SecurityConfig.
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq) => {
+              proxyReq.removeHeader('origin')
+            })
+          },
         },
         '/api': 'http://localhost:8081',
         '/ws': {

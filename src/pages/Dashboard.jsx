@@ -12,6 +12,8 @@ import StatusBadge from '@/components/shared/StatusBadge'
 import TimeAgo from '@/components/shared/TimeAgo'
 import EmptyState from '@/components/shared/EmptyState'
 import HealthScoreBadge from '@/components/shared/HealthScoreBadge'
+import CountUp from '@/components/shared/CountUp'
+import ContentStockList from '@/components/dashboard/ContentStockList'
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid,
@@ -530,7 +532,7 @@ export default function Dashboard() {
         <MetricCard
           icon={Film}
           label="Content Stock"
-          value={totalReels ?? '—'}
+          value={totalReels == null ? '—' : <CountUp value={totalReels} />}
           subtitle={
             erroredIdentities.length > 0
               ? `Drive unreachable (${erroredIdentities.length} identit${erroredIdentities.length > 1 ? 'ies' : 'y'})`
@@ -687,57 +689,7 @@ export default function Dashboard() {
               <CardTitle className="text-sm text-[#A1A1AA]">Content Stock</CardTitle>
             </CardHeader>
             <CardContent>
-              {contentEntries.length > 0 ? (
-                <div className="space-y-3">
-                  {/* L'echelle des barres ne doit dependre que des identites lisibles */}
-                  {(() => {
-                    const max = Math.max(...countableIdentities.map(([, d]) => d.reelCount || d.count || 0), 1)
-                    return contentEntries.map(([name, data]) => {
-                      if (data.status === 'ERROR') {
-                        return (
-                          <div key={name}>
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs text-[#A1A1AA] truncate">{name}</span>
-                              <span
-                                className="text-xs text-[#EF4444] flex items-center gap-1 shrink-0"
-                                title={data.error || 'Drive unavailable'}
-                              >
-                                <AlertTriangle className="w-3 h-3" />
-                                Drive error
-                              </span>
-                            </div>
-                            {/* Pas de barre de progression : on ne connait pas le stock */}
-                            <div
-                              className="h-1.5 rounded-full border border-dashed border-[#EF4444]/30 bg-[#EF4444]/5"
-                              aria-label="Stock unknown"
-                            />
-                          </div>
-                        )
-                      }
-                      const count = data.reelCount || data.count || 0
-                      return (
-                        <div key={name}>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-[#A1A1AA] truncate">{name}</span>
-                            <span className="text-xs text-[#52525B] tabular-nums">{count}</span>
-                          </div>
-                          <div className="h-1.5 rounded-full bg-[#1a1a1a] overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all duration-500"
-                              style={{
-                                width: `${(count / max) * 100}%`,
-                                background: count < 3 ? '#EF4444' : count < 10 ? '#F59E0B' : '#8B5CF6',
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )
-                    })
-                  })()}
-                </div>
-              ) : (
-                <p className="text-xs text-[#52525B] text-center py-4">No content data</p>
-              )}
+              <ContentStockList entries={contentEntries} loading={contentLoading} />
             </CardContent>
           </Card>
         </div>

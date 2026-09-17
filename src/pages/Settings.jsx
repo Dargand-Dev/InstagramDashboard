@@ -15,6 +15,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select'
 import EmptyState from '@/components/shared/EmptyState'
+import SmsProvidersCard from '@/components/settings/SmsProvidersCard'
 import { toast } from 'sonner'
 import {
   Settings as SettingsIcon, Users, Calendar, Server,
@@ -213,6 +214,9 @@ export default function Settings() {
       <h1 className="text-xl font-semibold text-[#FAFAFA]">Configuration</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* SMS Providers */}
+        <SmsProvidersCard />
+
         {/* Identities */}
         <Card className="bg-[#111111] border-[#1a1a1a]">
           <CardHeader>

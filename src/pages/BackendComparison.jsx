@@ -147,14 +147,19 @@ function BackendColumn({ summary }) {
   return (
     <Card className="bg-[#111111] border-[#1a1a1a]">
       <CardContent className="p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 shrink-0">
             <Box className="w-4 h-4" style={{ color }} />
             <span className="text-sm font-semibold" style={{ color }}>
               {backendLabel(summary.backend)}
             </span>
           </div>
-          <span className="text-xs text-[#52525B]">
+          {/* truncate + title : tant qu'aucun device n'a été sondé, ils tombent tous du même
+              côté et la liste déborde sur deux lignes en écrasant l'en-tête. */}
+          <span
+            className="text-xs text-[#52525B] truncate text-right min-w-0"
+            title={summary.devices.join(', ')}
+          >
             {summary.devices.length > 0 ? summary.devices.join(', ') : 'aucun device'}
           </span>
         </div>

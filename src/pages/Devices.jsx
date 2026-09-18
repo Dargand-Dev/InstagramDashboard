@@ -39,6 +39,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useManualControl } from '@/hooks/useManualControl'
+import ContainerBackendBadge from '@/components/devices/ContainerBackendBadge'
+import ContainerBackendCard from '@/components/devices/ContainerBackendCard'
 
 const STATUS_DOT = {
   IDLE: 'bg-[#22C55E]',
@@ -92,7 +94,10 @@ function DeviceCard({ device, onSelect, onToggle, onTakeControl, onOpenTerminal 
             <Smartphone className="w-4 h-4 text-[#A1A1AA]" />
           </div>
           <div>
-            <p className="text-sm font-medium text-[#FAFAFA]">{device.name || device.label || 'Unnamed Device'}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-sm font-medium text-[#FAFAFA]">{device.name || device.label || 'Unnamed Device'}</p>
+              <ContainerBackendBadge device={device} />
+            </div>
             <p className="text-xs text-[#52525B] font-mono">{device.udid ? `${device.udid.slice(0, 12)}...` : '—'}</p>
           </div>
         </div>
@@ -229,25 +234,12 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
   }, [device])
 
   const updateMutation = useMutation({
-    // Le PUT backend remplace le document complet : on doit donc renvoyer toutes
-    // les données du device existant (udid, ports, presets, trollvnc, type, priority,
-    // xcode*, deviceIp, enabled, ...) et n'écraser que les champs édités dans le form,
-    // sinon Mongo perd toutes les infos non présentes dans le payload.
-    mutationFn: (body) => {
-      // On retire les champs runtime injectés par le merge live-status
-      // (ils ne font pas partie du DeviceConfigDocument et n'ont rien à faire dans le PUT).
-      const {
-        status: _status,
-        currentAction: _currentAction,
-        currentAccount: _currentAccount,
-        currentRunId: _currentRunId,
-        lastActivityAt: _lastActivityAt,
-        manualMode: _manualMode,
-        port: _port, // alias scalaire injecté par le useMemo, le vrai stockage est `ports.appium`
-        ...persisted
-      } = device
-      return apiPut(`/api/devices/${device.id}`, {
-        ...persisted,
+    // Le PUT backend fait un merge partiel (Jackson readerForUpdating) : on n'envoie que les
+    // champs édités. Renvoyer le device entier était nécessaire quand le PUT remplaçait le
+    // document ; ça ne l'est plus, et ça réinjectait des champs runtime (status, manualMode)
+    // et calculés (effectiveBackend) qui n'ont rien à faire dans un payload d'écriture.
+    mutationFn: (body) =>
+      apiPut(`/api/devices/${device.id}`, {
         name: body.name,
         proxyHost: body.proxyHost || null,
         proxyPort: body.proxyPort ? Number(body.proxyPort) : null,
@@ -256,8 +248,7 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
         proxyUrl: body.proxyUrl || null,
         rotatingUrl: body.rotatingUrl || null,
         proxyExpiresAt: body.proxyExpiresAt ? new Date(body.proxyExpiresAt).toISOString() : null,
-      })
-    },
+      }),
     onSuccess: () => {
       toast.success('Device updated')
       queryClient.invalidateQueries({ queryKey: ['devices-config'] })
@@ -418,6 +409,9 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
                     <Input type="datetime-local" value={editForm.proxyExpiresAt || ''} onChange={setField('proxyExpiresAt')} className="h-9 bg-[#0A0A0A] border-[#1a1a1a] text-sm text-[#FAFAFA]" />
                   </FieldRow>
                 </div>
+
+                {/* Outillage de containers : ses propres endpoints, hors du mode Edit global */}
+                <ContainerBackendCard device={device} />
               </div>
             )}
 

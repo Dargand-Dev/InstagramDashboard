@@ -70,6 +70,18 @@ Dark-mode only. Theme tokens defined via `@theme` in `src/index.css` (surface co
 - HTTP 423 indicates distributed lock conflict — handled specially in both API layers (returns `{ locked: true, ...body }`)
 - Key API prefixes: `/api/accounts`, `/api/automation/*`, `/api/stats/*`, `/api/devices`, `/api/queue`, `/api/notifications`, `/api/auth`
 
+### Container backends (doritos / crane+ghost)
+
+Each device runs one of two container toolings. The backend resolves it as *manual override >
+detection > `DORITOS` default* and ships the result as a computed `effectiveBackend` field on every
+device — **don't reimplement that fallback in the UI**. `containerBackend` is the manual choice
+(null = auto), `detectedBackend` / `backendProbe` / `backendDetectedAt` are written by the SSH probe
+only. Edited from `ContainerBackendCard` in the device detail sheet via `useDeviceBackend.js`, which
+owns its own endpoints (`PUT /api/devices/{id}/container-backend`,
+`POST /api/devices/{id}/detect-backend`) — outside the sheet's global Edit mode. Ghost presets are
+shown only for `CRANE_GHOST` devices and saved through the generic partial `PUT /api/devices/{id}`.
+`/backend-comparison` compares both stacks from `GET /api/stats/backend-comparison`.
+
 ### Component Organization
 
 - `src/components/ui/` — shadcn/ui primitives (don't edit manually, use `npx shadcn@latest add`)

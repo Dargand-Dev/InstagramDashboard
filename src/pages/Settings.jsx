@@ -419,6 +419,9 @@ export default function Settings() {
 
       {/* Identity Dialog */}
       <IdentityDialog
+        // Remonte la modale à chaque ouverture : ses useState ne lisent `identity` qu'au montage,
+        // sans cette clé l'édition affichait (et renvoyait) les valeurs d'une autre identity.
+        key={identityDialog.open ? (identityDialog.identity?.id ?? 'new') : 'closed'}
         open={identityDialog.open}
         onOpenChange={(open) => setIdentityDialog({ open, identity: open ? identityDialog.identity : null })}
         identity={identityDialog.identity}

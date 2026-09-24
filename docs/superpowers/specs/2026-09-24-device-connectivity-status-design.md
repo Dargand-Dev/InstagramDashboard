@@ -53,15 +53,27 @@ méthodes existantes ne changent pas.
 - `probeAll()` :
   1. un seul `listConnectedUdids()` pour tous les devices ;
   2. pour **tous** les devices configurés (activés ou non) ayant un UDID : SSH `true`
-     vers `deviceIp` via `SshClient.run(ip, "true", 12)`, **en parallèle** sur un pool
+     vers `deviceIp` via `SshClient.checkReachable(ip, 12)`, **en parallèle** sur un pool
      dédié de 8 threads (≤ ~10 s par cycle) ; pas d'IP → `ssh=false`,
      `sshError="IP non configurée"` ;
   3. met à jour le cache ; pour chaque device dont `usb` ou `ssh` a changé (ou nouveau),
      publie `DeviceConnectivityChangedEvent(udid)` ;
   4. retire du cache les UDID qui ne sont plus configurés.
+- **Temps borné** (ajout issu de la revue) : `SshClient.run` lit stdout jusqu'au bout
+  avant `waitFor`, donc son timeout ne tue jamais une session figée après l'échange de
+  clés. La sonde passe par `SshClient.checkReachable` : stdout ignoré, chien de garde qui
+  tue sshpass et ssh à l'échéance, keepalives `ServerAliveInterval=5`/`CountMax=2`. En
+  filet, chaque future est complétée en `timeout` après 17 s (`completeOnTimeout`).
+- **Hors du thread `@Scheduled`** : l'appli n'en a qu'un (plusieurs `TaskScheduler`
+  déclarés, aucun nommé `taskScheduler`, donc `spring.task.scheduling.pool.size` ne
+  s'applique pas). La méthode `@Scheduled` confie le cycle à un exécuteur mono-thread
+  dédié.
 - **Un seul test à la fois** : `ReentrantLock`. Le cycle planifié fait `tryLock()` et
-  saute son tour si un test tourne déjà. `refreshNow()` fait `lock()` : il attend la fin
-  du test en cours, puis relance un test complet (résultat frais garanti).
+  saute son tour si un test tourne déjà. `refreshNow()` attend au plus 30 s
+  (`tryLock(30 s)`) puis relance un test complet ; au-delà, il renvoie le cache tel quel.
+- **Hystérésis SSH** (ajout après observation en réel : échecs `exit=255` isolés,
+  rétablis au cycle suivant) : un téléphone dont le SSH était OK ne passe KO qu'après
+  **2 échecs consécutifs** de la sonde planifiée. « Revérifier » applique le résultat brut.
 - `get(udid)` → `Optional<Connectivity>`.
 - Raisons SSH (`describeSshFailure(Result)`, statique, testable) :
 
@@ -72,6 +84,7 @@ méthodes existantes ne changent pas.
   | stderr contient `No route to host` / `Host is down` | `hôte injoignable` |
   | `exitCode == 5` (sshpass) | `mot de passe refusé` |
   | `exception() != null` | l'exception |
+  | autre, stderr non vide | 1re ligne de stderr (≤ 120 car.) |
   | autre | `exit=<code>` |
 
 ### `DeviceConnectivityChangedEvent` (nouveau, `event/`)
@@ -139,21 +152,32 @@ compatible, le statut affiché reste calculé.
   `RefreshCw` qui tourne pendant l'appel) → `useMutation` sur
   `POST /api/devices/connectivity/refresh`, puis invalidation de `devices-live` ; toast
   d'erreur si l'appel échoue.
-- `ConnectivityPills.jsx` (nouveau, `components/activity-log/`) : deux pastilles
+- `ConnectivityPills.jsx` (nouveau, `components/shared/`) : deux pastilles
   `USB` / `SSH` — vert ✓, rouge ✗, gris `?` (inconnu / pas encore testé) ; l'infobulle
   (`title`) donne la raison SSH et l'heure du dernier test.
+- Partagés entre `/activity-log` et `/devices` : `shared/RefreshConnectivityButton.jsx`
+  (le bouton « Revérifier », qui pose la réponse dans le cache `['devices-live']`) et
+  `lib/connectivity.js` (`pickConnectivity`, `degradedReason`).
 - `DeviceCard.jsx` : pastille de statut `DEGRADED` orange, bordure orange ; affiche
   `ConnectivityPills` ; bloc d'alerte `DEGRADED` qui nomme la cause
   (« Câble USB non détecté » / « SSH injoignable (timeout) »).
 - `FleetSummaryBar.jsx` : ajout des tuiles **Degraded** et **Offline**.
-- `Devices.jsx` : `DEGRADED` dans `STATUS_DOT`, dans `statusCounts` et dans les tuiles
-  de résumé, pour que la page Devices reste cohérente.
+- `Devices.jsx` : même rendu que `/activity-log` — `DEGRADED` dans `STATUS_DOT`,
+  `statusCounts` et les tuiles ; pastilles + bandeau de cause sur les cartes ; icône Wi-Fi
+  pilotée par le test SSH ; bouton « Revérifier ». La fiche reçoit un `liveDevice` séparé
+  pour le statut, la connectivité et le run en cours, parce que son formulaire d'édition
+  se réinitialise à chaque changement de `device`.
+- `VncWall.jsx` (conséquence du statut `OFFLINE` devenu réel) : un téléphone `OFFLINE` à
+  l'ouverture du mur, donc exclu de `startWall`, restait sur « Démarrage TrollVNC... »
+  une fois revenu. Il est maintenant démarré une fois automatiquement ; Retry et ce
+  rattrapage passent la tuile en `FAILED` si take-control échoue.
 
 Pas de framework de test côté dashboard : vérification par `npm run lint`,
-`npm run build` et contrôle visuel de `/activity-log`.
+`npm run build` et contrôle visuel de `/activity-log` et `/devices`.
 
 ## Hors périmètre
 
 - Bloquer le lancement de tâches sur un téléphone `OFFLINE`/`DEGRADED`.
-- Hystérésis (exiger deux échecs consécutifs) : à ajouter seulement si on observe des
-  clignotements.
+- Corriger le timeout de `SshClient.run` pour ses ~20 autres appelants (doritos,
+  mediareceiverd, ipinfo…) : même défaut que ci-dessus, mais le changer peut tuer des
+  commandes longues qui passent aujourd'hui ; à traiter à part.

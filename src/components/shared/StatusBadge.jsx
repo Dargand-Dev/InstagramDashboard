@@ -19,6 +19,7 @@ const STATUS_STYLES = {
   IDLE: 'bg-[#52525B]/10 text-[#52525B] border-[#52525B]/20',
   DISABLED: 'bg-[#52525B]/10 text-[#52525B] border-[#52525B]/20',
   DISCONNECTED: 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20 animate-subtle-pulse',
+  DEGRADED: 'bg-[#F97316]/10 text-[#F97316] border-[#F97316]/20',
   SKIPPED: 'bg-[#52525B]/10 text-[#52525B] border-[#52525B]/20',
   CREATING: 'bg-[#3B82F6]/10 text-[#3B82F6] border-[#3B82F6]/20 animate-subtle-pulse',
   PAUSED_FOR_SCHEDULE: 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20',

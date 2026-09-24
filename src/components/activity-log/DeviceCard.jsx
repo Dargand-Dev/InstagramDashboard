@@ -6,6 +6,7 @@ import {
   Smartphone, Loader2, User, Clock, AlertTriangle, WifiOff,
   CheckCircle, XCircle, Minus,
 } from 'lucide-react'
+import ConnectivityPills from './ConnectivityPills'
 
 const STATUS_DOT = {
   IDLE: 'bg-[#22C55E]',
@@ -13,6 +14,14 @@ const STATUS_DOT = {
   ERROR: 'bg-[#EF4444]',
   OFFLINE: 'bg-[#52525B]',
   DISCONNECTED: 'bg-[#F59E0B] animate-subtle-pulse',
+  DEGRADED: 'bg-[#F97316]',
+}
+
+// Cause affichée pour un téléphone DEGRADED (un seul des deux tests a échoué)
+function degradedReason(device) {
+  if (device.usbConnected === false) return 'Câble USB non détecté'
+  if (device.sshReachable === false) return `SSH injoignable${device.sshError ? ` (${device.sshError})` : ''}`
+  return 'Connectivité partielle'
 }
 
 export default function DeviceCard({ device, activeRun, recentRuns, onClick }) {
@@ -20,6 +29,7 @@ export default function DeviceCard({ device, activeRun, recentRuns, onClick }) {
   const isRunning = device.status === 'RUNNING'
   const isError = device.status === 'ERROR'
   const isDisconnected = device.status === 'DISCONNECTED'
+  const isDegraded = device.status === 'DEGRADED'
 
   const stats = useMemo(() => {
     const runs = recentRuns || []
@@ -47,7 +57,7 @@ export default function DeviceCard({ device, activeRun, recentRuns, onClick }) {
   return (
     <div
       className={`group relative bg-[#0A0A0A] border rounded-lg p-4 hover:bg-[#111111] hover:border-[#222222] transition-all duration-150 cursor-pointer ${
-        isError ? 'border-[#EF4444]/30' : isDisconnected ? 'border-[#F59E0B]/30' : 'border-[#1a1a1a]'
+        isError ? 'border-[#EF4444]/30' : isDisconnected ? 'border-[#F59E0B]/30' : isDegraded ? 'border-[#F97316]/30' : 'border-[#1a1a1a]'
       }`}
       onClick={onClick}
       role="button"
@@ -69,6 +79,11 @@ export default function DeviceCard({ device, activeRun, recentRuns, onClick }) {
           <span className={`w-2 h-2 rounded-full ${statusColor}`} />
           <span className="text-xs text-[#52525B]">{device.status || 'OFFLINE'}</span>
         </div>
+      </div>
+
+      {/* Connectivité USB / SSH */}
+      <div className="mb-3">
+        <ConnectivityPills device={device} />
       </div>
 
       {/* Mini-stats */}
@@ -133,6 +148,16 @@ export default function DeviceCard({ device, activeRun, recentRuns, onClick }) {
           {device.currentAction && (
             <p className="text-xs text-[#A1A1AA] mt-0.5">{device.currentAction}</p>
           )}
+        </div>
+      )}
+
+      {/* Degraded */}
+      {isDegraded && (
+        <div className="mb-3 p-2 rounded-md bg-[#F97316]/5 border border-[#F97316]/10">
+          <div className="flex items-center gap-1.5 text-xs text-[#F97316]">
+            <AlertTriangle className="w-3 h-3 shrink-0" />
+            <span className="truncate">{degradedReason(device)}</span>
+          </div>
         </div>
       )}
 

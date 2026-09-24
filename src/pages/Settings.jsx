@@ -60,6 +60,7 @@ function IdentityDialog({ open, onOpenChange, identity, onSave, isPending }) {
   const [name, setName] = useState(identity?.identityId || identity?.name || identity?.identityName || '')
   const [driveFolder, setDriveFolder] = useState(identity?.driveFolderId || identity?.driveFolder || '')
   const [hairColor, setHairColor] = useState(identity?.hairColor || '')
+  const [gmsSourceLinkId, setGmsSourceLinkId] = useState(identity?.gmsSourceLinkId || '')
 
   const isEdit = !!identity?.id
 
@@ -70,6 +71,7 @@ function IdentityDialog({ open, onOpenChange, identity, onSave, isPending }) {
       identityId: name.trim(),
       driveFolderId: driveFolder.trim(),
       hairColor: hairColor || null,
+      gmsSourceLinkId: gmsSourceLinkId.trim() || null,
     })
   }
 
@@ -95,6 +97,15 @@ function IdentityDialog({ open, onOpenChange, identity, onSave, isPending }) {
               value={driveFolder}
               onChange={e => setDriveFolder(e.target.value)}
               placeholder="Google Drive folder ID or path"
+              className="bg-[#0A0A0A] border-[#1a1a1a] text-[#FAFAFA]"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs text-[#A1A1AA]">GetMySocial template link ID (optional)</Label>
+            <Input
+              value={gmsSourceLinkId}
+              onChange={e => setGmsSourceLinkId(e.target.value)}
+              placeholder="lnk_…"
               className="bg-[#0A0A0A] border-[#1a1a1a] text-[#FAFAFA]"
             />
           </div>

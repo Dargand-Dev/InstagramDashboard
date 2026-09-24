@@ -48,6 +48,7 @@ const STATUS_DOT = {
   ERROR: 'bg-[#EF4444]',
   OFFLINE: 'bg-[#52525B]',
   DISCONNECTED: 'bg-[#F59E0B] animate-subtle-pulse',
+  DEGRADED: 'bg-[#F97316]',
 }
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
@@ -689,7 +690,7 @@ export default function Devices() {
   }, [devices, search])
 
   const statusCounts = useMemo(() => {
-    const counts = { IDLE: 0, RUNNING: 0, ERROR: 0, OFFLINE: 0, DISCONNECTED: 0 }
+    const counts = { IDLE: 0, RUNNING: 0, ERROR: 0, OFFLINE: 0, DISCONNECTED: 0, DEGRADED: 0 }
     devices.forEach((d) => {
       const s = d.status || 'OFFLINE'
       counts[s] = (counts[s] || 0) + 1
@@ -719,11 +720,12 @@ export default function Devices() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { label: 'Idle', count: statusCounts.IDLE, color: '#22C55E', dot: 'bg-[#22C55E]' },
           { label: 'Running', count: statusCounts.RUNNING, color: '#3B82F6', dot: 'bg-[#3B82F6]' },
           { label: 'Disconnected', count: statusCounts.DISCONNECTED, color: '#F59E0B', dot: 'bg-[#F59E0B]' },
+          { label: 'Degraded', count: statusCounts.DEGRADED, color: '#F97316', dot: 'bg-[#F97316]' },
           { label: 'Error', count: statusCounts.ERROR, color: '#EF4444', dot: 'bg-[#EF4444]' },
           { label: 'Offline', count: statusCounts.OFFLINE, color: '#52525B', dot: 'bg-[#52525B]' },
         ].map((s) => (

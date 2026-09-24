@@ -1,14 +1,18 @@
-import { Smartphone, Play, AlertTriangle, ScrollText } from 'lucide-react'
+import { Smartphone, Play, AlertTriangle, ScrollText, Unplug, WifiOff } from 'lucide-react'
 
 const STATS = [
   { key: 'total', label: 'Total Devices', icon: Smartphone, color: '#A1A1AA' },
   { key: 'running', label: 'Running', icon: Play, color: '#3B82F6' },
+  { key: 'degraded', label: 'Degraded', icon: Unplug, color: '#F97316' },
+  { key: 'offline', label: 'Offline', icon: WifiOff, color: '#52525B' },
   { key: 'error', label: 'Error', icon: AlertTriangle, color: '#EF4444' },
   { key: 'runsToday', label: 'Runs Today', icon: ScrollText, color: '#22C55E' },
 ]
 
 export default function FleetSummaryBar({ devices, runs }) {
   const running = devices.filter(d => d.status === 'RUNNING').length
+  const degraded = devices.filter(d => d.status === 'DEGRADED').length
+  const offline = devices.filter(d => d.status === 'OFFLINE').length
   const error = devices.filter(d => d.status === 'ERROR').length
 
   const todayStart = new Date()
@@ -18,10 +22,10 @@ export default function FleetSummaryBar({ devices, runs }) {
     return t && new Date(t) >= todayStart
   }).length
 
-  const values = { total: devices.length, running, error, runsToday }
+  const values = { total: devices.length, running, degraded, offline, error, runsToday }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       {STATS.map(s => (
         <div key={s.key} className="bg-[#0A0A0A] border border-[#1a1a1a] rounded-lg p-3">
           <div className="flex items-center gap-1.5 mb-1">

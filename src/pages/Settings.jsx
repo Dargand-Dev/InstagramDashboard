@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select'
 import EmptyState from '@/components/shared/EmptyState'
 import SmsProvidersCard from '@/components/settings/SmsProvidersCard'
+import BackendRestartControl from '@/components/settings/BackendRestartControl'
 import { toast } from 'sonner'
 import {
   Settings as SettingsIcon, Users, Calendar, Server,
@@ -412,6 +413,7 @@ export default function Settings() {
                   <span className="text-xs text-[#A1A1AA] font-mono">{value}</span>
                 </div>
               ))}
+              {import.meta.env.DEV && <BackendRestartControl />}
             </div>
           </CardContent>
         </Card>

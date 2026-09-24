@@ -3,6 +3,8 @@ import {
 } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import StatusBadge from '@/components/shared/StatusBadge'
+import ConnectivityPills from '@/components/shared/ConnectivityPills'
+import { degradedReason } from '@/lib/connectivity'
 import DeviceRunsTab from './tabs/DeviceRunsTab'
 import DeviceLogsTab from './tabs/DeviceLogsTab'
 import DeviceStatsTab from './tabs/DeviceStatsTab'
@@ -27,6 +29,12 @@ export default function DeviceDetailSheet({ device, open, onOpenChange }) {
           <DialogDescription className="text-[#52525B] font-mono text-xs">
             {device.udid || 'No UDID'}
           </DialogDescription>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <ConnectivityPills device={device} />
+            {device.status === 'DEGRADED' && (
+              <span className="text-xs text-[#F97316]">{degradedReason(device)}</span>
+            )}
+          </div>
         </DialogHeader>
 
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">

@@ -20,6 +20,9 @@ import {
 import StatusBadge from '@/components/shared/StatusBadge'
 import TimeAgo from '@/components/shared/TimeAgo'
 import EmptyState from '@/components/shared/EmptyState'
+import ConnectivityPills from '@/components/shared/ConnectivityPills'
+import RefreshConnectivityButton from '@/components/shared/RefreshConnectivityButton'
+import { pickConnectivity, degradedReason } from '@/lib/connectivity'
 import {
   Smartphone,
   Plus,
@@ -82,11 +85,16 @@ function DeviceCard({ device, onSelect, onToggle, onTakeControl, onOpenTerminal 
   const isRunning = device.status === 'RUNNING'
   const isError = device.status === 'ERROR'
   const isDisconnected = device.status === 'DISCONNECTED'
+  const isDegraded = device.status === 'DEGRADED'
   const isManual = device.manualMode === true
+  // Réseau du téléphone : c'est le test SSH (Wi-Fi) qui le dit, pas le statut global
+  const networkUp = device.status !== 'OFFLINE' && device.sshReachable !== false
 
   return (
     <div
-      className="group relative bg-[#0A0A0A] border border-[#1a1a1a] rounded-lg p-4 hover:bg-[#111111] hover:border-[#222222] transition-all duration-150 cursor-pointer"
+      className={`group relative bg-[#0A0A0A] border rounded-lg p-4 hover:bg-[#111111] hover:border-[#222222] transition-all duration-150 cursor-pointer ${
+        isDegraded ? 'border-[#F97316]/30' : 'border-[#1a1a1a]'
+      }`}
       onClick={() => onSelect(device)}
     >
       <div className="flex items-start justify-between mb-3">
@@ -107,6 +115,20 @@ function DeviceCard({ device, onSelect, onToggle, onTakeControl, onOpenTerminal 
           <span className="text-xs text-[#52525B]">{device.status || 'OFFLINE'}</span>
         </div>
       </div>
+
+      {/* Connectivité USB / SSH */}
+      <div className="mb-3">
+        <ConnectivityPills device={device} />
+      </div>
+
+      {isDegraded && (
+        <div className="mb-3 p-2 rounded-md bg-[#F97316]/5 border border-[#F97316]/10">
+          <div className="flex items-center gap-1.5 text-xs text-[#F97316]">
+            <AlertTriangle className="w-3 h-3 shrink-0" />
+            <span className="truncate">{degradedReason(device)}</span>
+          </div>
+        </div>
+      )}
 
       {isRunning && (
         <div className="mb-3 p-2 rounded-md bg-[#3B82F6]/5 border border-[#3B82F6]/10">
@@ -152,10 +174,10 @@ function DeviceCard({ device, onSelect, onToggle, onTakeControl, onOpenTerminal 
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-xs text-[#52525B]">
-          {device.status === 'OFFLINE' ? (
-            <WifiOff className="w-3 h-3" />
-          ) : (
+          {networkUp ? (
             <Wifi className="w-3 h-3 text-[#22C55E]" />
+          ) : (
+            <WifiOff className="w-3 h-3" />
           )}
           <span>{(device.port || device.ports?.appium) ? `Port ${device.port || device.ports?.appium}` : 'No port'}</span>
         </div>
@@ -200,7 +222,9 @@ function DeviceCard({ device, onSelect, onToggle, onTakeControl, onOpenTerminal 
   )
 }
 
-function DeviceDetailSheet({ device, open, onOpenChange }) {
+// `device` est figé à l'ouverture (il alimente le formulaire d'édition) ; `liveDevice` suit
+// le polling live-status pour le statut et la connectivité affichés dans l'en-tête.
+function DeviceDetailSheet({ device, liveDevice, open, onOpenChange }) {
   const queryClient = useQueryClient()
   const [editForm, setEditForm] = useState({})
   const [editing, setEditing] = useState(false)
@@ -264,6 +288,7 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
 
   const expiryColor = proxyExpiryColor(device.proxyExpiresAt)
   const expiryFormatted = formatProxyExpiry(device.proxyExpiresAt)
+  const live = liveDevice || device
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -274,11 +299,17 @@ function DeviceDetailSheet({ device, open, onOpenChange }) {
           <DialogTitle className="text-[#FAFAFA] flex items-center gap-2">
             <Smartphone className="w-4 h-4 text-[#A1A1AA]" />
             {device.name || device.label || 'Device'}
-            <StatusBadge status={device.status || 'OFFLINE'} />
+            <StatusBadge status={live.status || 'OFFLINE'} />
           </DialogTitle>
           <DialogDescription className="text-[#52525B] font-mono text-xs break-all">
             {device.udid || 'No UDID'}
           </DialogDescription>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <ConnectivityPills device={live} />
+            {live.status === 'DEGRADED' && (
+              <span className="text-xs text-[#F97316]">{degradedReason(live)}</span>
+            )}
+          </div>
         </DialogHeader>
 
         <div className="flex gap-4 border-b border-[#1a1a1a] px-6 shrink-0">
@@ -649,6 +680,7 @@ export default function Devices() {
         lastActivityAt: live.lastActivityAt,
         manualMode: !!live.manualMode,
         port: d.ports?.appium || d.port,
+        ...pickConnectivity(live),
       }
     })
   }, [staticDevices, liveStatuses])
@@ -706,6 +738,7 @@ export default function Devices() {
           <p className="text-sm text-[#52525B] mt-0.5">{devices.length} device{devices.length !== 1 ? 's' : ''} registered</p>
         </div>
         <div className="flex items-center gap-2">
+          <RefreshConnectivityButton className="border-[#1a1a1a] text-[#A1A1AA] hover:text-[#FAFAFA]" />
           <Button
             size="sm"
             variant="outline"
@@ -781,7 +814,12 @@ export default function Devices() {
         </div>
       )}
 
-      <DeviceDetailSheet device={selectedDevice} open={sheetOpen} onOpenChange={setSheetOpen} />
+      <DeviceDetailSheet
+        device={selectedDevice}
+        liveDevice={selectedDevice && devices.find((d) => d.id === selectedDevice.id)}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+      />
       <AddDeviceDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />
     </div>
   )

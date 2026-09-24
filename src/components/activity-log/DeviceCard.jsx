@@ -6,7 +6,8 @@ import {
   Smartphone, Loader2, User, Clock, AlertTriangle, WifiOff,
   CheckCircle, XCircle, Minus,
 } from 'lucide-react'
-import ConnectivityPills from './ConnectivityPills'
+import ConnectivityPills from '@/components/shared/ConnectivityPills'
+import { degradedReason } from '@/lib/connectivity'
 
 const STATUS_DOT = {
   IDLE: 'bg-[#22C55E]',
@@ -15,13 +16,6 @@ const STATUS_DOT = {
   OFFLINE: 'bg-[#52525B]',
   DISCONNECTED: 'bg-[#F59E0B] animate-subtle-pulse',
   DEGRADED: 'bg-[#F97316]',
-}
-
-// Cause affichée pour un téléphone DEGRADED (un seul des deux tests a échoué)
-function degradedReason(device) {
-  if (device.usbConnected === false) return 'Câble USB non détecté'
-  if (device.sshReachable === false) return `SSH injoignable${device.sshError ? ` (${device.sshError})` : ''}`
-  return 'Connectivité partielle'
 }
 
 export default function DeviceCard({ device, activeRun, recentRuns, onClick }) {

@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import { toast } from 'sonner'
-import { RefreshCw } from 'lucide-react'
-import { apiGet, apiPost } from '@/lib/api'
-import { Button } from '@/components/ui/button'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiGet } from '@/lib/api'
+import { pickConnectivity } from '@/lib/connectivity'
+import RefreshConnectivityButton from '@/components/shared/RefreshConnectivityButton'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useActiveRuns } from '@/hooks/useActiveRuns'
 import FleetSummaryBar from '@/components/activity-log/FleetSummaryBar'
@@ -71,10 +70,7 @@ export default function ActivityLog() {
         lastError: live.lastError,
         elapsedTime: live.elapsedTime,
         port: d.ports?.appium || d.port,
-        usbConnected: live.usbConnected,
-        sshReachable: live.sshReachable,
-        sshError: live.sshError,
-        connectivityCheckedAt: live.connectivityCheckedAt,
+        ...pickConnectivity(live),
       }
     })
   }, [staticDevices, liveStatuses])
@@ -87,13 +83,6 @@ export default function ActivityLog() {
     })
     return unsub
   }, [isConnected, subscribe, queryClient])
-
-  // Force un test USB + SSH immédiat ; la réponse contient déjà les statuts à jour
-  const refreshConnectivity = useMutation({
-    mutationFn: () => apiPost('/api/devices/connectivity/refresh'),
-    onSuccess: (res) => queryClient.setQueryData(['devices-live'], res),
-    onError: (err) => toast.error(`Revérification impossible : ${err.message}`),
-  })
 
   // Keep selected device in sync with live data
   useEffect(() => {
@@ -111,16 +100,7 @@ export default function ActivityLog() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-[#FAFAFA]">Activity Log</h1>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => refreshConnectivity.mutate()}
-          disabled={refreshConnectivity.isPending}
-          title="Relance idevice_id et un test SSH sur chaque téléphone"
-        >
-          <RefreshCw className={`w-4 h-4 mr-1.5 ${refreshConnectivity.isPending ? 'animate-spin' : ''}`} />
-          Revérifier
-        </Button>
+        <RefreshConnectivityButton />
       </div>
 
       <FleetSummaryBar devices={devices} runs={allRuns} />

@@ -78,7 +78,8 @@ Access guard (the route has no JWT, and restarting cancels work):
 Rendered at the bottom of the Settings "System" card, only when `import.meta.env.DEV`.
 
 - Plain `fetch` on relative URLs (not `apiPost`: no JWT involved, and `VITE_API_URL` must not prefix a dev-server route).
-- React Query: `useQuery(['dev-backend-restart'])` for the status, polling every 2 s while `stopping`/`starting`;
+- React Query: `useQuery(['dev-backend-restart'])` for the status, polling every 2 s while `stopping`/`starting`,
+  including when the tab is hidden (`refetchIntervalInBackground`: the user often switches to the IDE during the build);
   `useMutation` for the POST.
 - Row "Backend Spring Boot" with a phase badge and a **Redémarrer** button (disabled and spinning while in progress).
 - Confirmation dialog: the process on port 8081 is stopped and relaunched with `mvn spring-boot:run`

@@ -32,6 +32,8 @@ export function useBackendRestartStatus() {
     queryFn: () => devFetch(STATUS_URL),
     enabled: isLocalBrowser,
     refetchInterval: (query) => (RESTART_IN_PROGRESS.has(query.state.data?.phase) ? 2000 : false),
+    // On part souvent sur l'IDE pendant la compilation Maven : le suivi continue onglet masqué
+    refetchIntervalInBackground: true,
   })
 }
 

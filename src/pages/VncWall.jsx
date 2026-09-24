@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, LayoutGrid } from 'lucide-react'
@@ -25,6 +25,9 @@ export default function VncWall() {
   // Garde-fou : auto-start ne doit s'exécuter qu'une fois par mount,
   // même si tilesData.length oscille à cause des refetch live-status.
   const autoStartedRef = useRef(false)
+  // UDIDs déjà envoyés en démarrage (startWall initial ou rattrapage) : un device n'est
+  // lancé qu'une fois automatiquement, ensuite c'est le bouton Retry.
+  const attemptedRef = useRef(new Set())
 
   const sessions = useManualControlStore((s) => s.sessions)
   const walling = useManualControlStore((s) => s.walling)
@@ -93,16 +96,43 @@ export default function VncWall() {
       .map((d) => d.udid)
     if (reachableUdids.length > 0) {
       autoStartedRef.current = true
+      reachableUdids.forEach((udid) => attemptedRef.current.add(udid))
       startWall(reachableUdids)
     }
   }, [tilesData, wallActive, isStarting, startWall, isConnected, wallTopicSubscribed])
 
-  // Retry pour un device en FAILED : passe par le hook useManualControl pour
-  // que le store soit correctement mis à jour (sessions[udid] + walling cleared).
+  // Démarre un seul téléphone (Retry ou rattrapage) via useManualControl, qui pose
+  // sessions[udid] en cas de succès. Le hook ne touche pas à `walling` : sans ces callbacks,
+  // un échec laisserait la tuile sur « Démarrage TrollVNC... » sans bouton Retry.
+  const startDevice = useCallback((udid, deviceName) => {
+    setWalling(udid, 'STARTING', { deviceName })
+    const fail = (error) => setWalling(udid, 'FAILED', { deviceName, error })
+    takeControl({ udid, deviceName }, {
+      onSuccess: (data) => {
+        if (data?.locked) fail(data.message || 'Device verrouillé par une autre opération')
+        else if (!data?.vncUrl) fail('Réponse take-control invalide (vncUrl manquant)')
+      },
+      onError: (err) => fail(err.message || 'Take control échoué'),
+    })
+  }, [setWalling, takeControl])
+
+  // Rattrapage : un téléphone OFFLINE à l'ouverture (sonde USB + SSH) et revenu depuis n'a
+  // ni session ni entrée walling — sans ça il resterait sur « Démarrage TrollVNC... ».
+  // On le démarre une seule fois automatiquement.
+  useEffect(() => {
+    if (!autoStartedRef.current || !wallActive) return
+    tilesData.forEach((d) => {
+      if (d.status === 'OFFLINE' || d.status === 'DISCONNECTED') return
+      if (attemptedRef.current.has(d.udid) || sessions[d.udid] || walling[d.udid]) return
+      attemptedRef.current.add(d.udid)
+      startDevice(d.udid, d.name)
+    })
+  }, [tilesData, wallActive, sessions, walling, startDevice])
+
+  // Retry pour un device en FAILED
   const handleRetry = (udid) => {
     const device = tilesData.find((d) => d.udid === udid)
-    setWalling(udid, 'STARTING', { deviceName: device?.name })
-    takeControl({ udid, deviceName: device?.name })
+    startDevice(udid, device?.name)
   }
 
   // Compute per-device state

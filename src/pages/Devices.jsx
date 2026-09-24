@@ -223,7 +223,7 @@ function DeviceCard({ device, onSelect, onToggle, onTakeControl, onOpenTerminal 
 }
 
 // `device` est figé à l'ouverture (il alimente le formulaire d'édition) ; `liveDevice` suit
-// le polling live-status pour le statut et la connectivité affichés dans l'en-tête.
+// le polling live-status pour tout ce qui est runtime : statut, connectivité, run en cours.
 function DeviceDetailSheet({ device, liveDevice, open, onOpenChange }) {
   const queryClient = useQueryClient()
   const [editForm, setEditForm] = useState({})
@@ -336,16 +336,16 @@ function DeviceDetailSheet({ device, liveDevice, open, onOpenChange }) {
           <div className="px-6 py-5">
             {activeTab === 'info' && (
               <div className="space-y-5 pb-2">
-                {device.status === 'RUNNING' && (
+                {live.status === 'RUNNING' && (
                   <div className="p-3 rounded-lg bg-[#3B82F6]/5 border border-[#3B82F6]/10 space-y-2">
                     <p className="text-xs font-medium text-[#3B82F6]">Current Run</p>
                     <div className="space-y-1 text-xs text-[#A1A1AA]">
-                      {(device.currentAction || device.currentWorkflow) && <p>Workflow: {device.currentAction || device.currentWorkflow}</p>}
-                      {device.currentAccount && <p>Account: {device.currentAccount}</p>}
-                      {device.lastActivityAt && <p>Last activity: <TimeAgo date={device.lastActivityAt} /></p>}
-                      {device.currentRunId && (
+                      {(live.currentAction || live.currentWorkflow) && <p>Workflow: {live.currentAction || live.currentWorkflow}</p>}
+                      {live.currentAccount && <p>Account: {live.currentAccount}</p>}
+                      {live.lastActivityAt && <p>Last activity: <TimeAgo date={live.lastActivityAt} /></p>}
+                      {live.currentRunId && (
                         <a
-                          href={`/execution-center?run=${device.currentRunId}`}
+                          href={`/execution-center?run=${live.currentRunId}`}
                           className="text-[#3B82F6] hover:underline inline-flex items-center gap-1 mt-1"
                         >
                           <Monitor className="w-3 h-3" /> View in Execution Center

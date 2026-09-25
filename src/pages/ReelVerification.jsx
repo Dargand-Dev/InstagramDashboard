@@ -196,11 +196,11 @@ export default function ReelVerification() {
     const device = deviceByUdid.get(account.deviceUdid)
     try {
       const resp = await apiPost('/api/automation/execute', {
-        actionName: 'SwitchCraneContainer',
+        actionName: 'SwitchContainer',
         deviceUdid: account.deviceUdid,
         parameters: {
           containerId: account.containerId,
-          containerName: account.craneContainer,
+          containerName: account.containerName,
           proxyRotateUrl: device?.rotatingUrl || undefined,
         },
       })

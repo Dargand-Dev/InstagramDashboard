@@ -15,8 +15,8 @@ const ACTION_META = {
   'PostReel':                { icon: Video, color: 'text-purple-400', desc: 'Post a reel from Drive content', group: 'Content' },
   'PostStory':               { icon: Image, color: 'text-pink-400', desc: 'Post a story', group: 'Content' },
   'TransferVideoToDevice':   { icon: Smartphone, color: 'text-indigo-400', desc: 'Push video to device via AFC', group: 'Device' },
-  'CreateCraneContainer':    { icon: Container, color: 'text-teal-400', desc: 'Create a new Crane container', group: 'Device' },
-  'SwitchCraneContainer':    { icon: RefreshCw, color: 'text-orange-400', desc: 'Switch to another Crane container', group: 'Device' },
+  'CreateContainer':         { icon: Container, color: 'text-teal-400', desc: 'Create a new container', group: 'Device' },
+  'SwitchContainer':         { icon: RefreshCw, color: 'text-orange-400', desc: 'Switch to another container', group: 'Device' },
   'Cleanup':                 { icon: Trash2, color: 'text-red-400', desc: 'Clean up device state', group: 'Device' },
   'TestClipboardPaste':      { icon: Clipboard, color: 'text-gray-400', desc: 'Test clipboard paste functionality', group: 'Utility' },
 }
@@ -31,8 +31,9 @@ const ACTION_PARAMS = {
   PostStory: [
     { name: 'storyLinkUrl', label: 'Story Link URL', type: 'text', required: true, placeholder: 'https://...' },
   ],
-  SwitchCraneContainer: [
-    { name: 'containerName', label: 'Container Name', type: 'text', required: true, placeholder: 'e.g. container-1' },
+  SwitchContainer: [
+    { name: 'containerId', label: 'Container ID', type: 'text', required: true, placeholder: 'id doritos / crane' },
+    { name: 'containerName', label: 'Container Name', type: 'text', required: false, placeholder: 'e.g. container-1' },
   ],
   TestClipboardPaste: [
     { name: 'text', label: 'Text to Paste', type: 'text', required: true, placeholder: 'Text content' },

@@ -308,11 +308,11 @@ export default function Accounts() {
     const device = (Array.isArray(devicesData) ? devicesData : []).find(d => d.udid === account.deviceUdid)
     try {
       await apiPost('/api/automation/execute', {
-        actionName: 'SwitchCraneContainer',
+        actionName: 'SwitchContainer',
         deviceUdid: account.deviceUdid,
         parameters: {
           containerId: account.containerId,
-          containerName: account.craneContainer,
+          containerName: account.containerName,
           proxyRotateUrl: device?.rotatingUrl || undefined,
         },
       })

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -44,6 +45,11 @@ function IdentityRow({ identity, onEdit, onDelete }) {
             {hairLabel}
           </Badge>
         )}
+        {identity.contentLoop && (
+          <Badge variant="outline" className="bg-[#1a1a1a] text-[#A1A1AA] border-[#27272A] text-[10px] uppercase">
+            Boucle
+          </Badge>
+        )}
       </div>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <Button variant="ghost" size="icon-xs" className="text-[#52525B] hover:text-[#A1A1AA]" onClick={() => onEdit(identity)}>
@@ -62,6 +68,7 @@ function IdentityDialog({ open, onOpenChange, identity, onSave, isPending }) {
   const [driveFolder, setDriveFolder] = useState(identity?.driveFolderId || identity?.driveFolder || '')
   const [hairColor, setHairColor] = useState(identity?.hairColor || '')
   const [gmsSourceLinkId, setGmsSourceLinkId] = useState(identity?.gmsSourceLinkId || '')
+  const [contentLoop, setContentLoop] = useState(!!identity?.contentLoop)
 
   const isEdit = !!identity?.id
 
@@ -73,6 +80,7 @@ function IdentityDialog({ open, onOpenChange, identity, onSave, isPending }) {
       driveFolderId: driveFolder.trim(),
       hairColor: hairColor || null,
       gmsSourceLinkId: gmsSourceLinkId.trim() || null,
+      contentLoop,
     })
   }
 
@@ -109,6 +117,15 @@ function IdentityDialog({ open, onOpenChange, identity, onSave, isPending }) {
               placeholder="lnk_…"
               className="bg-[#0A0A0A] border-[#1a1a1a] text-[#FAFAFA]"
             />
+          </div>
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs text-[#A1A1AA]">Contenu en boucle (spoofé)</Label>
+              <p className="text-[11px] text-[#52525B]">
+                Les vidéos ne sont plus mises à la corbeille : chaque compte les reposte en boucle, et chaque post est une variante unique.
+              </p>
+            </div>
+            <Switch checked={contentLoop} onCheckedChange={setContentLoop} size="sm" />
           </div>
           <div className="space-y-2">
             <Label className="text-xs text-[#A1A1AA]">Couleur de cheveux</Label>

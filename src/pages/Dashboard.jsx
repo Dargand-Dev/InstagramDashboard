@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { apiGet, apiPost } from '@/lib/api'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from '@/components/ui/card'
@@ -35,6 +36,7 @@ import {
   Zap,
   Gauge,
   ChevronDown,
+  RefreshCw,
 } from 'lucide-react'
 
 const CREATION_TYPES = ['CreateAccount', 'CreateAccountFromExistingContainer', 'CreateAccountNoReel']
@@ -325,6 +327,51 @@ export default function Dashboard() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['active-runs'] }),
   })
 
+  // Reconnexion Google Drive : consentement Google dans un nouvel onglet, le backend y reçoit le
+  // retour et rebranche Drive à chaud. L'onglet prévient par postMessage ; si Google a coupé
+  // window.opener (COOP), on recharge le stock quand la fenêtre reprend le focus.
+  const [driveReconnecting, setDriveReconnecting] = useState(false)
+  const drivePending = useRef(false)
+
+  const reconnectDrive = async () => {
+    // Onglet ouvert pendant le clic, sinon le bloqueur de popups refuse après l'appel réseau
+    const popup = window.open('', '_blank')
+    setDriveReconnecting(true)
+    try {
+      const { authUrl } = await apiPost('/api/drive/oauth/start')
+      if (!authUrl) throw new Error('no consent URL returned')
+      if (popup) {
+        popup.location.href = authUrl
+      } else {
+        window.open(authUrl, '_blank')
+      }
+      drivePending.current = true
+    } catch (err) {
+      popup?.close()
+      toast.error('Drive reconnection failed: ' + err.message)
+    } finally {
+      setDriveReconnecting(false)
+    }
+  }
+
+  useEffect(() => {
+    const onMessage = (event) => {
+      if (event.data?.type !== 'drive-reconnected') return
+      drivePending.current = false
+      toast.success('Google Drive reconnected')
+      queryClient.invalidateQueries({ queryKey: ['content-status'] })
+    }
+    const onFocus = () => {
+      if (drivePending.current) queryClient.invalidateQueries({ queryKey: ['content-status'] })
+    }
+    window.addEventListener('message', onMessage)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      window.removeEventListener('message', onMessage)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [queryClient])
+
   // Derived data
   const activeAccounts = accountsData?.data || accountsData || []
   const allAccounts = allAccountsData?.data || allAccountsData || []
@@ -455,10 +502,22 @@ export default function Dashboard() {
           <AlertTriangle className="w-4 h-4 text-[#F59E0B] mt-0.5 shrink-0" />
           <div className="space-y-1">
             {erroredIdentities.length > 0 && (
-              <p className="text-sm text-[#EF4444]">
-                Google Drive unreachable — stock unknown for {erroredIdentities.length} identit{erroredIdentities.length > 1 ? 'ies' : 'y'}
-                {erroredIdentities[0][1].error ? `: ${String(erroredIdentities[0][1].error).split('\n')[0].slice(0, 120)}` : ''}
-              </p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <p className="text-sm text-[#EF4444]">
+                  Google Drive unreachable — stock unknown for {erroredIdentities.length} identit{erroredIdentities.length > 1 ? 'ies' : 'y'}
+                  {erroredIdentities[0][1].error ? `: ${String(erroredIdentities[0][1].error).split('\n')[0].slice(0, 120)}` : ''}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 border-[#EF4444]/30 text-[#EF4444] hover:bg-[#EF4444]/10 hover:text-[#F87171]"
+                  disabled={driveReconnecting}
+                  onClick={reconnectDrive}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${driveReconnecting ? 'animate-spin' : ''}`} />
+                  Reconnecter
+                </Button>
+              </div>
             )}
             {lowStockIdentities.length > 0 && (
               <p className="text-sm text-[#F59E0B]">

@@ -442,6 +442,7 @@ export default function ExecutionCenter() {
   const { data: queueData } = useQuery({
     queryKey: ['queue-preview'],
     queryFn: () => apiGet('/api/queue'),
+    refetchInterval: isConnected ? false : 10000,
   })
 
   const { data: liveStatuses = [] } = useQuery({
@@ -464,10 +465,13 @@ export default function ExecutionCenter() {
       subscribe('/topic/executions/status', () => {
         queryClient.invalidateQueries({ queryKey: ['active-runs'] })
         queryClient.invalidateQueries({ queryKey: ['recent-runs-timeline'] })
+        queryClient.invalidateQueries({ queryKey: ['queue-preview'] })
       }),
       subscribe('/topic/devices/status', () => {
         queryClient.invalidateQueries({ queryKey: ['devices-live'] })
         queryClient.invalidateQueries({ queryKey: ['active-runs'] })
+        // Passage WAITING_PROXY <-> RUNNING : la pastille d'attente de l'aperçu de file suit
+        queryClient.invalidateQueries({ queryKey: ['queue-preview'] })
       }),
     ]
     return () => unsubs.forEach(fn => fn && fn())

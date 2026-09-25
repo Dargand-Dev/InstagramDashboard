@@ -329,7 +329,7 @@ export default function Accounts() {
       email: selectedAccount.email || '',
       phone: selectedAccount.phone || '',
       totpSecret: selectedAccount.totpSecret || '',
-      craneContainer: selectedAccount.craneContainer || '',
+      containerName: selectedAccount.containerName || '',
       deviceUdid: selectedAccount.deviceUdid || '',
       proxySession: selectedAccount.proxySession || '',
     })
@@ -981,7 +981,7 @@ export default function Accounts() {
                     <EditableDetailRow label="Email" value={editValues.email} onChange={v => setEditValues(p => ({ ...p, email: v }))} placeholder="email@example.com" />
                     <EditableDetailRow label="Phone" value={editValues.phone} onChange={v => setEditValues(p => ({ ...p, phone: v }))} mono placeholder="+1234567890" />
                     <EditableDetailRow label="2FA Secret" value={editValues.totpSecret} onChange={v => setEditValues(p => ({ ...p, totpSecret: v }))} mono placeholder="TOTP secret" />
-                    <EditableDetailRow label="Container" value={editValues.craneContainer} onChange={v => setEditValues(p => ({ ...p, craneContainer: v }))} mono placeholder="container name" />
+                    <EditableDetailRow label="Container" value={editValues.containerName} onChange={v => setEditValues(p => ({ ...p, containerName: v }))} mono placeholder="container name" />
                     <EditableDetailRow
                       label="Device"
                       value={editValues.deviceUdid}
@@ -1012,7 +1012,7 @@ export default function Accounts() {
                       mono
                       blur
                     />
-                    <DetailRow label="Container" value={selectedAccount.craneContainer} mono blur />
+                    <DetailRow label="Container" value={selectedAccount.containerName} mono blur />
                     <DetailRow label="Device" value={selectedAccount.deviceUdid ? `${deviceMap[selectedAccount.deviceUdid] || 'Unknown'} (${selectedAccount.deviceUdid})` : null} mono blur />
                     <DetailRow label="Proxy Session" value={selectedAccount.proxySession} mono blur />
                     <DetailRow

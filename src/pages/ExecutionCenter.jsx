@@ -38,6 +38,7 @@ import {
   ListOrdered,
   Unplug,
   RefreshCw,
+  Hourglass,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -224,7 +225,7 @@ function ProgressBar({ progress, estimatedRemainingMs }) {
   )
 }
 
-function ExecutionCard({ run, onStopGraceful, onKill, wsSubscribe, wsConnected }) {
+function ExecutionCard({ run, live, onStopGraceful, onKill, wsSubscribe, wsConnected }) {
   const [expanded, setExpanded] = useState(false)
   const [showLogs, setShowLogs] = useState(false)
   const [logText, setLogText] = useState('')
@@ -232,6 +233,8 @@ function ExecutionCard({ run, onStopGraceful, onKill, wsSubscribe, wsConnected }
   const [accountSearch, setAccountSearch] = useState('')
 
   const runId = run.runId || run.id
+  // Tâche démarrée mais en attente du proxy partagé : le statut live du device le dit
+  const waitingProxy = live?.status === 'WAITING_PROXY' && live.currentRunId === runId
   const accounts = run.accounts || run.accountList || []
   const progress = run.progress
   const filteredAccounts = accounts.filter(a =>
@@ -284,7 +287,7 @@ function ExecutionCard({ run, onStopGraceful, onKill, wsSubscribe, wsConnected }
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-[#FAFAFA]">{run.workflowName || run.workflow}</span>
-                <StatusBadge status={run.status || 'RUNNING'} />
+                <StatusBadge status={waitingProxy ? 'WAITING_PROXY' : (run.status || 'RUNNING')} />
               </div>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-xs text-[#52525B]">{run.deviceName || run.deviceUdid || run.device}</span>
@@ -303,7 +306,13 @@ function ExecutionCard({ run, onStopGraceful, onKill, wsSubscribe, wsConnected }
                   </>
                 )}
               </div>
-              {progress && <div className="mt-2"><ProgressBar progress={progress} estimatedRemainingMs={run.estimatedRemainingMs} /></div>}
+              {waitingProxy && (
+                <p className="mt-1.5 text-xs text-[#06B6D4] flex items-center gap-1">
+                  <Hourglass className="w-3 h-3 shrink-0" />
+                  {live.currentAction || 'En attente du proxy partagé'}
+                </p>
+              )}
+              {progress && <div className="mt-2"><ProgressBar progress={progress} estimatedRemainingMs={waitingProxy ? null : run.estimatedRemainingMs} /></div>}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -446,6 +455,7 @@ export default function ExecutionCenter() {
   })
 
   const disconnectedDevices = liveStatuses.filter(d => d.status === 'DISCONNECTED')
+  const liveByUdid = Object.fromEntries(liveStatuses.map(d => [d.deviceUdid || d.udid, d]))
 
   // WebSocket
   useEffect(() => {
@@ -554,6 +564,7 @@ export default function ExecutionCenter() {
                 <ExecutionCard
                   key={run.runId || run.id}
                   run={run}
+                  live={liveByUdid[run.deviceUdid]}
                   onStopGraceful={(id) => stopGraceful.mutate(id)}
                   onKill={(id) => killImmediate.mutate(id)}
                   wsSubscribe={subscribe}
@@ -618,7 +629,13 @@ export default function ExecutionCenter() {
                               {formatEta(item.estimatedDurationMs)}
                             </span>
                           )}
-                          {item.status === 'RUNNING' && item.estimatedRemainingMs && (
+                          {item.waitingForProxy && (
+                            <span className="text-[10px] text-[#06B6D4] flex items-center gap-0.5">
+                              <Hourglass className="w-2.5 h-2.5" />
+                              {item.waitingForProxy.message || 'En attente du proxy partagé'}
+                            </span>
+                          )}
+                          {item.status === 'RUNNING' && item.estimatedRemainingMs && !item.waitingForProxy && (
                             <span className="text-[10px] text-[#A1A1AA] flex items-center gap-0.5">
                               <Timer className="w-2.5 h-2.5" />
                               {formatEta(item.estimatedRemainingMs)} left

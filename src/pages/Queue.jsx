@@ -204,9 +204,10 @@ function TaskCard({ task, onCancel, onReprioritize }) {
                     variant="ghost"
                     size="icon"
                     className="h-6 w-6 text-[#52525B] hover:text-[#22C55E]"
+                    title="Plus prioritaire (valeur plus petite)"
                     onClick={(e) => {
                       e.stopPropagation()
-                      onReprioritize(task.id, task.priority + 1)
+                      onReprioritize(task.id, Math.max(0, task.priority - 1))
                     }}
                   >
                     <ArrowUp className="w-3 h-3" />
@@ -215,9 +216,10 @@ function TaskCard({ task, onCancel, onReprioritize }) {
                     variant="ghost"
                     size="icon"
                     className="h-6 w-6 text-[#52525B] hover:text-[#F59E0B]"
+                    title="Moins prioritaire (valeur plus grande)"
                     onClick={(e) => {
                       e.stopPropagation()
-                      onReprioritize(task.id, Math.max(0, task.priority - 1))
+                      onReprioritize(task.id, task.priority + 1)
                     }}
                   >
                     <ArrowDown className="w-3 h-3" />

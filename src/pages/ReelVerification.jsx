@@ -41,7 +41,7 @@ export default function ReelVerification() {
   const recheck = useRecheckOne()
   const dismiss = useDismissOne()
 
-  // Comptes + devices pour résoudre containerId / craneContainer / rotatingUrl
+  // Comptes + devices pour résoudre containerId / containerName / rotatingUrl
   // afin de permettre l'ouverture du conteneur directement depuis la ligne.
   const accounts = useQuery({
     queryKey: ['accounts'],

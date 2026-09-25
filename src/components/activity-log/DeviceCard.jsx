@@ -4,8 +4,9 @@ import StatusBadge from '@/components/shared/StatusBadge'
 import TimeAgo from '@/components/shared/TimeAgo'
 import {
   Smartphone, Loader2, User, Clock, AlertTriangle, WifiOff,
-  CheckCircle, XCircle, Minus,
+  CheckCircle, XCircle, Minus, Hourglass,
 } from 'lucide-react'
+import { deviceStatusLabel } from '@/lib/deviceStatus'
 import ConnectivityPills from '@/components/shared/ConnectivityPills'
 import { degradedReason } from '@/lib/connectivity'
 
@@ -16,6 +17,7 @@ const STATUS_DOT = {
   OFFLINE: 'bg-[#52525B]',
   DISCONNECTED: 'bg-[#F59E0B] animate-subtle-pulse',
   DEGRADED: 'bg-[#F97316]',
+  WAITING_PROXY: 'bg-[#06B6D4] animate-subtle-pulse',
 }
 
 export default function DeviceCard({ device, activeRun, recentRuns, onClick }) {
@@ -24,6 +26,7 @@ export default function DeviceCard({ device, activeRun, recentRuns, onClick }) {
   const isError = device.status === 'ERROR'
   const isDisconnected = device.status === 'DISCONNECTED'
   const isDegraded = device.status === 'DEGRADED'
+  const isWaitingProxy = device.status === 'WAITING_PROXY'
 
   const stats = useMemo(() => {
     const runs = recentRuns || []
@@ -71,7 +74,7 @@ export default function DeviceCard({ device, activeRun, recentRuns, onClick }) {
         </div>
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${statusColor}`} />
-          <span className="text-xs text-[#52525B]">{device.status || 'OFFLINE'}</span>
+          <span className="text-xs text-[#52525B]">{deviceStatusLabel(device.status || 'OFFLINE')}</span>
         </div>
       </div>
 
@@ -138,6 +141,19 @@ export default function DeviceCard({ device, activeRun, recentRuns, onClick }) {
           <div className="flex items-center gap-1.5 text-xs text-[#F59E0B]">
             <AlertTriangle className="w-3 h-3 shrink-0 animate-pulse" />
             <span className="font-medium">USB cable disconnected</span>
+          </div>
+          {device.currentAction && (
+            <p className="text-xs text-[#A1A1AA] mt-0.5">{device.currentAction}</p>
+          )}
+        </div>
+      )}
+
+      {/* En attente du proxy partagé */}
+      {isWaitingProxy && (
+        <div className="mb-3 p-2 rounded-md bg-[#06B6D4]/5 border border-[#06B6D4]/10">
+          <div className="flex items-center gap-1.5 text-xs text-[#06B6D4]">
+            <Hourglass className="w-3 h-3 shrink-0" />
+            <span className="font-medium">Proxy partagé occupé</span>
           </div>
           {device.currentAction && (
             <p className="text-xs text-[#A1A1AA] mt-0.5">{device.currentAction}</p>

@@ -23,6 +23,7 @@ import EmptyState from '@/components/shared/EmptyState'
 import ConnectivityPills from '@/components/shared/ConnectivityPills'
 import RefreshConnectivityButton from '@/components/shared/RefreshConnectivityButton'
 import { pickConnectivity, degradedReason } from '@/lib/connectivity'
+import { deviceStatusLabel, isBusyStatus } from '@/lib/deviceStatus'
 import {
   Smartphone,
   Plus,
@@ -39,6 +40,7 @@ import {
   Hand,
   LayoutGrid,
   Terminal,
+  Hourglass,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useManualControl } from '@/hooks/useManualControl'
@@ -52,6 +54,7 @@ const STATUS_DOT = {
   OFFLINE: 'bg-[#52525B]',
   DISCONNECTED: 'bg-[#F59E0B] animate-subtle-pulse',
   DEGRADED: 'bg-[#F97316]',
+  WAITING_PROXY: 'bg-[#06B6D4] animate-subtle-pulse',
 }
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
@@ -86,6 +89,8 @@ function DeviceCard({ device, onSelect, onToggle, onTakeControl, onOpenTerminal 
   const isError = device.status === 'ERROR'
   const isDisconnected = device.status === 'DISCONNECTED'
   const isDegraded = device.status === 'DEGRADED'
+  const isWaitingProxy = device.status === 'WAITING_PROXY'
+  const sharedWith = device.proxySharedWith || []
   const isManual = device.manualMode === true
   // Réseau du téléphone : c'est le test SSH (Wi-Fi) qui le dit, pas le statut global
   const networkUp = device.status !== 'OFFLINE' && device.sshReachable !== false
@@ -106,13 +111,21 @@ function DeviceCard({ device, onSelect, onToggle, onTakeControl, onOpenTerminal 
             <div className="flex items-center gap-1.5">
               <p className="text-sm font-medium text-[#FAFAFA]">{device.name || device.label || 'Unnamed Device'}</p>
               <ContainerBackendBadge device={device} />
+              {sharedWith.length > 0 && (
+                <span
+                  className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap text-[#06B6D4] border-[#06B6D4]/25 bg-[#06B6D4]/10"
+                  title={`Proxy partagé avec ${sharedWith.join(', ')} : ces téléphones alternent compte par compte`}
+                >
+                  Proxy partagé
+                </span>
+              )}
             </div>
             <p className="text-xs text-[#52525B] font-mono">{device.udid ? `${device.udid.slice(0, 12)}...` : '—'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${statusColor}`} />
-          <span className="text-xs text-[#52525B]">{device.status || 'OFFLINE'}</span>
+          <span className="text-xs text-[#52525B]">{deviceStatusLabel(device.status || 'OFFLINE')}</span>
         </div>
       </div>
 
@@ -120,6 +133,22 @@ function DeviceCard({ device, onSelect, onToggle, onTakeControl, onOpenTerminal 
       <div className="mb-3">
         <ConnectivityPills device={device} />
       </div>
+
+      {isWaitingProxy && (
+        <div className="mb-3 p-2 rounded-md bg-[#06B6D4]/5 border border-[#06B6D4]/10">
+          <div className="flex items-center gap-1.5 text-xs text-[#06B6D4] mb-1">
+            <Hourglass className="w-3 h-3 shrink-0" />
+            <span className="font-medium">Proxy partagé occupé</span>
+          </div>
+          <p className="text-xs text-[#A1A1AA]">{device.currentAction || 'En attente du proxy partagé'}</p>
+          {device.currentAccount && (
+            <div className="flex items-center gap-1 text-xs text-[#52525B] mt-0.5">
+              <User className="w-3 h-3" />
+              <span>{device.currentAccount}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {isDegraded && (
         <div className="mb-3 p-2 rounded-md bg-[#F97316]/5 border border-[#F97316]/10">
@@ -336,11 +365,15 @@ function DeviceDetailSheet({ device, liveDevice, open, onOpenChange }) {
           <div className="px-6 py-5">
             {activeTab === 'info' && (
               <div className="space-y-5 pb-2">
-                {live.status === 'RUNNING' && (
+                {isBusyStatus(live.status) && (
                   <div className="p-3 rounded-lg bg-[#3B82F6]/5 border border-[#3B82F6]/10 space-y-2">
                     <p className="text-xs font-medium text-[#3B82F6]">Current Run</p>
                     <div className="space-y-1 text-xs text-[#A1A1AA]">
-                      {(live.currentAction || live.currentWorkflow) && <p>Workflow: {live.currentAction || live.currentWorkflow}</p>}
+                      {live.status === 'WAITING_PROXY' ? (
+                        <p className="text-[#06B6D4]">{live.currentAction || 'En attente du proxy partagé'}</p>
+                      ) : (
+                        (live.currentAction || live.currentWorkflow) && <p>Workflow: {live.currentAction || live.currentWorkflow}</p>
+                      )}
                       {live.currentAccount && <p>Account: {live.currentAccount}</p>}
                       {live.lastActivityAt && <p>Last activity: <TimeAgo date={live.lastActivityAt} /></p>}
                       {live.currentRunId && (
@@ -436,6 +469,12 @@ function DeviceDetailSheet({ device, liveDevice, open, onOpenChange }) {
                   <FieldRow label="Rotating URL" editing={editing} value={device.rotatingUrl} mono>
                     <Input placeholder="https://..." value={editForm.rotatingUrl || ''} onChange={setField('rotatingUrl')} className="h-9 bg-[#0A0A0A] border-[#1a1a1a] text-sm text-[#FAFAFA] font-mono" />
                   </FieldRow>
+                  {device.proxySharedWith?.length > 0 && (
+                    <p className="text-xs text-[#06B6D4]">
+                      Proxy partagé avec {device.proxySharedWith.join(', ')} : ces téléphones alternent compte par compte,
+                      jamais en même temps.
+                    </p>
+                  )}
 
                   <FieldRow label="Expires at" editing={editing} value={expiryFormatted} valueColor={expiryColor}>
                     <Input type="datetime-local" value={editForm.proxyExpiresAt || ''} onChange={setField('proxyExpiresAt')} className="h-9 bg-[#0A0A0A] border-[#1a1a1a] text-sm text-[#FAFAFA]" />
@@ -724,7 +763,8 @@ export default function Devices() {
   const statusCounts = useMemo(() => {
     const counts = { IDLE: 0, RUNNING: 0, ERROR: 0, OFFLINE: 0, DISCONNECTED: 0, DEGRADED: 0 }
     devices.forEach((d) => {
-      const s = d.status || 'OFFLINE'
+      // En attente du proxy partagé = tâche démarrée : compté dans « Running »
+      const s = d.status === 'WAITING_PROXY' ? 'RUNNING' : (d.status || 'OFFLINE')
       counts[s] = (counts[s] || 0) + 1
     })
     return counts

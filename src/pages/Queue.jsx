@@ -37,6 +37,7 @@ import {
   Loader2,
   Timer,
   PauseCircle,
+  Hourglass,
 } from 'lucide-react'
 
 function formatDuration(startStr) {
@@ -160,6 +161,15 @@ function TaskCard({ task, onCancel, onReprioritize }) {
               </div>
               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                 <span className="text-xs text-[#52525B]">{task.deviceName}</span>
+                {task.waitingForProxy && (
+                  <>
+                    <span className="text-xs text-[#3f3f46]">·</span>
+                    <span className="text-xs text-[#06B6D4] flex items-center gap-0.5">
+                      <Hourglass className="w-3 h-3" />
+                      {task.waitingForProxy.message || 'En attente du proxy partagé'}
+                    </span>
+                  </>
+                )}
                 {task.currentAccount && (
                   <>
                     <span className="text-xs text-[#3f3f46]">·</span>

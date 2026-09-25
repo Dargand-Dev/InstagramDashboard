@@ -1,4 +1,5 @@
 import { Smartphone, Play, AlertTriangle, ScrollText, Unplug, WifiOff } from 'lucide-react'
+import { isBusyStatus } from '@/lib/deviceStatus'
 
 const STATS = [
   { key: 'total', label: 'Total Devices', icon: Smartphone, color: '#A1A1AA' },
@@ -10,7 +11,7 @@ const STATS = [
 ]
 
 export default function FleetSummaryBar({ devices, runs }) {
-  const running = devices.filter(d => d.status === 'RUNNING').length
+  const running = devices.filter(d => isBusyStatus(d.status)).length
   const degraded = devices.filter(d => d.status === 'DEGRADED').length
   const offline = devices.filter(d => d.status === 'OFFLINE').length
   const error = devices.filter(d => d.status === 'ERROR').length

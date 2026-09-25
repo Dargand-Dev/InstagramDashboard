@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { deviceStatusLabel } from '@/lib/deviceStatus'
 
 const STATUS_STYLES = {
   SUCCESS: 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/20',
@@ -20,6 +21,7 @@ const STATUS_STYLES = {
   DISABLED: 'bg-[#52525B]/10 text-[#52525B] border-[#52525B]/20',
   DISCONNECTED: 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20 animate-subtle-pulse',
   DEGRADED: 'bg-[#F97316]/10 text-[#F97316] border-[#F97316]/20',
+  WAITING_PROXY: 'bg-[#06B6D4]/10 text-[#06B6D4] border-[#06B6D4]/20 animate-subtle-pulse',
   SKIPPED: 'bg-[#52525B]/10 text-[#52525B] border-[#52525B]/20',
   CREATING: 'bg-[#3B82F6]/10 text-[#3B82F6] border-[#3B82F6]/20 animate-subtle-pulse',
   PAUSED_FOR_SCHEDULE: 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20',
@@ -34,7 +36,7 @@ export default function StatusBadge({ status, className }) {
 
   return (
     <Badge variant="outline" className={cn('text-xs font-medium border', style, className)}>
-      {status}
+      {deviceStatusLabel(status)}
     </Badge>
   )
 }

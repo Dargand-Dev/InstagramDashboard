@@ -251,8 +251,8 @@ function DeviceCard({ device, onSelect, onToggle, onTakeControl, onOpenTerminal 
   )
 }
 
-// `device` est figé à l'ouverture (il alimente le formulaire d'édition) ; `liveDevice` suit
-// le polling live-status pour tout ce qui est runtime : statut, connectivité, run en cours.
+// Le formulaire est initialisé au clic sur Edit : les rafraîchissements de configuration
+// et de statut restent visibles sans écraser une saisie en cours.
 function DeviceDetailSheet({ device, liveDevice, open, onOpenChange }) {
   const queryClient = useQueryClient()
   const [editForm, setEditForm] = useState({})
@@ -270,22 +270,21 @@ function DeviceDetailSheet({ device, liveDevice, open, onOpenChange }) {
     },
   })
 
-  useEffect(() => {
-    if (device) {
-      setEditForm({
-        name: device.name || device.label || '',
-        port: device.port || '',
-        proxyHost: device.proxyHost || '',
-        proxyPort: device.proxyPort || '',
-        proxyUsername: device.proxyUsername || '',
-        proxyPassword: device.proxyPassword || '',
-        proxyUrl: device.proxyUrl || '',
-        rotatingUrl: device.rotatingUrl || '',
-        proxyExpiresAt: toDatetimeLocal(device.proxyExpiresAt),
-      })
-      setEditing(false)
-    }
-  }, [device])
+  const startEditing = () => {
+    setEditForm({
+      name: device.name || device.label || '',
+      deviceIp: device.deviceIp || '',
+      port: device.port || '',
+      proxyHost: device.proxyHost || '',
+      proxyPort: device.proxyPort || '',
+      proxyUsername: device.proxyUsername || '',
+      proxyPassword: device.proxyPassword || '',
+      proxyUrl: device.proxyUrl || '',
+      rotatingUrl: device.rotatingUrl || '',
+      proxyExpiresAt: toDatetimeLocal(device.proxyExpiresAt),
+    })
+    setEditing(true)
+  }
 
   const updateMutation = useMutation({
     // Le PUT backend fait un merge partiel (Jackson readerForUpdating) : on n'envoie que les
@@ -295,6 +294,7 @@ function DeviceDetailSheet({ device, liveDevice, open, onOpenChange }) {
     mutationFn: (body) =>
       apiPut(`/api/devices/${device.id}`, {
         name: body.name,
+        deviceIp: body.deviceIp.trim() || null,
         proxyHost: body.proxyHost || null,
         proxyPort: body.proxyPort ? Number(body.proxyPort) : null,
         proxyUsername: body.proxyUsername || null,
@@ -303,9 +303,9 @@ function DeviceDetailSheet({ device, liveDevice, open, onOpenChange }) {
         rotatingUrl: body.rotatingUrl || null,
         proxyExpiresAt: body.proxyExpiresAt ? new Date(body.proxyExpiresAt).toISOString() : null,
       }),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success('Device updated')
-      queryClient.invalidateQueries({ queryKey: ['devices-config'] })
+      await queryClient.invalidateQueries({ queryKey: ['devices-config'] })
       queryClient.invalidateQueries({ queryKey: ['devices-proxy-expiring'] })
       setEditing(false)
     },
@@ -320,7 +320,10 @@ function DeviceDetailSheet({ device, liveDevice, open, onOpenChange }) {
   const live = liveDevice || device
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(nextOpen) => {
+      if (!nextOpen) setEditing(false)
+      onOpenChange(nextOpen)
+    }}>
       <DialogContent
         className="bg-[#0A0A0A] border-[#1a1a1a] w-[92vw] sm:max-w-3xl max-h-[88vh] flex flex-col p-0 gap-0"
       >
@@ -396,7 +399,7 @@ function DeviceDetailSheet({ device, liveDevice, open, onOpenChange }) {
                       variant="ghost"
                       size="sm"
                       className="h-7 text-xs text-[#3B82F6] hover:text-[#3B82F6] hover:bg-[#3B82F6]/10"
-                      onClick={() => setEditing(true)}
+                      onClick={startEditing}
                     >
                       <Settings className="w-3 h-3 mr-1" /> Edit
                     </Button>
@@ -424,6 +427,17 @@ function DeviceDetailSheet({ device, liveDevice, open, onOpenChange }) {
                   </FieldRow>
                   <FieldRow label="Appium port" editing={editing} value={device.port}>
                     <Input value={editForm.port || ''} onChange={setField('port')} className="h-9 bg-[#0A0A0A] border-[#1a1a1a] text-sm text-[#FAFAFA] font-mono" />
+                  </FieldRow>
+                  <FieldRow label="IP locale (Wi-Fi / SSH)" htmlFor="device-local-ip" editing={editing} value={device.deviceIp} mono>
+                    <Input
+                      id="device-local-ip"
+                      placeholder="192.168.1.42"
+                      value={editForm.deviceIp || ''}
+                      onChange={setField('deviceIp')}
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="h-9 font-mono"
+                    />
                   </FieldRow>
                   <FieldRow label="UDID" editing={false} value={device.udid} mono />
                   <FieldRow label="Enabled" editing={false} value={device.enabled !== false ? 'Yes' : 'No'} />
@@ -518,10 +532,10 @@ function DeviceDetailSheet({ device, liveDevice, open, onOpenChange }) {
   )
 }
 
-function FieldRow({ label, editing, value, mono, valueColor, children }) {
+function FieldRow({ label, htmlFor, editing, value, mono, valueColor, children }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-[11px] uppercase tracking-wide text-[#52525B]">{label}</Label>
+      <Label htmlFor={htmlFor} className="text-[11px] uppercase tracking-wide text-[#52525B]">{label}</Label>
       {editing && children ? (
         children
       ) : (
@@ -855,7 +869,8 @@ export default function Devices() {
       )}
 
       <DeviceDetailSheet
-        device={selectedDevice}
+        key={selectedDevice?.id}
+        device={devices.find((d) => d.id === selectedDevice?.id) || selectedDevice}
         liveDevice={selectedDevice && devices.find((d) => d.id === selectedDevice.id)}
         open={sheetOpen}
         onOpenChange={setSheetOpen}

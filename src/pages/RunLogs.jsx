@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiPost } from '@/lib/api'
+import { apiGetBlob, apiPost } from '@/lib/api'
 import { useRunLogsWithLive } from '@/hooks/useRunLogsWithLive'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -11,7 +11,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   DialogFooter, DialogClose,
 } from '@/components/ui/dialog'
-import { ArrowLeft, Terminal, Copy, Check, Square, SkullIcon } from 'lucide-react'
+import { ArrowLeft, Terminal, Copy, Check, Download, LoaderCircle, Square, SkullIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function RunLogs() {
@@ -25,6 +25,32 @@ export default function RunLogs() {
   const [viewerHeight, setViewerHeight] = useState(600)
   const [copied, setCopied] = useState(false)
   const [killDialogOpen, setKillDialogOpen] = useState(false)
+
+  const downloadXml = useMutation({
+    mutationFn: async (requestedRunId) => {
+      const blob = await apiGetBlob(`/api/automation/runs/${encodeURIComponent(requestedRunId)}/page-source`)
+      if (!blob.size || !/^(application|text)\/xml(?:;|$)/i.test(blob.type)) {
+        throw new Error('La source XML est indisponible pour cette session')
+      }
+
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const filenameRunId = requestedRunId.replace(/[^a-zA-Z0-9_-]/g, '_')
+      link.href = url
+      link.download = `page-source-${filenameRunId}-${timestamp}.xml`
+      document.body.appendChild(link)
+      try {
+        link.click()
+      } finally {
+        link.remove()
+        // Keep the URL alive long enough for the browser to start the download.
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+      }
+    },
+    onSuccess: () => toast.success('Téléchargement du XML lancé'),
+    onError: (err) => toast.error(err.message || 'Échec du téléchargement du XML'),
+  })
 
   const stopGraceful = useMutation({
     mutationFn: () => apiPost(`/api/automation/runs/${encodeURIComponent(runId)}/stop`, { mode: 'GRACEFUL' }),
@@ -116,17 +142,34 @@ export default function RunLogs() {
             </Button>
           </>
         )}
-        {text && (
+        <div className="ml-auto flex items-center gap-2">
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
-            className="h-8 px-3 text-xs text-[#A1A1AA] hover:text-[#FAFAFA] gap-1.5 ml-auto"
-            onClick={handleCopyLogs}
+            onClick={() => downloadXml.mutate(runId)}
+            disabled={!isActive || downloadXml.isPending}
+            aria-busy={downloadXml.isPending}
+            title={isActive
+              ? 'Télécharger la source XML de l’écran actuel du téléphone'
+              : 'La capture XML nécessite un run actif avec une session Appium'}
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            {copied ? 'Copié' : 'Copier les logs'}
+            {downloadXml.isPending
+              ? <LoaderCircle data-icon="inline-start" className="animate-spin" />
+              : <Download data-icon="inline-start" />}
+            {downloadXml.isPending ? 'Capture du XML…' : 'Télécharger le XML'}
           </Button>
-        )}
+          {text && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-3 text-xs text-[#A1A1AA] hover:text-[#FAFAFA] gap-1.5"
+              onClick={handleCopyLogs}
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied ? 'Copié' : 'Copier les logs'}
+            </Button>
+          )}
+        </div>
       </div>
       <div ref={containerRef} className="flex-1 min-h-0">
         {isLoading ? (

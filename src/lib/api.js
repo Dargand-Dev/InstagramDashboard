@@ -9,12 +9,12 @@ function getHeaders() {
   return headers
 }
 
-async function handleResponse(res) {
+async function handleResponse(res, responseType = 'json') {
   if (res.status === 401) {
     useAuthStore.getState().handleUnauthorized()
     throw new Error('Session expired')
   }
-  if (res.status === 423) {
+  if (res.status === 423 && responseType === 'json') {
     const body = await res.json().catch(() => ({}))
     return { locked: true, ...body }
   }
@@ -24,19 +24,23 @@ async function handleResponse(res) {
     err.status = res.status
     throw err
   }
-  return res.json().catch(() => ({}))
+  return responseType === 'blob' ? res.blob() : res.json().catch(() => ({}))
 }
 
-export async function apiFetch(url, options = {}) {
+export async function apiFetch(url, options = {}, responseType = 'json') {
   const res = await fetch(`${BASE_URL}${url}`, {
     ...options,
     headers: { ...getHeaders(), ...options.headers },
   })
-  return handleResponse(res)
+  return handleResponse(res, responseType)
 }
 
 export async function apiGet(url, signal) {
   return apiFetch(url, { signal })
+}
+
+export async function apiGetBlob(url) {
+  return apiFetch(url, { cache: 'no-store' }, 'blob')
 }
 
 export async function apiPost(url, body) {

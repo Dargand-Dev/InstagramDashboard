@@ -48,6 +48,7 @@ import CommandPalette from '@/components/CommandPalette'
 import ManualControlOverlay from '@/components/manual-control/ManualControlOverlay'
 import ManualControlBootstrapper from '@/components/manual-control/ManualControlBootstrapper'
 import WallBanner from '@/components/wall/WallBanner'
+import NotificationHost from '@/components/notifications/NotificationHost'
 
 const NAV_SECTIONS = [
   {
@@ -145,7 +146,7 @@ function NavItem({ item, collapsed, isActive }) {
   return content
 }
 
-function SidebarContent({ collapsed, setCollapsed, wsStatus }) {
+function SidebarContent({ collapsed, wsStatus }) {
   const location = useLocation()
   const logout = useAuthStore((s) => s.logout)
   const user = useAuthStore((s) => s.user)
@@ -233,7 +234,7 @@ export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
   const unreadCount = useNotificationStore((s) => s.unreadCount)
-  const { status: wsStatus } = useWebSocket()
+  const { status: wsStatus, subscribe, isConnected } = useWebSocket()
 
   // Find current page info for breadcrumb
   const currentSection = NAV_SECTIONS.find((s) =>
@@ -246,6 +247,7 @@ export default function AppLayout() {
       <ManualControlBootstrapper />
       <ManualControlOverlay />
       <WallBanner />
+      <NotificationHost subscribe={subscribe} isConnected={isConnected} />
       {/* Mobile overlay */}
       {mobileOpen && (
         <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={() => setMobileOpen(false)} />
@@ -258,7 +260,7 @@ export default function AppLayout() {
           collapsed ? 'w-[60px]' : 'w-[240px]'
         )}
       >
-        <SidebarContent collapsed={collapsed} setCollapsed={setCollapsed} wsStatus={wsStatus} />
+        <SidebarContent collapsed={collapsed} wsStatus={wsStatus} />
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="absolute top-3.5 hidden lg:flex items-center justify-center w-5 h-5 rounded-full border border-[#1a1a1a] bg-[#0A0A0A] hover:bg-[#111111] transition-colors duration-150 z-10"
@@ -276,7 +278,7 @@ export default function AppLayout() {
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <SidebarContent collapsed={false} setCollapsed={() => {}} wsStatus={wsStatus} />
+        <SidebarContent collapsed={false} wsStatus={wsStatus} />
       </aside>
 
       {/* Main */}

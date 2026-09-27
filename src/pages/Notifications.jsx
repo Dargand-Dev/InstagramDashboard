@@ -1,10 +1,8 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPut, apiDelete } from '@/lib/api'
-import { useWebSocket } from '@/hooks/useWebSocket'
+import { useState, useRef, useMemo } from 'react'
+import { apiPut, apiDelete } from '@/lib/api'
 import { useNotificationStore } from '@/stores/notificationStore'
+import { contentIssueKey } from '@/stores/notificationState'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import TimeAgo from '@/components/shared/TimeAgo'
@@ -22,6 +20,7 @@ import {
   User,
   Smartphone,
   Settings,
+  Clapperboard,
   Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -39,11 +38,12 @@ const CATEGORY_CONFIG = {
   ACCOUNT: { icon: User, label: 'Account' },
   DEVICE: { icon: Smartphone, label: 'Device' },
   SYSTEM: { icon: Settings, label: 'System' },
+  CONTENT: { icon: Clapperboard, label: 'Content' },
 }
 
-const FILTER_TABS = ['All', 'Unread', 'Execution', 'Account', 'Device', 'System']
+const FILTER_TABS = ['All', 'Unread', 'Execution', 'Account', 'Device', 'System', 'Content']
 
-function NotificationRow({ notification, onMarkRead, onDelete }) {
+function NotificationRow({ notification, onMarkRead, onDelete, onOpenContentIssue }) {
   const isUnread = !notification.read
   const type = TYPE_CONFIG[notification.type] || TYPE_CONFIG.INFO
   const category = CATEGORY_CONFIG[notification.category] || CATEGORY_CONFIG.SYSTEM
@@ -84,6 +84,14 @@ function NotificationRow({ notification, onMarkRead, onDelete }) {
           </Badge>
           <TimeAgo date={notification.createdAt || notification.timestamp} className="text-[10px] text-[#52525B]" />
         </div>
+        {contentIssueKey(notification) && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={(event) => { event.stopPropagation(); onOpenContentIssue(notification.id) }}>
+              {notification.contentIssue.trashed ? 'Voir le détail' : 'Examiner la vidéo'}
+            </Button>
+            {notification.contentIssue.trashed && <Badge variant="secondary">Vidéo à la corbeille</Badge>}
+          </div>
+        )}
       </div>
 
       {/* Actions */}
@@ -114,28 +122,9 @@ function NotificationRow({ notification, onMarkRead, onDelete }) {
 }
 
 export default function Notifications() {
-  const queryClient = useQueryClient()
   const [filter, setFilter] = useState('All')
-  const { subscribe, isConnected } = useWebSocket()
-  const { notifications, unreadCount, addNotification, markRead, markAllRead, fetchNotifications } = useNotificationStore()
+  const { notifications, unreadCount, markRead, markAllRead, removeNotification, openContentIssue } = useNotificationStore()
   const scrollRef = useRef(null)
-
-  // Fetch on mount
-  useEffect(() => {
-    fetchNotifications()
-  }, [fetchNotifications])
-
-  // WebSocket subscription for real-time notifications
-  useEffect(() => {
-    if (!isConnected) return
-    const unsub = subscribe('/topic/notifications', (notification) => {
-      addNotification(notification)
-      toast(notification.title || 'New notification', {
-        description: notification.message,
-      })
-    })
-    return unsub
-  }, [isConnected, subscribe, addNotification])
 
   const handleMarkRead = (id) => {
     markRead(id)
@@ -148,13 +137,9 @@ export default function Notifications() {
   }
 
   const handleDelete = (id) => {
-    useNotificationStore.setState((state) => ({
-      notifications: state.notifications.filter((n) => n.id !== id),
-      unreadCount: state.notifications.find((n) => n.id === id && !n.read)
-        ? Math.max(0, state.unreadCount - 1)
-        : state.unreadCount,
-    }))
-    apiDelete(`/api/notifications/${id}`).catch(() => toast.error('Failed to delete notification'))
+    apiDelete(`/api/notifications/${id}`)
+      .then(() => removeNotification(id))
+      .catch(() => toast.error('Failed to delete notification'))
   }
 
   const filtered = useMemo(() => {
@@ -164,6 +149,7 @@ export default function Notifications() {
       case 'Account': return notifications.filter((n) => n.category === 'ACCOUNT')
       case 'Device': return notifications.filter((n) => n.category === 'DEVICE')
       case 'System': return notifications.filter((n) => n.category === 'SYSTEM')
+      case 'Content': return notifications.filter((n) => n.category === 'CONTENT')
       default: return notifications
     }
   }, [notifications, filter])
@@ -246,6 +232,7 @@ export default function Notifications() {
                 notification={notification}
                 onMarkRead={handleMarkRead}
                 onDelete={handleDelete}
+                onOpenContentIssue={openContentIssue}
               />
             ))}
           </ScrollArea>

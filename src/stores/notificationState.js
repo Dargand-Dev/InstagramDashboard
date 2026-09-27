@@ -4,6 +4,18 @@ export function contentIssueKey(notification) {
   return JSON.stringify([issue.code, issue.runId || notification.id, issue.driveFileId])
 }
 
+// Lire ou fermer le pop-up ne résout pas le fichier qui a bloqué la publication.
+export function blockingContentIssues(notifications) {
+  const seenFiles = new Set()
+  return notifications.filter((notification) => {
+    if (!contentIssueKey(notification) || notification.contentIssue.trashed) return false
+    const fileId = notification.contentIssue.driveFileId
+    if (seenFiles.has(fileId)) return false
+    seenFiles.add(fileId)
+    return true
+  })
+}
+
 function withNotifications(state, notifications) {
   const byIssueKey = new Map(notifications.map((notification) => [contentIssueKey(notification), notification]))
   const contentAlertQueue = state.contentAlertQueue.filter((key, index) => {

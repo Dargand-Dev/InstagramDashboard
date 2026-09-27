@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createStore } from 'zustand/vanilla'
-import { createNotificationState } from './notificationState.js'
+import { blockingContentIssues, createNotificationState } from './notificationState.js'
 
 const notification = (id, overrides = {}) => ({
   id, title: 'Vidéo invalide', read: false, timestamp: '2026-09-27T12:00:00Z',
@@ -9,6 +9,36 @@ const notification = (id, overrides = {}) => ({
   ...overrides,
 })
 const makeStore = (fetchList = async () => []) => createStore(createNotificationState(fetchList))
+
+test('blocking banner survives reading and dismissing the popup', () => {
+  const store = makeStore()
+  store.getState().addNotification(notification('n1'))
+  const key = store.getState().contentAlertQueue[0]
+  store.getState().dismissContentIssue(key)
+  store.getState().markAllRead()
+  const issues = blockingContentIssues(store.getState().notifications)
+  assert.deepEqual(issues.map((n) => n.id), ['n1'])
+})
+
+test('blocking banner groups the same video across runs but keeps distinct files', () => {
+  const first = notification('n1')
+  const nextRun = notification('n2')
+  nextRun.contentIssue.runId = 'run-2'
+  const anotherFile = notification('n3')
+  anotherFile.contentIssue.driveFileId = 'drive-2'
+  assert.deepEqual(blockingContentIssues([nextRun, first, anotherFile])
+    .map((n) => n.id), ['n2', 'n3'])
+})
+
+test('blocking banner removes a trashed file and ignores ordinary notifications', () => {
+  const store = makeStore()
+  store.getState().addNotification(notification('n1'))
+  store.getState().addNotification(notification('normal', { contentIssue: null }))
+  const trashed = notification('n1')
+  trashed.contentIssue.trashed = true
+  store.getState().addNotification(trashed)
+  assert.deepEqual(blockingContentIssues(store.getState().notifications), [])
+})
 
 test('replayed events and duplicate run/file events produce one alert and one unread item', () => {
   const store = makeStore()

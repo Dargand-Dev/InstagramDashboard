@@ -325,7 +325,7 @@ function DeviceDetailSheet({ device, liveDevice, open, onOpenChange }) {
       onOpenChange(nextOpen)
     }}>
       <DialogContent
-        className="bg-[#0A0A0A] border-[#1a1a1a] w-[92vw] sm:max-w-3xl max-h-[88vh] flex flex-col p-0 gap-0"
+        className="bg-[#0A0A0A] border-[#1a1a1a] w-[92vw] sm:max-w-3xl max-h-[88vh] flex flex-col overflow-hidden p-0 gap-0"
       >
         <DialogHeader className="border-b border-[#1a1a1a] px-6 py-4 shrink-0">
           <DialogTitle className="text-[#FAFAFA] flex items-center gap-2">
@@ -364,7 +364,7 @@ function DeviceDetailSheet({ device, liveDevice, open, onOpenChange }) {
           ))}
         </div>
 
-        <ScrollArea className="flex-1">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="px-6 py-5">
             {activeTab === 'info' && (
               <div className="space-y-5 pb-2">
@@ -526,7 +526,7 @@ function DeviceDetailSheet({ device, liveDevice, open, onOpenChange }) {
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   )

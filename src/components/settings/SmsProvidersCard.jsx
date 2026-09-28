@@ -80,7 +80,7 @@ export default function SmsProvidersCard() {
         <CardHeader>
           <CardTitle className="text-sm text-[#A1A1AA] flex items-center gap-2">
             <MessageSquare className="w-4 h-4 text-[#10B981]" />
-            SMS Providers
+            Fournisseurs SMS
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -100,7 +100,7 @@ export default function SmsProvidersCard() {
         <CardHeader>
           <CardTitle className="text-sm text-[#A1A1AA] flex items-center gap-2">
             <MessageSquare className="w-4 h-4 text-[#10B981]" />
-            SMS Providers
+            Fournisseurs SMS
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -161,7 +161,7 @@ export default function SmsProvidersCard() {
       <CardHeader>
         <CardTitle className="text-sm text-[#A1A1AA] flex items-center gap-2">
           <MessageSquare className="w-4 h-4 text-[#10B981]" />
-          SMS Providers
+          Fournisseurs SMS
         </CardTitle>
         <CardAction>
           <Button
@@ -366,8 +366,9 @@ export default function SmsProvidersCard() {
         )}
 
         <p className="text-[10px] text-[#3F3F46]">
-          Appliqué à la prochaine location de numéro, sans redémarrage du backend. Les clés API,
-          services et pays de chaque provider restent dans <span className="font-mono">application.yml</span>.
+          Le mode et l’ordre des providers s’appliquent à la prochaine location de numéro, sans redémarrage.
+          Les clés API, services et pays se modifient dans la configuration de l’application ci-dessus et
+          prennent effet après redémarrage. Les choix enregistrés ici gardent la priorité sur les valeurs de démarrage.
         </p>
       </CardContent>
     </Card>

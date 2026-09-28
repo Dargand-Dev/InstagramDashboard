@@ -17,12 +17,12 @@ import {
 } from '@/components/ui/select'
 import EmptyState from '@/components/shared/EmptyState'
 import SmsProvidersCard from '@/components/settings/SmsProvidersCard'
+import ApplicationSettingsCard from '@/components/settings/ApplicationSettingsCard'
 import BackendRestartControl from '@/components/settings/BackendRestartControl'
 import { toast } from 'sonner'
 import {
-  Settings as SettingsIcon, Users, Calendar, Server,
-  Lock, Info, Plus, Pencil, Trash2, Eye, EyeOff,
-  CheckCircle, XCircle, Clock,
+  Users, Server,
+  Lock, Plus, Pencil, Trash2, Eye, EyeOff,
 } from 'lucide-react'
 
 function IdentityRow({ identity, onEdit, onDelete }) {
@@ -73,7 +73,7 @@ function IdentityDialog({ open, onOpenChange, identity, onSave, isPending }) {
   const isEdit = !!identity?.id
 
   const handleSave = () => {
-    if (!name.trim()) { toast.error('Name is required'); return }
+    if (!name.trim()) { toast.error('Le nom est obligatoire'); return }
     onSave({
       ...identity,
       identityId: name.trim(),
@@ -88,29 +88,29 @@ function IdentityDialog({ open, onOpenChange, identity, onSave, isPending }) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-[#111111] border-[#1a1a1a] text-[#FAFAFA] max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-sm">{isEdit ? 'Edit Identity' : 'Add Identity'}</DialogTitle>
+          <DialogTitle className="text-sm">{isEdit ? 'Modifier une identité' : 'Ajouter une identité'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label className="text-xs text-[#A1A1AA]">Name</Label>
+            <Label className="text-xs text-[#A1A1AA]">Nom</Label>
             <Input
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="Identity name"
+              placeholder="Nom de l’identité"
               className="bg-[#0A0A0A] border-[#1a1a1a] text-[#FAFAFA]"
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-xs text-[#A1A1AA]">Drive Folder (optional)</Label>
+            <Label className="text-xs text-[#A1A1AA]">Dossier Drive (facultatif)</Label>
             <Input
               value={driveFolder}
               onChange={e => setDriveFolder(e.target.value)}
-              placeholder="Google Drive folder ID or path"
+              placeholder="Identifiant ou chemin du dossier Google Drive"
               className="bg-[#0A0A0A] border-[#1a1a1a] text-[#FAFAFA]"
             />
           </div>
           <div className="space-y-2">
-            <Label className="text-xs text-[#A1A1AA]">GetMySocial template link ID (optional)</Label>
+            <Label className="text-xs text-[#A1A1AA]">Identifiant du modèle GetMySocial (facultatif)</Label>
             <Input
               value={gmsSourceLinkId}
               onChange={e => setGmsSourceLinkId(e.target.value)}
@@ -142,9 +142,9 @@ function IdentityDialog({ open, onOpenChange, identity, onSave, isPending }) {
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="text-[#A1A1AA]">Cancel</Button>
+            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="text-[#A1A1AA]">Annuler</Button>
           <Button size="sm" className="bg-[#3B82F6] hover:bg-[#2563EB] text-white" onClick={handleSave} disabled={isPending}>
-            {isPending ? 'Saving...' : 'Save'}
+            {isPending ? 'Enregistrement…' : 'Enregistrer'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -165,23 +165,16 @@ export default function Settings() {
     queryFn: () => apiGet('/api/identities'),
   })
 
-  const { data: scheduleData, isLoading: scheduleLoading } = useQuery({
-    queryKey: ['schedule'],
-    queryFn: () => apiGet('/api/automation/schedule'),
-  })
-
   const identities = useMemo(() => {
     const raw = identitiesData?.data || identitiesData || []
     return Array.isArray(raw) ? raw : []
   }, [identitiesData])
 
-  const schedule = scheduleData?.data || scheduleData || {}
-
   // Identity mutations
   const createIdentity = useMutation({
     mutationFn: (data) => apiPost('/api/identities', data),
     onSuccess: () => {
-      toast.success('Identity created')
+      toast.success('Identité créée')
       queryClient.invalidateQueries({ queryKey: ['identities'] })
       setIdentityDialog({ open: false, identity: null })
     },
@@ -190,7 +183,7 @@ export default function Settings() {
   const updateIdentity = useMutation({
     mutationFn: (data) => apiPut(`/api/identities/${data.identityId}`, data),
     onSuccess: () => {
-      toast.success('Identity updated')
+      toast.success('Identité mise à jour')
       queryClient.invalidateQueries({ queryKey: ['identities'] })
       setIdentityDialog({ open: false, identity: null })
     },
@@ -199,7 +192,7 @@ export default function Settings() {
   const deleteIdentity = useMutation({
     mutationFn: (id) => apiDelete(`/api/identities/${id}`),
     onSuccess: () => {
-      toast.success('Identity deleted')
+      toast.success('Identité supprimée')
       queryClient.invalidateQueries({ queryKey: ['identities'] })
       setDeleteTarget(null)
     },
@@ -214,22 +207,22 @@ export default function Settings() {
   const changePassword = useMutation({
     mutationFn: (data) => apiPost('/api/auth/change-password', data),
     onSuccess: () => {
-      toast.success('Password changed')
+      toast.success('Mot de passe modifié')
       setPasswordForm({ current: '', new: '', confirm: '' })
     },
   })
 
   const handleChangePassword = () => {
     if (!passwordForm.current || !passwordForm.new) {
-      toast.error('Please fill in all fields')
+      toast.error('Renseignez tous les champs')
       return
     }
     if (passwordForm.new !== passwordForm.confirm) {
-      toast.error('Passwords do not match')
+      toast.error('Les mots de passe ne correspondent pas')
       return
     }
     if (passwordForm.new.length < 6) {
-      toast.error('Password must be at least 6 characters')
+      toast.error('Le mot de passe doit contenir au moins 6 caractères')
       return
     }
     changePassword.mutate({
@@ -242,6 +235,8 @@ export default function Settings() {
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-[#FAFAFA]">Configuration</h1>
 
+      <ApplicationSettingsCard />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* SMS Providers */}
         <SmsProvidersCard />
@@ -251,7 +246,7 @@ export default function Settings() {
           <CardHeader>
             <CardTitle className="text-sm text-[#A1A1AA] flex items-center gap-2">
               <Users className="w-4 h-4 text-[#8B5CF6]" />
-              Identities
+              Identités
             </CardTitle>
             <CardAction>
               <Button
@@ -260,7 +255,7 @@ export default function Settings() {
                 className="text-xs text-[#3B82F6] hover:text-[#3B82F6] hover:bg-[#3B82F6]/10"
                 onClick={() => setIdentityDialog({ open: true, identity: null })}
               >
-                <Plus className="w-3 h-3 mr-1" />Add
+                <Plus className="w-3 h-3 mr-1" />Ajouter
               </Button>
             </CardAction>
           </CardHeader>
@@ -281,71 +276,7 @@ export default function Settings() {
                 ))}
               </div>
             ) : (
-              <EmptyState icon={Users} title="No identities" description="Add your first identity to get started" />
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Scheduler Config */}
-        <Card className="bg-[#111111] border-[#1a1a1a]">
-          <CardHeader>
-            <CardTitle className="text-sm text-[#A1A1AA] flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-[#3B82F6]" />
-              Scheduler
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {scheduleLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-10 w-full bg-[#1a1a1a]" />
-                <Skeleton className="h-10 w-full bg-[#1a1a1a]" />
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 rounded-lg bg-[#0A0A0A] border border-[#1a1a1a]">
-                  <div className="flex items-center gap-2">
-                    {schedule.enabled !== false ? (
-                      <CheckCircle className="w-4 h-4 text-[#22C55E]" />
-                    ) : (
-                      <XCircle className="w-4 h-4 text-[#EF4444]" />
-                    )}
-                    <span className="text-sm text-[#FAFAFA]">
-                      {schedule.enabled !== false ? 'Enabled' : 'Disabled'}
-                    </span>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className={schedule.enabled !== false
-                      ? 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/20'
-                      : 'bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/20'
-                    }
-                  >
-                    {schedule.enabled !== false ? 'ON' : 'OFF'}
-                  </Badge>
-                </div>
-
-                {(schedule.windows || schedule.postingWindows || schedule.timeWindows) && (
-                  <div className="p-3 rounded-lg bg-[#0A0A0A] border border-[#1a1a1a]">
-                    <p className="text-xs text-[#52525B] mb-2">Posting Windows</p>
-                    <div className="space-y-1">
-                      {(schedule.windows || schedule.postingWindows || schedule.timeWindows || []).map((w, i) => (
-                        <div key={i} className="flex items-center gap-2 text-xs">
-                          <Clock className="w-3 h-3 text-[#52525B]" />
-                          <span className="text-[#A1A1AA]">
-                            {w.start || `${w.startHour}:00`} — {w.end || `${w.endHour}:00`}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-3">
-                  <p className="text-xs text-[#F59E0B]">
-                    Scheduler config is managed via YAML. Edit the backend configuration file to change windows or enable/disable.
-                  </p>
-                </div>
-              </div>
+              <EmptyState icon={Users} title="Aucune identité" description="Ajoutez une première identité pour commencer" />
             )}
           </CardContent>
         </Card>
@@ -355,13 +286,13 @@ export default function Settings() {
           <CardHeader>
             <CardTitle className="text-sm text-[#A1A1AA] flex items-center gap-2">
               <Lock className="w-4 h-4 text-[#F59E0B]" />
-              Authentication
+              Authentification
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label className="text-xs text-[#A1A1AA]">Current Password</Label>
+                <Label className="text-xs text-[#A1A1AA]">Mot de passe actuel</Label>
                 <div className="relative">
                   <Input
                     type={showPassword ? 'text' : 'password'}
@@ -378,7 +309,7 @@ export default function Settings() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label className="text-xs text-[#A1A1AA]">New Password</Label>
+                <Label className="text-xs text-[#A1A1AA]">Nouveau mot de passe</Label>
                 <Input
                   type="password"
                   value={passwordForm.new}
@@ -387,7 +318,7 @@ export default function Settings() {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs text-[#A1A1AA]">Confirm New Password</Label>
+                <Label className="text-xs text-[#A1A1AA]">Confirmer le nouveau mot de passe</Label>
                 <Input
                   type="password"
                   value={passwordForm.confirm}
@@ -401,7 +332,7 @@ export default function Settings() {
                 onClick={handleChangePassword}
                 disabled={changePassword.isPending}
               >
-                {changePassword.isPending ? 'Changing...' : 'Change Password'}
+                {changePassword.isPending ? 'Modification…' : 'Modifier le mot de passe'}
               </Button>
             </div>
           </CardContent>
@@ -412,19 +343,18 @@ export default function Settings() {
           <CardHeader>
             <CardTitle className="text-sm text-[#A1A1AA] flex items-center gap-2">
               <Server className="w-4 h-4 text-[#22C55E]" />
-              System
+              Système
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               {[
-                { label: 'Dashboard', value: 'v2.0.0', icon: Info },
-                { label: 'API Backend', value: 'localhost:8081', icon: Server },
-                { label: 'Framework', value: 'React 19 + Vite', icon: SettingsIcon },
-              ].map(({ label, value, icon: Icon }) => (
+                { label: 'Dashboard', value: 'v2.0.0' },
+                { label: 'API Backend', value: 'localhost:8081' },
+                { label: 'Framework', value: 'React 19 + Vite' },
+              ].map(({ label, value }) => (
                 <div key={label} className="flex items-center justify-between py-2 border-b border-[#1a1a1a] last:border-0">
                   <div className="flex items-center gap-2">
-                    <Icon className="w-3.5 h-3.5 text-[#52525B]" />
                     <span className="text-xs text-[#52525B]">{label}</span>
                   </div>
                   <span className="text-xs text-[#A1A1AA] font-mono">{value}</span>
@@ -452,20 +382,20 @@ export default function Settings() {
       <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <DialogContent className="bg-[#111111] border-[#1a1a1a] text-[#FAFAFA] max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-sm">Delete Identity</DialogTitle>
+          <DialogTitle className="text-sm">Supprimer l’identité</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-[#A1A1AA]">
-            Are you sure you want to delete <span className="text-[#FAFAFA] font-medium">{deleteTarget?.identityId || deleteTarget?.name || deleteTarget?.identityName}</span>?
+            Voulez-vous supprimer <span className="text-[#FAFAFA] font-medium">{deleteTarget?.identityId || deleteTarget?.name || deleteTarget?.identityName}</span> ?
           </p>
           <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(null)} className="text-[#A1A1AA]">Cancel</Button>
+            <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(null)} className="text-[#A1A1AA]">Annuler</Button>
             <Button
               size="sm"
               className="bg-[#EF4444] hover:bg-[#DC2626] text-white"
               onClick={() => deleteIdentity.mutate(deleteTarget.identityId)}
               disabled={deleteIdentity.isPending}
             >
-              {deleteIdentity.isPending ? 'Deleting...' : 'Delete'}
+              {deleteIdentity.isPending ? 'Suppression…' : 'Supprimer'}
             </Button>
           </DialogFooter>
         </DialogContent>

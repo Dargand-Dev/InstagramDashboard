@@ -36,7 +36,10 @@ export default function ExecutionTimeline({ runs }) {
   const windowMs = Math.max(now - Math.min(...rows.map(row => row.start)), 30 * 60 * 1000)
   const windowStart = now - windowMs
   const legend = new Set(['COMPLETED', 'FAILED', 'RUNNING', 'SKIPPED'])
-  rows.forEach(row => row.segments.forEach(segment => legend.add(segment.status)))
+  rows.forEach(row => {
+    legend.add(row.status)
+    row.segments.forEach(segment => legend.add(segment.status))
+  })
   const legendItems = [...new Map([...legend].map(status => {
     const appearance = TIMELINE_STATUSES[status] || TIMELINE_STATUSES.UNKNOWN
     return [appearance.label, appearance]
@@ -58,26 +61,36 @@ export default function ExecutionTimeline({ runs }) {
             {row.name}
           </span>
           <div className="flex-1 h-5 bg-surface rounded relative overflow-hidden">
-            {row.segments.map(segment => {
-              const appearance = TIMELINE_STATUSES[segment.status] || TIMELINE_STATUSES.UNKNOWN
-              const label = [row.name, row.device, segment.name !== row.name && segment.name, appearance.label, formatDuration(segment.duration)]
-                .filter(Boolean).join(' · ')
-              return (
-                <div
-                  key={segment.key}
-                  role="img"
-                  aria-label={label}
-                  title={label}
-                  className="absolute h-full min-w-[2px] rounded-sm border-r border-surface/50 transition-all duration-300"
-                  style={{
-                    left: `${((segment.start - windowStart) / windowMs) * 100}%`,
-                    width: `${((segment.end - segment.start) / windowMs) * 100}%`,
-                    backgroundColor: appearance.color,
-                    opacity: 0.85,
-                  }}
-                />
-              )
-            })}
+            <div
+              className="absolute h-full min-w-[2px] rounded overflow-hidden transition-all duration-300"
+              title={`${row.name} · ${row.device} · ${(TIMELINE_STATUSES[row.status] || TIMELINE_STATUSES.UNKNOWN).label}`}
+              style={{
+                left: `${((row.start - windowStart) / windowMs) * 100}%`,
+                width: `${(row.duration / windowMs) * 100}%`,
+                backgroundColor: (TIMELINE_STATUSES[row.status] || TIMELINE_STATUSES.UNKNOWN).color,
+                opacity: 0.85,
+              }}
+            >
+              {row.segments.map(segment => {
+                const appearance = TIMELINE_STATUSES[segment.status] || TIMELINE_STATUSES.UNKNOWN
+                const label = [row.name, row.device, segment.name !== row.name && segment.name, appearance.label, formatDuration(segment.duration)]
+                  .filter(Boolean).join(' · ')
+                return (
+                  <div
+                    key={segment.key}
+                    role="img"
+                    aria-label={label}
+                    title={label}
+                    className="absolute h-full transition-all duration-300"
+                    style={{
+                      left: `${((segment.start - row.start) / row.duration) * 100}%`,
+                      width: `${((segment.end - segment.start) / row.duration) * 100}%`,
+                      backgroundColor: appearance.color,
+                    }}
+                  />
+                )
+              })}
+            </div>
           </div>
         </div>
       ))}

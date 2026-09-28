@@ -4,6 +4,56 @@ import { buildTimelineRows } from './timelineData.js'
 
 const NOW = Date.parse('2026-09-28T12:00:00Z')
 
+test('neighboring colors each cover half the gap without changing account durations', () => {
+  const [row] = buildTimelineRows([{
+    runId: 'midpoints', startedAt: NOW - 3600000, status: 'RUNNING', accountEntries: [
+      { containerName: 'done', status: 'COMPLETED', startedAt: NOW - 3600000, completedAt: NOW - 3000000 },
+      { containerName: 'failed', status: 'FAILED', startedAt: NOW - 2400000, completedAt: NOW - 1800000 },
+      { containerName: 'live', status: 'RUNNING', startedAt: NOW - 600000 },
+    ],
+  }], NOW)
+  assert.deepEqual(row.segments.map(({ displayStart, displayEnd }) => [displayStart, displayEnd]), [
+    [NOW - 3600000, NOW - 2700000],
+    [NOW - 2700000, NOW - 1200000],
+    [NOW - 1200000, NOW],
+  ])
+  assert.deepEqual(row.segments.map(({ start, end, duration }) => [start, end, duration]), [
+    [NOW - 3600000, NOW - 3000000, 600000],
+    [NOW - 2400000, NOW - 1800000, 600000],
+    [NOW - 600000, NOW, 600000],
+  ])
+})
+
+test('gap midpoints follow timestamps even when account order differs or intervals overlap', () => {
+  const [row] = buildTimelineRows([{
+    runId: 'unordered', startedAt: NOW - 4000, status: 'RUNNING', accountEntries: [
+      { containerName: 'last', status: 'FAILED', startedAt: NOW - 1000, completedAt: NOW - 500 },
+      { containerName: 'long', status: 'COMPLETED', startedAt: NOW - 4000, completedAt: NOW - 2000 },
+      { containerName: 'nested', status: 'COMPLETED', startedAt: NOW - 3000, completedAt: NOW - 2500 },
+    ],
+  }], NOW)
+  assert.deepEqual(row.segments.map(({ name, displayStart, displayEnd }) => [name, displayStart, displayEnd]), [
+    ['long', NOW - 4000, NOW - 1500],
+    ['nested', NOW - 3000, NOW - 2500],
+    ['last', NOW - 1500, NOW - 500],
+  ])
+})
+
+test('touching intervals and a run without account timings retain their original bounds', () => {
+  const [row, fallback] = buildTimelineRows([
+    { runId: 'touching', startedAt: NOW - 2000, status: 'RUNNING', accountEntries: [
+      { containerName: 'done', status: 'COMPLETED', startedAt: NOW - 2000, completedAt: NOW - 1000 },
+      { containerName: 'live', status: 'RUNNING', startedAt: NOW - 1000 },
+    ] },
+    { runId: 'fallback', startedAt: NOW - 2000, status: 'RUNNING' },
+  ], NOW)
+  assert.deepEqual(row.segments.map(({ displayStart, displayEnd }) => [displayStart, displayEnd]), [
+    [NOW - 2000, NOW - 1000], [NOW - 1000, NOW],
+  ])
+  assert.equal(fallback.segments[0].displayStart, NOW - 2000)
+  assert.equal(fallback.segments[0].displayEnd, NOW)
+})
+
 test('active batch segments preserve done, failed and growing running intervals', () => {
   const run = {
     runId: 'wf-live', workflowName: 'PostReel', deviceName: 'Phone 1',

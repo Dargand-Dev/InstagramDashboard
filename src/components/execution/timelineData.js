@@ -77,6 +77,25 @@ function accountSegments(run, start, end) {
   })
 }
 
+function joinSegmentGaps(segments) {
+  const displaySegments = segments
+    .map(segment => ({ ...segment, displayStart: segment.start, displayEnd: segment.end }))
+    .sort((a, b) => a.start - b.start)
+  let previous = displaySegments[0]
+
+  for (const segment of displaySegments.slice(1)) {
+    if (segment.start > previous.end) {
+      const midpoint = previous.end + (segment.start - previous.end) / 2
+      previous.displayEnd = midpoint
+      segment.displayStart = midpoint
+    }
+    // An overlapping, shorter interval must not move the covered edge backward.
+    if (segment.end > previous.end) previous = segment
+  }
+
+  return displaySegments
+}
+
 export function buildTimelineRows(runs, now = Date.now()) {
   if (!Array.isArray(runs) || !Number.isFinite(now)) return []
   const rows = new Map()
@@ -105,9 +124,9 @@ export function buildTimelineRows(runs, now = Date.now()) {
       end,
       duration: end - start,
       status,
-      segments: segments.length > 0 ? segments : [{
+      segments: joinSegmentGaps(segments.length > 0 ? segments : [{
         key: `${runId}-run`, name, status, start, end, duration: end - start,
-      }],
+      }]),
     })
     if (completed) completedIds.add(runId)
   })

@@ -83,8 +83,8 @@ export default function ExecutionTimeline({ runs }) {
                     title={label}
                     className="absolute h-full transition-all duration-300"
                     style={{
-                      left: `${((segment.start - row.start) / row.duration) * 100}%`,
-                      width: `${((segment.end - segment.start) / row.duration) * 100}%`,
+                      left: `${((segment.displayStart - row.start) / row.duration) * 100}%`,
+                      width: `${((segment.displayEnd - segment.displayStart) / row.duration) * 100}%`,
                       backgroundColor: appearance.color,
                     }}
                   />

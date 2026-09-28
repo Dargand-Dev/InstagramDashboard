@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { apiGet, apiPost, apiPut } from '@/lib/api'
+import { apiGet, apiPost } from '@/lib/api'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,7 @@ import {
 import { Collapsible } from '@/components/ui/collapsible'
 import StatusBadge from '@/components/shared/StatusBadge'
 import { deriveDisplayStatus } from '@/utils/status'
+import ExecutionTimeline from '@/components/execution/ExecutionTimeline'
 import LogViewer from '@/components/shared/LogViewer'
 import TimeAgo from '@/components/shared/TimeAgo'
 import EmptyState from '@/components/shared/EmptyState'
@@ -72,103 +73,6 @@ function ElapsedTime({ startedAt }) {
     return () => clearInterval(id)
   }, [startedAt])
   return <span className="tabular-nums">{formatDuration(elapsed)}</span>
-}
-
-const STATUS_COLORS = {
-  RUNNING: '#3B82F6',
-  COMPLETED: '#22C55E',
-  SUCCESS: '#22C55E',
-  FAILED: '#EF4444',
-  ERROR: '#EF4444',
-  QUEUED: '#8B5CF6',
-  DISCONNECTED: '#F59E0B',
-  AUTO_SUSPENDED: '#A855F7',
-}
-
-function formatTimeLabel(ms) {
-  if (ms < 60 * 1000) return `${Math.round(ms / 1000)}s ago`
-  if (ms < 60 * 60 * 1000) return `${Math.round(ms / 60000)}m ago`
-  const h = Math.floor(ms / 3600000)
-  const m = Math.round((ms % 3600000) / 60000)
-  return m > 0 ? `${h}h${m}m ago` : `${h}h ago`
-}
-
-function ExecutionTimeline({ runs }) {
-  const now = Date.now()
-  const MIN_WINDOW = 30 * 60 * 1000 // 30 min minimum
-
-  // First pass: compute raw start/end for each run
-  const rawData = (runs || []).filter(r => r.startedAt).map((run) => {
-    const start = new Date(run.startedAt).getTime()
-    const end = run.completedAt ? new Date(run.completedAt).getTime() : now
-    return {
-      name: run.workflowName || run.workflow || 'Run',
-      start,
-      end: Math.min(end, now),
-      duration: end - start,
-      status: run.status || 'RUNNING',
-      device: run.deviceName || run.device,
-      runId: run.runId || run.id,
-    }
-  })
-
-  // Compute window: from the earliest run start to now, with a minimum of 30 min
-  const earliestStart = rawData.length > 0
-    ? Math.min(...rawData.map(d => d.start))
-    : now - MIN_WINDOW
-  const windowMs = Math.max(now - earliestStart, MIN_WINDOW)
-  const windowStart = now - windowMs
-
-  const chartData = rawData.filter(d => d.end > windowStart)
-
-  if (chartData.length === 0) {
-    return (
-      <div className="flex items-center justify-center py-6 text-[#52525B] text-xs">
-        No recent executions
-      </div>
-    )
-  }
-
-  const data = chartData.map(d => ({
-    ...d,
-    offset: ((Math.max(d.start, windowStart) - windowStart) / windowMs) * 100,
-    width: ((d.end - Math.max(d.start, windowStart)) / windowMs) * 100,
-  }))
-
-  const midMs = windowMs / 2
-
-  return (
-    <div className="space-y-2">
-      {data.map((d, i) => (
-        <div key={d.runId || i} className="group relative">
-          <div className="flex items-center gap-2 h-7">
-            <span className="text-xs text-[#52525B] w-24 truncate shrink-0">{d.name}</span>
-            <div className="flex-1 h-5 bg-[#0A0A0A] rounded relative overflow-hidden">
-              <div
-                className="absolute h-full rounded transition-all duration-300"
-                style={{
-                  left: `${d.offset}%`,
-                  width: `${Math.max(d.width, 1)}%`,
-                  background: STATUS_COLORS[d.status] || '#52525B',
-                  opacity: 0.8,
-                }}
-              />
-            </div>
-          </div>
-          <div className="absolute left-28 top-0 hidden group-hover:flex items-center h-7 pointer-events-none z-10">
-            <div className="bg-[#1a1a1a] border border-[#1a1a1a] rounded-md px-2 py-1 text-xs text-[#FAFAFA] shadow-lg whitespace-nowrap">
-              {d.name} · {d.device} · {formatDuration(d.duration)}
-            </div>
-          </div>
-        </div>
-      ))}
-      <div className="flex justify-between text-[10px] text-[#3f3f46] px-[104px]">
-        <span>{formatTimeLabel(windowMs)}</span>
-        <span>{formatTimeLabel(midMs)}</span>
-        <span>now</span>
-      </div>
-    </div>
-  )
 }
 
 function formatEta(ms) {
@@ -495,7 +399,6 @@ export default function ExecutionCenter() {
     return raw.runs || []
   })()
   const timelineRuns = [...(Array.isArray(runs) ? runs : []), ...(Array.isArray(allRuns) ? allRuns : [])]
-    .filter((r, i, arr) => arr.findIndex(x => (x.runId || x.id) === (r.runId || r.id)) === i)
 
   // Backend returns { queues: { deviceUdid: [tasks] }, totalQueued, ... }
   const queue = (() => {

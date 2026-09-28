@@ -28,7 +28,7 @@ export default function ExecutionTimeline({ runs }) {
   if (rows.length === 0) {
     return (
       <div className="flex items-center justify-center py-6 text-text-muted text-xs">
-        No recent executions
+        No active executions
       </div>
     )
   }

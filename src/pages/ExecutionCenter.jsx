@@ -337,12 +337,6 @@ export default function ExecutionCenter() {
     refetchInterval: isConnected ? 5000 : 10000,
   })
 
-  const { data: recentRuns } = useQuery({
-    queryKey: ['recent-runs-timeline'],
-    queryFn: () => apiGet('/api/automation/runs?limit=20'),
-    refetchInterval: isConnected ? false : 10000,
-  })
-
   const { data: queueData } = useQuery({
     queryKey: ['queue-preview'],
     queryFn: () => apiGet('/api/queue'),
@@ -368,7 +362,6 @@ export default function ExecutionCenter() {
     const unsubs = [
       subscribe('/topic/executions/status', () => {
         queryClient.invalidateQueries({ queryKey: ['active-runs'] })
-        queryClient.invalidateQueries({ queryKey: ['recent-runs-timeline'] })
         queryClient.invalidateQueries({ queryKey: ['queue-preview'] })
       }),
       subscribe('/topic/devices/status', () => {
@@ -392,13 +385,6 @@ export default function ExecutionCenter() {
   })
 
   const runs = activeRuns?.data || activeRuns || []
-  // Backend returns { totalRuns, showing, runs: [...] }
-  const allRuns = (() => {
-    const raw = recentRuns?.data || recentRuns || {}
-    if (Array.isArray(raw)) return raw
-    return raw.runs || []
-  })()
-  const timelineRuns = [...(Array.isArray(runs) ? runs : []), ...(Array.isArray(allRuns) ? allRuns : [])]
 
   // Backend returns { queues: { deviceUdid: [tasks] }, totalQueued, ... }
   const queue = (() => {
@@ -420,7 +406,7 @@ export default function ExecutionCenter() {
           <CardTitle className="text-sm text-[#A1A1AA]">Execution Timeline</CardTitle>
         </CardHeader>
         <CardContent>
-          <ExecutionTimeline runs={timelineRuns} />
+          <ExecutionTimeline runs={runs} />
         </CardContent>
       </Card>
 

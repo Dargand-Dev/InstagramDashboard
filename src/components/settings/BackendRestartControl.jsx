@@ -1,3 +1,4 @@
+import { SETTINGS_THEME } from './settingsTheme'
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -59,7 +60,7 @@ export default function BackendRestartControl() {
 
   if (!isLocalBrowser || error) {
     return (
-      <p className="text-xs text-[#52525B]">
+      <p className="text-xs text-muted-foreground">
         Redémarrage du backend indisponible : {error?.message || 'ouvrez le dashboard sur localhost'}.
       </p>
     )
@@ -70,18 +71,18 @@ export default function BackendRestartControl() {
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <Power className="w-3.5 h-3.5 text-[#52525B]" />
-            <span className="text-xs text-[#A1A1AA]">Backend Spring Boot</span>
+            <Power className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Backend Spring Boot</span>
             {badge && (
               <Badge variant="outline" className={`text-[10px] ${badge.className}`}>{badge.label}</Badge>
             )}
           </div>
-          {status && <p className="text-xs text-[#52525B] mt-1 truncate">{describe(status)}</p>}
+          {status && <p className="text-xs text-muted-foreground mt-1 truncate">{describe(status)}</p>}
         </div>
         <Button
           variant="outline"
           size="sm"
-          className="text-xs border-[#27272A] text-[#FAFAFA] hover:bg-[#1a1a1a]"
+          className="text-xs border-[#27272A] text-foreground hover:bg-[#1a1a1a]"
           disabled={!status || inProgress || restart.isPending}
           onClick={() => setConfirmOpen(true)}
         >
@@ -94,23 +95,23 @@ export default function BackendRestartControl() {
         <div className="rounded-lg border border-[#EF4444]/20 bg-[#EF4444]/5 p-3 space-y-2">
           <p className="text-xs text-[#EF4444]">{status.error}</p>
           {status.logTail && (
-            <pre className="max-h-48 overflow-auto rounded bg-[#0A0A0A] p-2 text-[10px] leading-4 text-[#A1A1AA] font-mono whitespace-pre-wrap break-all">
+            <pre className="max-h-48 overflow-auto rounded bg-[#0A0A0A] p-2 text-[10px] leading-4 text-muted-foreground font-mono whitespace-pre-wrap break-all">
               {status.logTail}
             </pre>
           )}
-          <p className="text-[10px] text-[#52525B] font-mono break-all">{status.logFile}</p>
+          <p className="text-[10px] text-muted-foreground font-mono break-all">{status.logFile}</p>
         </div>
       )}
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent className="bg-[#111111] border-[#1a1a1a] text-[#FAFAFA] max-w-md">
+        <DialogContent style={SETTINGS_THEME} className="max-w-md">
           <DialogHeader>
             <DialogTitle className="text-sm">Redémarrer le backend ?</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2 text-sm text-[#A1A1AA]">
+          <div className="space-y-2 text-sm text-muted-foreground">
             <p>
               Le processus qui écoute sur le port {status?.port} sera arrêté, puis relancé avec{' '}
-              <code className="font-mono text-xs text-[#FAFAFA]">{status?.startCommand}</code> (le code est recompilé).
+              <code className="font-mono text-xs text-foreground">{status?.startCommand}</code> (le code est recompilé).
             </p>
             <ul className="list-disc pl-5 space-y-1 text-xs">
               <li>Les tâches en cours et en file d'attente seront annulées.</li>
@@ -121,7 +122,7 @@ export default function BackendRestartControl() {
             </ul>
           </div>
           <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => setConfirmOpen(false)} className="text-[#A1A1AA]">
+            <Button variant="ghost" size="sm" onClick={() => setConfirmOpen(false)} className="text-muted-foreground">
               Annuler
             </Button>
             <Button

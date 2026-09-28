@@ -1,289 +1,175 @@
 import { useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPut } from '@/lib/api'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Switch } from '@/components/ui/switch'
-import { AlertTriangle, Plus, RotateCcw, Save, Search, Settings2, Trash2 } from 'lucide-react'
-import { toast } from 'sonner'
-import { changeForValue, makeApplicationSettingsPayload, updateApplicationSettingsDraft } from './applicationSettingsDraft'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { SETTINGS_THEME } from './settingsTheme'
+import { AlertTriangle, ArrowRight, CalendarDays, Check, ChevronDown, ChevronRight, Code2, Info, LoaderCircle, MessageSquare, Plug, RotateCw, Save, Search, ShieldCheck, SlidersHorizontal, Smartphone, UserRoundPlus, Users, X } from 'lucide-react'
+import useApplicationSettings from './useApplicationSettings'
+import SettingField from './SettingField'
+import SmsProvidersCard from './SmsProvidersCard'
+import IdentitiesSettings from './IdentitiesSettings'
+import BackendRestartControl from './BackendRestartControl'
+import { SETTINGS_SECTIONS, presentSettingsGroups, filterSettingsGroups } from './settingsPresentation'
+import { cn } from '@/lib/utils'
 
-const SETTINGS_URL = '/api/settings/application'
+const ICONS = { publications: CalendarDays, accounts: UserRoundPlus, sms: MessageSquare, identities: Users, connections: Plug, devices: Smartphone, security: ShieldCheck, system: SlidersHorizontal }
 
-function displayValue(field, value) {
-  if (field.secret) return field.activeConfigured ? 'Secret configuré' : 'Secret absent'
-  if (value == null) return 'Non défini'
-  if (field.type === 'boolean') return value ? 'Activé' : 'Désactivé'
-  if (field.type === 'string-list') return value.length ? value.join(', ') : 'Liste vide'
-  if (field.type === 'windows') return value.length ? value.map(w => `${w.start}–${w.end}`).join(', ') : 'Aucun créneau'
-  return String(value)
+function SettingsGroup({ group, controller, technical, searching }) {
+  const [expanded, setExpanded] = useState(false)
+  const changed = group.fields.filter(field => controller.changes[field.key]).length
+  const fields = <div className="min-w-0">{group.fields.map(field => <SettingField key={field.key} field={field}
+    change={controller.changes[field.key]} technical={technical} controller={controller} />)}</div>
+  if (group.advanced && !searching) return <Collapsible open={expanded} onOpenChange={setExpanded} className="rounded-xl border border-border bg-card">
+    <CollapsibleTrigger className="flex w-full items-center gap-3 rounded-xl p-5 text-left outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring sm:px-6">
+      <div className="min-w-0 flex-1"><h3 className="text-sm font-medium">{group.label}</h3><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{group.description}</p></div>
+      {changed > 0 ? <span className="rounded-full bg-blue-400/15 px-2 py-0.5 text-xs text-blue-300">{changed} modifié{changed > 1 ? 's' : ''}</span>
+        : <span className="text-xs tabular-nums text-muted-foreground">{group.fields.length}</span>}
+      <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground', expanded && 'rotate-180')} />
+    </CollapsibleTrigger>
+    <CollapsibleContent><div className="border-t border-border p-5 sm:px-6">{fields}</div></CollapsibleContent>
+  </Collapsible>
+  return <Card className="gap-5 py-6 ring-border">
+    <CardHeader className="px-5 sm:px-6">
+      {searching && <p className="mb-1 text-xs font-medium text-blue-300">{SETTINGS_SECTIONS.find(section => section.id === group.section)?.label}</p>}
+      <CardTitle><h3 className="text-base font-semibold">{group.label}</h3></CardTitle>
+      <CardDescription className="leading-relaxed">{group.description}</CardDescription>
+    </CardHeader>
+    <CardContent className="px-5 sm:px-6">{fields}</CardContent>
+  </Card>
 }
 
-function ArrayEditor({ field, value, onChange, disabled }) {
-  const entries = Array.isArray(value) ? value : []
-  const isWindows = field.type === 'windows'
-  const replace = (index, entry) => onChange(entries.map((current, i) => i === index ? entry : current))
-
-  return (
-    <div className="flex flex-col gap-2">
-      {entries.map((entry, index) => (
-        <div key={index} className="flex min-w-0 items-center gap-2">
-          {isWindows ? (
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <Input type="time" step="60" aria-label={`${field.label}, créneau ${index + 1}, début`} value={entry.start ?? ''}
-                onChange={event => replace(index, { ...entry, start: event.target.value })} disabled={disabled} />
-              <span className="text-muted-foreground">–</span>
-              <Input type="time" step="60" aria-label={`${field.label}, créneau ${index + 1}, fin`} value={entry.end ?? ''}
-                onChange={event => replace(index, { ...entry, end: event.target.value })} disabled={disabled} />
-            </div>
-          ) : (
-            <Input className="min-w-0 flex-1" aria-label={`${field.label}, élément ${index + 1}`} value={entry}
-              onChange={event => replace(index, event.target.value)} disabled={disabled} />
-          )}
-          <Button type="button" variant="ghost" size="icon-sm" aria-label={`Supprimer ${isWindows ? 'le créneau' : "l'élément"} ${index + 1}`}
-            onClick={() => onChange(entries.filter((_, i) => i !== index))} disabled={disabled}>
-            <Trash2 />
-          </Button>
-        </div>
-      ))}
-      <Button type="button" variant="outline" size="sm" className="self-start" onClick={() => onChange([...entries, isWindows ? { start: '', end: '' } : ''])} disabled={disabled}>
-        <Plus data-icon="inline-start" />Ajouter {isWindows ? 'un créneau' : 'un élément'}
-      </Button>
-    </div>
-  )
-}
-
-function FieldControl({ field, value, change, onChange, onClearSecret, disabled }) {
-  if (change?.action === 'reset') {
-    return <p className="text-sm text-muted-foreground">Valeur héritée après enregistrement</p>
-  }
-  if (field.type === 'boolean') {
-    return <Switch id={`setting-${field.key}`} checked={Boolean(value)} onCheckedChange={onChange} disabled={disabled} aria-label={field.label} />
-  }
-  if (field.type === 'string-list' || field.type === 'windows') {
-    return <ArrayEditor field={field} value={value} onChange={onChange} disabled={disabled} />
-  }
-  if (field.options?.length) {
-    return (
-      <Select value={String(value ?? '')} onValueChange={onChange} disabled={disabled}>
-        <SelectTrigger className="w-full" aria-label={field.label}>
-          <SelectValue placeholder="Choisir une valeur">{selected => selected || 'Choisir une valeur'}</SelectValue>
-        </SelectTrigger>
-        <SelectContent><SelectGroup>{field.options.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectGroup></SelectContent>
-      </Select>
-    )
-  }
-  if (field.secret) {
-    return (
-      <div className="flex min-w-0 gap-2">
-        <Input id={`setting-${field.key}`} type="password" autoComplete="new-password" className="min-w-0 flex-1"
-          value={change?.action === 'update' ? change.value : ''} onChange={event => onChange(event.target.value)}
-          placeholder={field.configured ? 'Secret configuré — vide = inchangé' : 'Saisir un secret'} disabled={disabled} />
-        <Button type="button" variant="outline" size="sm" onClick={onClearSecret} disabled={disabled || (!field.configured && !change)}>
-          {change?.action === 'update' && change.value === '' ? 'Annuler' : 'Effacer'}
-        </Button>
-      </div>
-    )
-  }
-  return (
-    <Input id={`setting-${field.key}`} type={field.type === 'integer' || field.type === 'number' ? 'number' : 'text'}
-      step={field.type === 'integer' ? '1' : field.type === 'number' ? 'any' : undefined}
-      min={field.min ?? undefined} max={field.max ?? undefined} value={value ?? ''}
-      onChange={event => onChange(event.target.value)} disabled={disabled} />
-  )
-}
-
-function SettingRow({ field, change, onChange, onReset, onUndo, onClearSecret, disabled }) {
-  const value = change?.action === 'update' ? change.value : field.value
-  const showActive = field.pendingRestart && !field.secret
-
-  return (
-    <div className="grid min-w-0 gap-3 border-b border-border py-4 last:border-b-0 md:grid-cols-[minmax(0,1fr)_minmax(16rem,1fr)] md:gap-6">
-      <div className="min-w-0 flex flex-col gap-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <Label htmlFor={`setting-${field.key}`} className="font-medium">{field.label || field.key}</Label>
-          {field.overridden && <Badge variant="secondary">Personnalisé</Badge>}
-          {field.pendingRestart && <Badge variant="outline">En attente</Badge>}
-          {field.blockedByExternalOverride && <Badge variant="outline">Surcharge au lancement</Badge>}
-          {change && <Badge>Modifié</Badge>}
-        </div>
-        <code className="break-all text-xs text-muted-foreground">{field.key}</code>
-        {field.description && <p className="text-xs leading-relaxed text-muted-foreground">{field.description}</p>}
-        {showActive && <p className="text-xs text-muted-foreground">Valeur actuellement active : {displayValue(field, field.activeValue)}</p>}
-        {field.secret && <p className="text-xs text-muted-foreground">{field.configured ? 'Secret enregistré' : 'Aucun secret enregistré'} · La valeur n’est jamais affichée.</p>}
-      </div>
-      <div className="flex min-w-0 flex-col gap-2">
-        <FieldControl field={field} value={value} change={change} onChange={onChange} onClearSecret={onClearSecret} disabled={disabled} />
-        <div className="flex flex-wrap gap-2">
-          {change && <Button type="button" variant="ghost" size="sm" onClick={onUndo} disabled={disabled}>Annuler la modification</Button>}
-          {field.overridden && change?.action !== 'reset' && (
-            <Button type="button" variant="ghost" size="sm" onClick={onReset} disabled={disabled}>
-              <RotateCcw data-icon="inline-start" />Valeur héritée
-            </Button>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function DraftActions({ dirtyCount, isPending, needsReview, onDiscard, onSave }) {
-  return (
-    <div className="flex w-full flex-wrap items-center justify-between gap-3">
-      <span className="text-sm text-muted-foreground">
-        {dirtyCount ? `${dirtyCount} modification${dirtyCount > 1 ? 's' : ''} non enregistrée${dirtyCount > 1 ? 's' : ''}` : 'Aucune modification en cours'}
-      </span>
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="outline" onClick={onDiscard} disabled={!dirtyCount || isPending}>Tout annuler</Button>
-        <Button type="button" onClick={onSave} disabled={!dirtyCount || isPending || needsReview}>
-          <Save data-icon="inline-start" />{isPending ? 'Enregistrement…' : 'Enregistrer'}
-        </Button>
-      </div>
-    </div>
-  )
+function SettingsUnavailable({ controller }) {
+  return <Card className="ring-border"><CardContent className="flex flex-col items-start gap-4 p-6">
+    <div className="flex size-11 items-center justify-center rounded-xl bg-amber-400/10 text-amber-300"><Info className="size-5" /></div>
+    <div><h3 className="font-semibold">Les réglages de l’application sont indisponibles</h3>
+      <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">{controller.error?.status === 404
+        ? 'Le serveur doit charger la mise à jour de configuration. Quand les tâches en cours seront terminées, redémarrez-le depuis la rubrique Système.'
+        : controller.error?.message || 'La connexion au serveur a échoué. Réessayez dans un instant.'}</p></div>
+    <Button variant="outline" onClick={() => controller.refetch()}><RotateCw className="size-4" />Réessayer</Button>
+  </CardContent></Card>
 }
 
 export default function ApplicationSettingsCard() {
-  const queryClient = useQueryClient()
-  const [draft, setDraft] = useState({ baseRevision: null, changes: {}, conflict: false })
-  const [category, setCategory] = useState('all')
+  const controller = useApplicationSettings()
+  const { snapshot, dirtyCount, needsReview, changes } = controller
+  const [sectionId, setSectionId] = useState('publications')
   const [search, setSearch] = useState('')
-  const { data: response, isLoading, error, refetch } = useQuery({
-    queryKey: ['application-settings'],
-    queryFn: () => apiGet(SETTINGS_URL),
-  })
-  const snapshot = response?.data ?? response
-  const changes = draft.changes
-  const groups = useMemo(() => snapshot?.groups ?? [], [snapshot])
-  const fieldCount = groups.reduce((count, group) => count + group.fields.length, 0)
-  const visibleGroups = useMemo(() => {
-    const term = search.trim().toLocaleLowerCase('fr-FR')
-    return groups
-      .filter(group => category === 'all' || group.id === category)
-      .map(group => ({ ...group, fields: group.fields.filter(field => !term ||
-        `${field.key} ${field.label ?? ''} ${field.description ?? ''}`.toLocaleLowerCase('fr-FR').includes(term)) }))
-      .filter(group => group.fields.length)
-  }, [groups, category, search])
-  const dirtyCount = Object.keys(changes).length
-  const needsReview = dirtyCount > 0 && (draft.conflict || draft.baseRevision !== snapshot?.revision)
-
-  const save = useMutation({
-    mutationFn: payload => apiPut(SETTINGS_URL, payload),
-    onSuccess: result => {
-      queryClient.setQueryData(['application-settings'], result)
-      setDraft({ baseRevision: null, changes: {}, conflict: false })
-      const saved = result?.data ?? result
-      toast.success(saved.restartRequired
-        ? 'Configuration enregistrée. Redémarrez le backend pour appliquer les changements.'
-        : 'Configuration enregistrée.')
-    },
-    onError: async failure => {
-      if (failure.status === 409) {
-        setDraft(previous => ({ ...previous, conflict: true }))
-        await refetch()
-        toast.error('La configuration a changé sur le serveur. Vérifiez votre brouillon avant de reprendre sur la nouvelle version.')
-      } else {
-        toast.error(failure.message || 'Impossible d’enregistrer la configuration')
-      }
-    },
-  })
-
-  const setValue = (field, value) => setDraft(previous =>
-    updateApplicationSettingsDraft(previous, snapshot.revision, field.key, changeForValue(field, value)))
-  const setReset = field => setDraft(previous =>
-    updateApplicationSettingsDraft(previous, snapshot.revision, field.key, { action: 'reset' }))
-  const undo = field => setDraft(previous =>
-    updateApplicationSettingsDraft(previous, snapshot.revision, field.key, null))
-  const clearSecret = field => setDraft(previous => {
-    const wasCleared = previous.changes[field.key]?.action === 'update' && previous.changes[field.key].value === ''
-    return updateApplicationSettingsDraft(previous, snapshot.revision, field.key, wasCleared ? null : { action: 'update', value: '' })
-  })
-  const discard = () => {
-    setDraft({ baseRevision: null, changes: {}, conflict: false })
-  }
-  const rebase = async () => {
-    const latest = await refetch()
-    const current = latest.data?.data ?? latest.data
-    if (latest.isError || !current?.revision) {
-      toast.error('Impossible de charger la version actuelle. Réessayez avant d’enregistrer.')
-      return
-    }
-    setDraft(previous => ({ ...previous, baseRevision: current.revision, conflict: false }))
-    toast.success('Brouillon repris sur la version actuelle. Vérifiez les valeurs avant de l’enregistrer.')
-  }
-  const handleSave = () => {
-    if (needsReview) return
-    try {
-      save.mutate(makeApplicationSettingsPayload(snapshot, changes, draft.baseRevision))
-    } catch (failure) {
-      toast.error(failure.message)
-    }
+  const [technical, setTechnical] = useState(false)
+  // Keep immediately saved panels mounted once visited, preserving their local drafts.
+  const [visited, setVisited] = useState([])
+  const groups = useMemo(() => presentSettingsGroups(snapshot?.groups ?? []), [snapshot])
+  const searching = Boolean(search.trim())
+  const visibleGroups = searching ? filterSettingsGroups(groups, search) : groups.filter(group => group.section === sectionId)
+  const common = visibleGroups.filter(group => !group.advanced)
+  const advanced = visibleGroups.filter(group => group.advanced)
+  const section = SETTINGS_SECTIONS.find(item => item.id === sectionId)
+  const SectionIcon = ICONS[sectionId]
+  const resultCount = visibleGroups.reduce((total, group) => total + group.fields.length, 0)
+  const goTo = id => {
+    setSectionId(id)
+    setSearch('')
+    setVisited(previous => previous.includes(id) ? previous : [...previous, id])
   }
 
-  return (
-    <Card className="min-w-0">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2"><Settings2 />Configuration de l’application</CardTitle>
-        <CardDescription>Paramètres du backend enregistrés pour le prochain démarrage. Les valeurs modifiées ne s’appliquent pas immédiatement.</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        {isLoading && !snapshot ? (
-          <div className="flex flex-col gap-3"><Skeleton className="h-9 w-full" /><Skeleton className="h-20 w-full" /><Skeleton className="h-20 w-full" /></div>
-        ) : !snapshot ? (
-          <Alert variant="destructive"><AlertTriangle /><AlertTitle>Configuration indisponible</AlertTitle><AlertDescription>{error?.status === 404
-            ? 'Redémarrez le backend pour charger la nouvelle page de configuration, une fois les tâches en cours terminées.'
-            : error?.message || 'Impossible de charger les paramètres.'}</AlertDescription></Alert>
-        ) : (
-          <>
-            {error && <Alert variant="destructive"><AlertTriangle /><AlertTitle>Synchronisation échouée</AlertTitle><AlertDescription>La dernière version connue reste affichée : {error.message}</AlertDescription></Alert>}
-            {snapshot.restartRequired && (
-              <Alert><AlertTriangle /><AlertTitle>Redémarrage nécessaire</AlertTitle><AlertDescription>
-                {snapshot.pendingCount} paramètre{snapshot.pendingCount > 1 ? 's' : ''} enregistré{snapshot.pendingCount > 1 ? 's' : ''} en attente. Redémarrez le backend quand vous serez prêt à appliquer ces valeurs.
-              </AlertDescription></Alert>
-            )}
-            {needsReview && <Alert><AlertTriangle /><AlertTitle>Une version plus récente est disponible</AlertTitle><AlertDescription>
-              Votre brouillon est conservé. Vérifiez les modifications affichées, puis confirmez leur reprise sur la version actuelle avant d’enregistrer.
-              <Button type="button" variant="outline" size="sm" className="mt-2" onClick={rebase} disabled={save.isPending}>J’ai vérifié : reprendre le brouillon</Button>
-            </AlertDescription></Alert>}
-            <DraftActions dirtyCount={dirtyCount} isPending={save.isPending} needsReview={needsReview} onDiscard={discard} onSave={handleSave} />
-            <div className="grid gap-3 sm:grid-cols-[minmax(12rem,18rem)_minmax(0,1fr)]">
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger className="w-full" aria-label="Catégorie des paramètres">
-                  <SelectValue>{selected => selected === 'all' ? `Toutes les catégories (${fieldCount})` : groups.find(group => group.id === selected)?.label || selected}</SelectValue>
-                </SelectTrigger>
-                <SelectContent><SelectGroup>
-                  <SelectItem value="all">Toutes les catégories ({fieldCount})</SelectItem>
-                  {groups.map(group => <SelectItem key={group.id} value={group.id}>{group.label} ({group.fields.length})</SelectItem>)}
-                </SelectGroup></SelectContent>
-              </Select>
-              <div className="relative min-w-0">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input className="pl-9" type="search" aria-label="Rechercher un paramètre" placeholder="Rechercher par nom, clé ou description…" value={search} onChange={event => setSearch(event.target.value)} />
-              </div>
-            </div>
-            {visibleGroups.length ? visibleGroups.map(group => (
-              <section key={group.id} aria-label={group.label} className="min-w-0">
-                <div className="flex items-center justify-between border-b border-border pb-2">
-                  <h2 className="font-medium">{group.label}</h2>
-                  <Badge variant="secondary">{group.fields.length}</Badge>
-                </div>
-                {group.fields.map(field => <SettingRow key={field.key} field={field} change={changes[field.key]}
-                  onChange={value => setValue(field, value)} onReset={() => setReset(field)} onUndo={() => undo(field)}
-                  onClearSecret={() => clearSecret(field)} disabled={save.isPending} />)}
-              </section>
-            )) : <p className="py-8 text-center text-sm text-muted-foreground">Aucun paramètre ne correspond à cette recherche.</p>}
-          </>
-        )}
-      </CardContent>
-      {snapshot && <CardFooter>
-        <DraftActions dirtyCount={dirtyCount} isPending={save.isPending} needsReview={needsReview} onDiscard={discard} onSave={handleSave} />
-      </CardFooter>}
-    </Card>
-  )
+  return <div style={SETTINGS_THEME} className="settings-page [&_[data-slot=switch-thumb]]:bg-white mx-auto flex min-h-full max-w-[1400px] flex-col text-foreground">
+    <header className="mb-5 flex flex-wrap items-center justify-between gap-5 border-b border-border pb-5 sm:pb-7 sm:mb-7">
+      <div><p className="mb-2 hidden text-xs font-medium uppercase sm:block tracking-[0.16em] text-muted-foreground">Votre espace de travail</p>
+        <h1 className="text-3xl font-semibold tracking-tight">Configuration</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Réglez vos automatisations, vos services et vos accès.</p></div>
+      {snapshot && <div className="flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 text-xs text-muted-foreground">
+        {dirtyCount ? <><span className="size-2 rounded-full bg-blue-400" />Brouillon en cours</>
+          : snapshot.restartRequired ? <><RotateCw className="size-3.5 text-amber-300" />Redémarrage en attente</>
+            : <><Check className="size-3.5 text-emerald-400" />Configuration à jour</>}
+      </div>}
+    </header>
+
+    <div className="grid flex-1 items-start gap-7 lg:grid-cols-[210px_minmax(0,1fr)] xl:gap-10">
+      <aside className="min-w-0 lg:sticky lg:top-0">
+        <p className="mb-3 hidden px-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground lg:block">Réglages</p>
+        <div className="lg:hidden">
+          <label id="settings-section-label" className="mb-2 block text-xs font-medium text-muted-foreground">Rubrique</label>
+          <Select value={sectionId} onValueChange={goTo}>
+            <SelectTrigger className="h-11 w-full bg-card" aria-labelledby="settings-section-label"><SelectValue>{selected => SETTINGS_SECTIONS.find(item => item.id === selected)?.label}</SelectValue></SelectTrigger>
+            <SelectContent style={SETTINGS_THEME}><SelectGroup>{SETTINGS_SECTIONS.map(item => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}</SelectGroup></SelectContent>
+          </Select>
+        </div>
+        <nav aria-label="Rubriques de configuration" className="hidden gap-1 lg:flex lg:flex-col">
+          {SETTINGS_SECTIONS.map(item => {
+            const Icon = ICONS[item.id]
+            const count = groups.filter(group => group.section === item.id).flatMap(group => group.fields).filter(field => changes[field.key]).length
+            const selected = item.id === sectionId && !searching
+            return <button type="button" key={item.id} onClick={() => goTo(item.id)} aria-current={selected ? 'page' : undefined}
+              className={cn('flex shrink-0 items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                selected ? 'bg-blue-500/12 text-blue-300' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground')}>
+              <Icon className="size-4 shrink-0" /><span className="whitespace-nowrap">{item.label}</span>
+              {count > 0 ? <span className="ml-auto rounded bg-blue-500/20 px-1.5 text-xs text-blue-200">{count}</span>
+                : selected && <ChevronRight className="ml-auto hidden size-3.5 lg:block" />}
+            </button>
+          })}
+        </nav>
+        <div className="mt-8 hidden border-t border-border px-3 pt-5 lg:block">
+          <p className="flex items-center gap-2 text-xs font-medium"><Info className="size-3.5 text-muted-foreground" />Comment ça fonctionne</p>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">Enregistrez vos réglages, puis redémarrez le serveur pour les appliquer. Les exceptions sont indiquées.</p>
+        </div>
+      </aside>
+
+      <div className="min-w-0 space-y-6 pb-8">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-0 flex-1 basis-40">
+            <Search className="pointer-events-none absolute left-3.5 top-3 size-4 text-muted-foreground" />
+            <Input type="search" className="h-10 bg-card pl-10 pr-10" aria-label="Rechercher un réglage" placeholder="Rechercher un réglage…" value={search} onChange={event => setSearch(event.target.value)} />
+            {search && <button type="button" aria-label="Effacer la recherche" className="absolute right-3 top-3 text-muted-foreground hover:text-foreground" onClick={() => setSearch('')}><X className="size-4" /></button>}
+          </div>
+          <Button variant={technical ? 'secondary' : 'ghost'} className="h-10 text-xs text-muted-foreground" title="Afficher les clés YAML et les actions de réinitialisation" aria-pressed={technical} onClick={() => setTechnical(value => !value)}>
+            <Code2 className="size-4" /><span className="sr-only sm:not-sr-only">Détails techniques</span>
+          </Button>
+        </div>
+
+        <div className="flex items-start gap-3.5">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-blue-400/15 bg-blue-400/10 text-blue-300">{searching ? <Search className="size-5" /> : <SectionIcon className="size-5" />}</div>
+          <div><h2 className="text-xl font-semibold tracking-tight">{searching ? 'Résultats de recherche' : section.label}</h2>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{searching ? `${resultCount} réglage${resultCount > 1 ? 's' : ''} trouvé${resultCount > 1 ? 's' : ''} dans toutes les rubriques` : section.description}</p></div>
+        </div>
+
+        {snapshot?.restartRequired && <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-amber-300/15 bg-amber-400/5 px-4 py-3 text-sm">
+          <RotateCw className="size-4 shrink-0 text-amber-300" /><p className="flex-1 basis-48 text-amber-100">{snapshot.pendingCount} réglage{snapshot.pendingCount > 1 ? 's' : ''} enregistré{snapshot.pendingCount > 1 ? 's' : ''} en attente de redémarrage.</p>
+          {sectionId !== 'system' && <button className="flex items-center gap-1.5 text-xs font-medium text-amber-200" onClick={() => goTo('system')}>Aller au système <ArrowRight className="size-3.5" /></button>}
+        </div>}
+        {needsReview && <Alert className="border-amber-400/30 bg-amber-400/5"><AlertTriangle /><AlertTitle>La configuration a changé depuis votre première modification</AlertTitle><AlertDescription>
+          Votre brouillon est conservé. Vérifiez les valeurs avant de reprendre sur la nouvelle version.
+          <Button className="mt-3" variant="outline" size="sm" onClick={controller.rebase} disabled={controller.saving}>J’ai vérifié : reprendre mon brouillon</Button>
+        </AlertDescription></Alert>}
+        {snapshot && controller.error && <Alert variant="destructive"><AlertTriangle /><AlertTitle>Synchronisation interrompue</AlertTitle><AlertDescription>La dernière version connue reste affichée. {controller.error.message}</AlertDescription></Alert>}
+
+        {visited.includes('sms') && <div hidden={searching || sectionId !== 'sms'}><SmsProvidersCard /></div>}
+        {visited.includes('identities') && <div hidden={searching || sectionId !== 'identities'}><IdentitiesSettings /></div>}
+        {!searching && sectionId === 'system' && <Card className="ring-border"><CardHeader className="px-6"><CardTitle>Appliquer les réglages</CardTitle>
+          <CardDescription className="leading-relaxed">Redémarrez le serveur après l’enregistrement, une fois les automatisations en cours terminées.</CardDescription></CardHeader>
+          <CardContent className="px-6">{import.meta.env.DEV ? <BackendRestartControl /> : <p className="text-sm text-muted-foreground">Relancez le service backend depuis votre environnement d’hébergement.</p>}</CardContent></Card>}
+
+        {controller.isLoading && !snapshot ? <div className="space-y-4"><Skeleton className="h-44 w-full rounded-xl" /><Skeleton className="h-64 w-full rounded-xl" /></div>
+          : !snapshot ? sectionId !== 'identities' && <SettingsUnavailable controller={controller} />
+            : searching ? visibleGroups.length ? visibleGroups.map(group => <SettingsGroup key={group.id} group={group} controller={controller} technical={technical} searching />)
+              : <div className="rounded-xl border border-dashed border-border px-6 py-14 text-center"><Search className="mx-auto mb-4 size-6 text-muted-foreground" /><h3 className="font-medium">Aucun réglage trouvé</h3><p className="mt-2 text-sm text-muted-foreground">Essayez un autre mot, comme « délai », « SMS » ou « Drive ».</p><Button variant="outline" className="mt-5" onClick={() => setSearch('')}>Effacer la recherche</Button></div>
+              : <>
+                {common.map(group => <SettingsGroup key={group.id} group={group} controller={controller} technical={technical} />)}
+                {advanced.length > 0 && <div className="space-y-3 pt-2"><div className="flex items-center gap-2 pb-1"><SlidersHorizontal className="size-3.5 text-muted-foreground" /><h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Réglages avancés</h3></div>
+                  {advanced.map(group => <SettingsGroup key={group.id} group={group} controller={controller} technical={technical} />)}
+                </div>}
+              </>}
+      </div>
+    </div>
+
+    {dirtyCount > 0 && <div className="sticky -bottom-4 z-20 -mx-4 border-t border-blue-400/25 bg-[#171e2c]/95 px-4 py-4 shadow-[0_-8px_30px_0_rgba(0,0,0,0.2)] backdrop-blur-lg lg:-bottom-6 lg:-mx-6 lg:px-6" role="region" aria-label="Enregistrer les modifications">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div aria-live="polite"><p className="text-sm font-medium">{dirtyCount} modification{dirtyCount > 1 ? 's' : ''} à enregistrer</p><p className="mt-1 text-xs text-muted-foreground">Vos changements seront appliqués après redémarrage.</p></div>
+        <div className="flex items-center gap-2"><Button variant="ghost" onClick={controller.discard} disabled={controller.saving}>Annuler</Button>
+          <Button className="h-10" onClick={controller.save} disabled={controller.saving || needsReview}>{controller.saving ? <LoaderCircle className="size-4 animate-spin" /> : <Save className="size-4" />}{controller.saving ? 'Enregistrement…' : 'Enregistrer les modifications'}</Button></div>
+      </div>
+    </div>}
+  </div>
 }

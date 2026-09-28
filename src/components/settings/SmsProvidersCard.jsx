@@ -1,23 +1,26 @@
+import { SETTINGS_THEME } from './settingsTheme'
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPut } from '@/lib/api'
-import { Card, CardContent, CardHeader, CardTitle, CardAction } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
-  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+  Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem,
 } from '@/components/ui/select'
 import { toast } from 'sonner'
 import {
-  MessageSquare, ArrowUp, ArrowDown, X, Plus, AlertTriangle, Shuffle, ListOrdered,
+  MessageSquare, ArrowUp, ArrowDown, X, Plus, AlertTriangle, Shuffle, ListOrdered, Save,
 } from 'lucide-react'
 
 const MODES = [
-  { value: 'PRIORITY', label: 'Priorité stricte', icon: ListOrdered, hint: 'Le principal est toujours tenté en premier, puis la chaîne de secours.' },
-  { value: 'RANDOM', label: 'Aléatoire', icon: Shuffle, hint: "L'ordre du pool est mélangé à chaque location de numéro." },
+  { value: 'PRIORITY', label: 'Par priorité', icon: ListOrdered, hint: 'Le fournisseur principal est essayé en premier, puis les secours dans l’ordre indiqué.' },
+  { value: 'RANDOM', label: 'Aléatoire', icon: Shuffle, hint: 'Un fournisseur est choisi au hasard parmi ceux du groupe sélectionné.' },
 ]
 
 /** Les 4 champs pilotés par le formulaire, extraits de la réponse API. */
@@ -33,12 +36,10 @@ function toForm(settings) {
 function ProviderName({ descriptor, name }) {
   const label = descriptor?.label || name
   return (
-    <span className="flex items-center gap-2 min-w-0">
-      <span className="text-sm text-[#FAFAFA] truncate">{label}</span>
+    <span className="flex min-w-0 flex-wrap items-center gap-2">
+      <span className="truncate font-medium text-foreground">{label}</span>
       {descriptor && !descriptor.credentialsReady && (
-        <Badge variant="outline" className="bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20 text-[10px]">
-          clé manquante
-        </Badge>
+        <Badge variant="destructive">Identifiants manquants</Badge>
       )}
     </span>
   )
@@ -69,22 +70,20 @@ export default function SmsProvidersCard() {
     onSuccess: (saved) => {
       queryClient.setQueryData(['sms-settings'], saved)
       setDraft(null)
-      toast.success('Providers SMS mis à jour')
+      toast.success('Fournisseurs SMS mis à jour')
     },
     onError: (e) => toast.error(e.message || 'Échec de la mise à jour'),
   })
 
   if (isLoading || (!form && !error)) {
     return (
-      <Card className="bg-[#111111] border-[#1a1a1a] lg:col-span-2">
-        <CardHeader>
-          <CardTitle className="text-sm text-[#A1A1AA] flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-[#10B981]" />
-            Fournisseurs SMS
-          </CardTitle>
+      <Card className="gap-5 py-6 ring-border">
+        <CardHeader className="px-5 sm:px-6">
+          <CardTitle className="flex items-center gap-2"><MessageSquare />Fournisseurs SMS</CardTitle>
+          <CardDescription>Chargement de la stratégie de sélection des numéros…</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full bg-[#1a1a1a]" />)}
+        <CardContent className="flex flex-col gap-3">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
         </CardContent>
       </Card>
     )
@@ -96,15 +95,12 @@ export default function SmsProvidersCard() {
   // bandeau au-dessus de la carte.
   if (!form) {
     return (
-      <Card className="bg-[#111111] border-[#1a1a1a] lg:col-span-2">
-        <CardHeader>
-          <CardTitle className="text-sm text-[#A1A1AA] flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-[#10B981]" />
-            Fournisseurs SMS
-          </CardTitle>
+      <Card className="gap-5 py-6 ring-border">
+        <CardHeader className="px-5 sm:px-6">
+          <CardTitle className="flex items-center gap-2"><MessageSquare />Fournisseurs SMS</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-[#EF4444]">Configuration SMS indisponible : {error.message}</p>
+          <Alert variant="destructive"><AlertTriangle /><AlertTitle>Configuration SMS indisponible</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert>
         </CardContent>
       </Card>
     )
@@ -146,67 +142,59 @@ export default function SmsProvidersCard() {
 
   const handleSave = () => {
     if (isRandom && form.randomPool.length === 0) {
-      toast.error('Sélectionnez au moins un provider dans le pool')
+      toast.error('Sélectionnez au moins un fournisseur dans le groupe aléatoire')
       return
     }
     if (!isRandom && !form.primaryProvider) {
-      toast.error('Sélectionnez un provider principal')
+      toast.error('Sélectionnez un fournisseur principal')
       return
     }
     save.mutate(form)
   }
 
   return (
-    <Card className="bg-[#111111] border-[#1a1a1a] lg:col-span-2">
-      <CardHeader>
-        <CardTitle className="text-sm text-[#A1A1AA] flex items-center gap-2">
-          <MessageSquare className="w-4 h-4 text-[#10B981]" />
-          Fournisseurs SMS
-        </CardTitle>
-        <CardAction>
-          <Button
-            size="sm"
-            className="bg-[#3B82F6] hover:bg-[#2563EB] text-white disabled:opacity-40"
-            onClick={handleSave}
-            disabled={!dirty || save.isPending}
-          >
-            {save.isPending ? 'Enregistrement...' : 'Enregistrer'}
+    <Card className="gap-5 py-6 ring-border">
+      <CardHeader className="px-5 sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardTitle className="flex items-center gap-2"><MessageSquare />Fournisseurs SMS</CardTitle>
+          <Button size="sm" onClick={handleSave} disabled={!dirty || save.isPending}>
+            <Save data-icon="inline-start" />{save.isPending ? 'Enregistrement…' : 'Enregistrer'}
           </Button>
-        </CardAction>
+        </div>
+        <CardDescription>
+          Choisissez comment l’application obtient un numéro lors de la création d’un compte.
+          Les changements enregistrés s’appliquent dès la prochaine demande de numéro.
+        </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-5">
+      <CardContent className="flex flex-col gap-6 px-5 sm:px-6">
         {error && (
-          <p className="text-xs text-[#EF4444]">
-            Dernière synchronisation en échec : {error.message} — affichage de la dernière config connue.
-          </p>
+          <Alert variant="destructive"><AlertTriangle /><AlertTitle>Synchronisation interrompue</AlertTitle><AlertDescription>
+            La dernière configuration connue reste affichée : {error.message}
+          </AlertDescription></Alert>
         )}
 
-        {/* Chaîne effectivement appliquée */}
-        <div className="p-3 rounded-lg bg-[#0A0A0A] border border-[#1a1a1a]">
-          <p className="text-xs text-[#52525B] mb-2">
-            {isRandom ? 'Tirage aléatoire parmi' : "Ordre d'essai"}
-          </p>
-          <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="font-medium text-foreground">{isRandom ? 'Groupe de tirage' : 'Ordre de sélection'}</p>
+              <p className="text-xs text-muted-foreground">{dirty ? 'Aperçu des changements non enregistrés' : 'Configuration enregistrée'}</p>
+            </div>
+            <Badge variant={dirty ? 'secondary' : 'outline'}>{dirty ? 'À enregistrer' : 'Actif'}</Badge>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             {activeChain.length === 0 && (
-              <span className="text-xs text-[#EF4444]">Aucun provider actif</span>
+              <span className="text-sm text-destructive">Aucun fournisseur sélectionné</span>
             )}
             {activeChain.map((name, i) => (
               <span key={name} className="flex items-center gap-2">
-                {i > 0 && <span className="text-[#3F3F46] text-xs">{isRandom ? '·' : '→'}</span>}
-                <Badge
-                  variant="outline"
-                  className={i === 0 && !isRandom
-                    ? 'bg-[#10B981]/10 text-[#10B981] border-[#10B981]/20'
-                    : 'bg-[#1a1a1a] text-[#A1A1AA] border-[#27272A]'}
-                >
-                  {byName[name]?.label || name}
-                </Badge>
+                {i > 0 && <span aria-hidden="true" className="text-muted-foreground">{isRandom ? '·' : '→'}</span>}
+                <Badge variant={i === 0 && !isRandom ? 'default' : 'outline'}>{byName[name]?.label || name}</Badge>
               </span>
             ))}
           </div>
           {data.updatedAt && (
-            <p className="text-[10px] text-[#3F3F46] mt-2">
+            <p className="text-xs text-muted-foreground">
               Dernière modification {new Date(data.updatedAt).toLocaleString('fr-FR')}
               {data.updatedBy ? ` par ${data.updatedBy}` : ''}
             </p>
@@ -214,46 +202,43 @@ export default function SmsProvidersCard() {
         </div>
 
         {missingCredentials.length > 0 && (
-          <div className="flex items-start gap-2 rounded-lg border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-3">
-            <AlertTriangle className="w-3.5 h-3.5 text-[#F59E0B] mt-0.5 shrink-0" />
-            <p className="text-xs text-[#F59E0B]">
-              {missingCredentials.map(n => byName[n]?.label || n).join(', ')} —
-              identifiants API absents côté backend : ce provider échouera à chaque location.
-            </p>
-          </div>
+          <Alert variant="destructive"><AlertTriangle /><AlertTitle>Identifiants manquants</AlertTitle><AlertDescription>
+            {missingCredentials.map(n => byName[n]?.label || n).join(', ')} : ces fournisseurs échoueront tant que leurs identifiants API ne seront pas configurés.
+          </AlertDescription></Alert>
         )}
 
-        {/* Mode de sélection */}
-        <div className="space-y-2">
-          <Label className="text-xs text-[#A1A1AA]">Mode de sélection</Label>
-          <div className="flex gap-2">
-            {MODES.map(mode => (
-              <Button
-                key={mode.value}
-                variant="ghost"
-                size="sm"
-                onClick={() => setField({ mode: mode.value })}
-                className={form.mode === mode.value
-                  ? 'bg-[#3B82F6]/10 text-[#3B82F6] hover:bg-[#3B82F6]/15 hover:text-[#3B82F6]'
-                  : 'text-[#52525B] hover:text-[#A1A1AA]'}
-              >
-                <mode.icon className="w-3 h-3 mr-1.5" />{mode.label}
-              </Button>
-            ))}
+        <section className="flex flex-col gap-3" aria-labelledby="sms-mode-title">
+          <div>
+            <h3 id="sms-mode-title" className="font-medium text-foreground">Stratégie de sélection</h3>
+            <p className="text-sm text-muted-foreground">Définissez dans quel ordre les fournisseurs seront sollicités.</p>
           </div>
-          <p className="text-[10px] text-[#3F3F46]">
-            {MODES.find(m => m.value === form.mode)?.hint}
-          </p>
-        </div>
+          <ToggleGroup multiple={false} value={[form.mode]} onValueChange={values => values[0] && setField({ mode: values[0] })}
+            variant="outline" spacing={2} aria-label="Stratégie de sélection"
+            className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+            {MODES.map(mode => (
+              <ToggleGroupItem key={mode.value} value={mode.value}
+                className="h-auto min-w-0 items-start justify-start gap-3 whitespace-normal px-4 py-3 text-left aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:text-foreground">
+                <mode.icon />
+                <span className="flex flex-col gap-1">
+                  <span className="font-medium">{mode.label}</span>
+                  <span className="text-xs leading-relaxed text-muted-foreground">{mode.hint}</span>
+                </span>
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </section>
 
         {isRandom ? (
-          <div className="space-y-2">
-            <Label className="text-xs text-[#A1A1AA]">Pool de providers</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <section className="flex flex-col gap-3" aria-labelledby="sms-pool-title">
+            <div>
+              <h3 id="sms-pool-title" className="font-medium text-foreground">Fournisseurs du groupe aléatoire</h3>
+              <p className="text-sm text-muted-foreground">Cochez les fournisseurs éligibles. Le tirage a lieu à chaque demande de numéro.</p>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {providers.map(p => (
                 <label
                   key={p.name}
-                  className="flex items-center gap-3 p-3 rounded-lg bg-[#0A0A0A] border border-[#1a1a1a] cursor-pointer hover:border-[#27272A]"
+                  className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-muted/20 p-4 hover:bg-muted/40 has-data-checked:border-primary"
                 >
                   <Checkbox
                     checked={form.randomPool.includes(p.name)}
@@ -263,78 +248,84 @@ export default function SmsProvidersCard() {
                 </label>
               ))}
             </div>
-          </div>
+          </section>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <div className="space-y-2">
-              <Label className="text-xs text-[#A1A1AA]">Provider principal</Label>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+            <section className="flex min-w-0 flex-col gap-3" aria-labelledby="sms-primary-title">
+              <div>
+                <Label id="sms-primary-title" htmlFor="sms-primary-provider" className="font-medium text-foreground">Fournisseur principal</Label>
+                <p className="text-sm text-muted-foreground">Toujours essayé en premier pour obtenir un numéro.</p>
+              </div>
               <Select value={form.primaryProvider ?? null} onValueChange={setPrimary}>
-                <SelectTrigger className="bg-[#0A0A0A] border-[#1a1a1a] text-[#FAFAFA]">
+                <SelectTrigger id="sms-primary-provider" className="w-full">
                   {/* Base UI (pas Radix) : sans enfant, SelectValue sérialise la valeur brute
                       et afficherait "smsbower" au lieu de "SMSBower". */}
-                  <SelectValue placeholder="Choisir un provider">
-                    {(value) => (value ? byName[value]?.label || value : 'Choisir un provider')}
+                  <SelectValue placeholder="Choisir un fournisseur">
+                    {(value) => (value ? byName[value]?.label || value : 'Choisir un fournisseur')}
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent className="bg-[#111111] border-[#1a1a1a] text-[#FAFAFA]">
+                <SelectContent style={SETTINGS_THEME}><SelectGroup>
                   {providers.map(p => (
                     <SelectItem key={p.name} value={p.name}>
-                      {p.label}{p.credentialsReady ? '' : ' — clé manquante'}
+                      {p.label}{p.credentialsReady ? '' : ' — identifiants manquants'}
                     </SelectItem>
                   ))}
-                </SelectContent>
+                </SelectGroup></SelectContent>
               </Select>
               {form.primaryProvider && byName[form.primaryProvider] && (
-                <p className="text-[10px] text-[#3F3F46]">
-                  service {byName[form.primaryProvider].service}
-                  {byName[form.primaryProvider].country ? ` · pays ${byName[form.primaryProvider].country}` : ''}
-                  {byName[form.primaryProvider].maxPrice ? ` · max ${byName[form.primaryProvider].maxPrice}` : ''}
+                <p className="text-xs text-muted-foreground">
+                  Service : {byName[form.primaryProvider].service || 'non défini'}
+                  {byName[form.primaryProvider].country ? ` · Pays : ${byName[form.primaryProvider].country}` : ''}
+                  {byName[form.primaryProvider].maxPrice ? ` · Prix max. : ${byName[form.primaryProvider].maxPrice}` : ''}
                 </p>
               )}
-            </div>
+            </section>
 
-            <div className="space-y-2">
-              <Label className="text-xs text-[#A1A1AA]">Chaîne de secours</Label>
+            <section className="flex min-w-0 flex-col gap-3" aria-labelledby="sms-fallback-title">
+              <div>
+                <h3 id="sms-fallback-title" className="font-medium text-foreground">Fournisseurs de secours</h3>
+                <p className="text-sm text-muted-foreground">Essayés de haut en bas si le principal échoue. Ajustez leur ordre avec les flèches.</p>
+              </div>
               {form.fallbackProviders.length === 0 ? (
-                <p className="text-xs text-[#52525B] p-3 rounded-lg bg-[#0A0A0A] border border-[#1a1a1a]">
-                  Aucun secours — si le principal échoue, la création de compte échoue.
+                <p className="rounded-lg border border-border bg-muted/20 p-4 text-sm text-muted-foreground">
+                  Aucun secours sélectionné. Si le principal échoue, la demande de numéro échoue.
                 </p>
               ) : (
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2">
                   {form.fallbackProviders.map((name, i) => (
                     <div
                       key={name}
-                      className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-[#0A0A0A] border border-[#1a1a1a]"
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 p-3"
                     >
-                      <span className="flex items-center gap-2 min-w-0">
-                        <span className="text-[10px] text-[#3F3F46] font-mono w-4 shrink-0">{i + 1}</span>
+                      <span className="flex min-w-0 items-center gap-3">
+                        <Badge variant="secondary">{i + 1}</Badge>
                         <ProviderName descriptor={byName[name]} name={name} />
                       </span>
-                      <span className="flex items-center gap-0.5 shrink-0">
+                      <span className="flex shrink-0 items-center gap-1">
                         <Button
-                          variant="ghost" size="icon-xs"
-                          className="text-[#52525B] hover:text-[#A1A1AA] disabled:opacity-20"
+                          type="button" variant="ghost" size="icon-sm"
+                          aria-label={`Monter ${byName[name]?.label || name} dans les secours`}
                           disabled={i === 0}
                           onClick={() => moveFallback(i, -1)}
                         >
-                          <ArrowUp className="w-3 h-3" />
+                          <ArrowUp />
                         </Button>
                         <Button
-                          variant="ghost" size="icon-xs"
-                          className="text-[#52525B] hover:text-[#A1A1AA] disabled:opacity-20"
+                          type="button" variant="ghost" size="icon-sm"
+                          aria-label={`Descendre ${byName[name]?.label || name} dans les secours`}
                           disabled={i === form.fallbackProviders.length - 1}
                           onClick={() => moveFallback(i, 1)}
                         >
-                          <ArrowDown className="w-3 h-3" />
+                          <ArrowDown />
                         </Button>
                         <Button
-                          variant="ghost" size="icon-xs"
-                          className="text-[#52525B] hover:text-[#EF4444]"
+                          type="button" variant="ghost" size="icon-sm"
+                          aria-label={`Retirer ${byName[name]?.label || name} des secours`}
                           onClick={() => setField({
                             fallbackProviders: form.fallbackProviders.filter(f => f !== name),
                           })}
                         >
-                          <X className="w-3 h-3" />
+                          <X />
                         </Button>
                       </span>
                     </div>
@@ -346,31 +337,32 @@ export default function SmsProvidersCard() {
                 <Select value="" onValueChange={(name) => setField({
                   fallbackProviders: [...form.fallbackProviders, name],
                 })}>
-                  <SelectTrigger className="bg-[#0A0A0A] border-[#1a1a1a] text-[#52525B]">
-                    <span className="flex items-center gap-1.5 text-xs">
-                      <Plus className="w-3 h-3" />Ajouter un secours
+                  <SelectTrigger className="w-full" aria-label="Ajouter un fournisseur de secours">
+                    <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Plus />Ajouter un fournisseur de secours
                     </span>
                   </SelectTrigger>
-                  <SelectContent className="bg-[#111111] border-[#1a1a1a] text-[#FAFAFA]">
+                  <SelectContent style={SETTINGS_THEME}><SelectGroup>
                     {availableFallbacks.map(name => (
                       <SelectItem key={name} value={name}>
                         {byName[name]?.label || name}
-                        {byName[name]?.credentialsReady ? '' : ' — clé manquante'}
+                        {byName[name]?.credentialsReady ? '' : ' — identifiants manquants'}
                       </SelectItem>
                     ))}
-                  </SelectContent>
+                  </SelectGroup></SelectContent>
                 </Select>
               )}
-            </div>
+            </section>
           </div>
         )}
-
-        <p className="text-[10px] text-[#3F3F46]">
-          Le mode et l’ordre des providers s’appliquent à la prochaine location de numéro, sans redémarrage.
-          Les clés API, services et pays se modifient dans la configuration de l’application ci-dessus et
-          prennent effet après redémarrage. Les choix enregistrés ici gardent la priorité sur les valeurs de démarrage.
-        </p>
       </CardContent>
+      <CardFooter className="flex flex-wrap items-start gap-3 text-sm text-muted-foreground">
+        <Badge variant="secondary">Sans redémarrage</Badge>
+        <p className="min-w-0 flex-1">
+          La stratégie et l’ordre enregistrés ici prennent effet dès la prochaine demande de numéro.
+          Les identifiants API et autres paramètres techniques se modifient dans la configuration de l’application et nécessitent un redémarrage.
+        </p>
+      </CardFooter>
     </Card>
   )
 }

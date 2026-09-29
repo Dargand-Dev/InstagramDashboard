@@ -51,7 +51,7 @@ function NamePoolForm({ pool, onSave, isPending, conflict, onReload, reloading }
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="identity-name-pool-usernames">Pseudos disponibles — {count}</Label>
-        <Textarea id="identity-name-pool-usernames" rows={10} value={text}
+        <Textarea id="identity-name-pool-usernames" className="field-sizing-fixed h-56 resize-y" rows={10} value={text}
           onChange={event => setText(event.target.value)} disabled={isPending}
           placeholder={'tommy.kvx\ntommy.zrle'} aria-describedby="identity-name-pool-help" />
         <p id="identity-name-pool-help" className="text-xs leading-relaxed text-muted-foreground">

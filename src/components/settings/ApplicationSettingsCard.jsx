@@ -12,6 +12,7 @@ import useApplicationSettings from './useApplicationSettings'
 import SettingField from './SettingField'
 import SmsProvidersCard from './SmsProvidersCard'
 import IdentitiesSettings from './IdentitiesSettings'
+import ProfilePictureTypesSettings from './ProfilePictureTypesSettings'
 import BackendRestartControl from './BackendRestartControl'
 import { SETTINGS_SECTIONS, presentSettingsGroups, filterSettingsGroups } from './settingsPresentation'
 import { cn } from '@/lib/utils'
@@ -61,14 +62,21 @@ export default function ApplicationSettingsCard() {
   const [technical, setTechnical] = useState(false)
   // Keep immediately saved panels mounted once visited, preserving their local drafts.
   const [visited, setVisited] = useState([])
-  const groups = useMemo(() => presentSettingsGroups(snapshot?.groups ?? []), [snapshot])
+  const groups = useMemo(() => presentSettingsGroups((snapshot?.groups ?? []).map(group => ({
+    ...group,
+    fields: group.fields.filter(field => ![
+      'profile.picture.blonde-drive-folder-id', 'profile.picture.brunette-drive-folder-id',
+    ].includes(field.key)),
+  }))), [snapshot])
   const searching = Boolean(search.trim())
+  const pictureTypesMatch = searching && search.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .trim().split(/\s+/).every(term => 'photos de profil identites types dossiers drive'.includes(term))
   const visibleGroups = searching ? filterSettingsGroups(groups, search) : groups.filter(group => group.section === sectionId)
   const common = visibleGroups.filter(group => !group.advanced)
   const advanced = visibleGroups.filter(group => group.advanced)
   const section = SETTINGS_SECTIONS.find(item => item.id === sectionId)
   const SectionIcon = ICONS[sectionId]
-  const resultCount = visibleGroups.reduce((total, group) => total + group.fields.length, 0)
+  const resultCount = visibleGroups.reduce((total, group) => total + group.fields.length, 0) + (pictureTypesMatch ? 1 : 0)
   const goTo = id => {
     setSectionId(id)
     setSearch('')
@@ -147,13 +155,14 @@ export default function ApplicationSettingsCard() {
 
         {visited.includes('sms') && <div hidden={searching || sectionId !== 'sms'}><SmsProvidersCard /></div>}
         {visited.includes('identities') && <div hidden={searching || sectionId !== 'identities'}><IdentitiesSettings /></div>}
+        {(visited.includes('identities') || pictureTypesMatch) && <div hidden={searching ? !pictureTypesMatch : sectionId !== 'identities'}><ProfilePictureTypesSettings /></div>}
         {!searching && sectionId === 'system' && <Card className="ring-border"><CardHeader className="px-6"><CardTitle>Appliquer les réglages</CardTitle>
           <CardDescription className="leading-relaxed">Redémarrez le serveur après l’enregistrement, une fois les automatisations en cours terminées.</CardDescription></CardHeader>
           <CardContent className="px-6">{import.meta.env.DEV ? <BackendRestartControl /> : <p className="text-sm text-muted-foreground">Relancez le service backend depuis votre environnement d’hébergement.</p>}</CardContent></Card>}
 
         {controller.isLoading && !snapshot ? <div className="space-y-4"><Skeleton className="h-44 w-full rounded-xl" /><Skeleton className="h-64 w-full rounded-xl" /></div>
           : !snapshot ? sectionId !== 'identities' && <SettingsUnavailable controller={controller} />
-            : searching ? visibleGroups.length ? visibleGroups.map(group => <SettingsGroup key={group.id} group={group} controller={controller} technical={technical} searching />)
+            : searching ? resultCount ? visibleGroups.map(group => <SettingsGroup key={group.id} group={group} controller={controller} technical={technical} searching />)
               : <div className="rounded-xl border border-dashed border-border px-6 py-14 text-center"><Search className="mx-auto mb-4 size-6 text-muted-foreground" /><h3 className="font-medium">Aucun réglage trouvé</h3><p className="mt-2 text-sm text-muted-foreground">Essayez un autre mot, comme « délai », « SMS » ou « Drive ».</p><Button variant="outline" className="mt-5" onClick={() => setSearch('')}>Effacer la recherche</Button></div>
               : <>
                 {common.map(group => <SettingsGroup key={group.id} group={group} controller={controller} technical={technical} />)}

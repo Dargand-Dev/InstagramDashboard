@@ -2,6 +2,8 @@ import { SETTINGS_THEME } from './settingsTheme'
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiDelete, apiGet, apiPost, apiPut } from '@/lib/api'
+import useProfilePictureTypes from '@/hooks/useProfilePictureTypes'
+import { getProfilePictureType, profilePictureSelection, profilePictureTypeLabel } from './profilePictureSelection'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -32,11 +34,10 @@ function initials(name) {
   return words.slice(0, 2).map(word => word[0].toUpperCase()).join('') || '?'
 }
 
-function IdentityRow({ identity, onEdit, onDelete }) {
+function IdentityRow({ identity, pictureTypes, onEdit, onDelete }) {
   const name = identityName(identity)
   const folder = identity.driveFolderId || identity.driveFolder
-  const hair = identity.hairColor === 'BLONDE' ? 'Blonde'
-    : identity.hairColor === 'BRUNETTE' ? 'Brune' : null
+  const pictureType = getProfilePictureType(identity)
 
   return (
     <li className="flex flex-col gap-3 rounded-xl border border-border bg-background/40 p-4 sm:flex-row sm:items-start sm:justify-between">
@@ -54,7 +55,7 @@ function IdentityRow({ identity, onEdit, onDelete }) {
             </span>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {hair && <Badge variant="secondary">{hair}</Badge>}
+            {pictureType && <Badge variant="secondary">Photo : {profilePictureTypeLabel(pictureType, pictureTypes)}</Badge>}
             {identity.contentLoop && <Badge variant="secondary">Contenu en boucle</Badge>}
             {identity.gmsSourceLinkId && <Badge variant="outline" title={identity.gmsSourceLinkId}>Modèle GetMySocial lié</Badge>}
           </div>
@@ -73,13 +74,18 @@ function IdentityRow({ identity, onEdit, onDelete }) {
   )
 }
 
-function IdentityDialog({ open, onOpenChange, identity, onSave, isPending }) {
+function IdentityDialog({ open, onOpenChange, identity, onSave, isPending, pictureTypes, pictureTypesLoading, pictureTypesError }) {
   const [identityId, setIdentityId] = useState(identity?.identityId || identity?.name || identity?.identityName || '')
   const [driveFolderId, setDriveFolderId] = useState(identity?.driveFolderId || identity?.driveFolder || '')
-  const [hairColor, setHairColor] = useState(identity?.hairColor || '')
+  const [pictureType, setPictureType] = useState(() => getProfilePictureType(identity))
   const [gmsSourceLinkId, setGmsSourceLinkId] = useState(identity?.gmsSourceLinkId || '')
   const [contentLoop, setContentLoop] = useState(Boolean(identity?.contentLoop))
   const isEdit = Boolean(identity?.id)
+  const pictureOptions = [{ value: 'NONE', label: 'Non définie' },
+    ...pictureTypes.map(type => ({ value: type.id, label: type.label }))]
+  if (pictureType && !pictureTypes.some(type => type.id === pictureType)) {
+    pictureOptions.push({ value: pictureType, label: profilePictureTypeLabel(pictureType, pictureTypes) })
+  }
 
   const handleSave = (event) => {
     event.preventDefault()
@@ -91,7 +97,7 @@ function IdentityDialog({ open, onOpenChange, identity, onSave, isPending }) {
       ...identity,
       identityId: identityId.trim(),
       driveFolderId: driveFolderId.trim(),
-      hairColor: hairColor || null,
+      ...profilePictureSelection(pictureType),
       gmsSourceLinkId: gmsSourceLinkId.trim() || null,
       contentLoop,
     })
@@ -129,17 +135,21 @@ function IdentityDialog({ open, onOpenChange, identity, onSave, isPending }) {
           <fieldset className="space-y-4 border-t border-border pt-5">
             <legend className="mb-3 text-sm font-semibold text-foreground">Apparence et publication</legend>
             <div className="space-y-2">
-              <Label htmlFor="identity-settings-hair">Couleur de cheveux</Label>
-              <Select value={hairColor || 'NONE'} onValueChange={value => setHairColor(value === 'NONE' ? '' : value)} disabled={isPending}>
-                <SelectTrigger id="identity-settings-hair" className="w-full" aria-label="Couleur de cheveux">
-                  <SelectValue>{selected => ({ NONE: 'Non définie', BLONDE: 'Blonde', BRUNETTE: 'Brune' })[selected] || 'Non définie'}</SelectValue>
+              <Label htmlFor="identity-settings-picture">Photo de profil</Label>
+              <Select items={pictureOptions} value={pictureType || 'NONE'} onValueChange={value => setPictureType(value === 'NONE' ? '' : value)}
+                disabled={isPending || pictureTypesLoading || Boolean(pictureTypesError)}>
+                <SelectTrigger id="identity-settings-picture" className="w-full" aria-label="Photo de profil" aria-describedby="identity-settings-picture-help">
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent style={SETTINGS_THEME}><SelectGroup>
-                  <SelectItem value="NONE">Non définie</SelectItem>
-                  <SelectItem value="BLONDE">Blonde</SelectItem>
-                  <SelectItem value="BRUNETTE">Brune</SelectItem>
+                  {pictureOptions.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
                 </SelectGroup></SelectContent>
               </Select>
+              <p id="identity-settings-picture-help" className="text-xs text-muted-foreground">
+                {pictureTypesLoading ? 'Chargement des types de photos…' : pictureTypesError
+                  ? 'Types de photos indisponibles. Réessayez depuis la section Photos de profil.'
+                  : 'Choisissez un type de photos. Ajoutez vos types et leurs dossiers Drive dans la section Photos de profil ci-dessous.'}
+              </p>
             </div>
             <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
               <div className="space-y-1">
@@ -164,6 +174,7 @@ function IdentityDialog({ open, onOpenChange, identity, onSave, isPending }) {
 
 export default function IdentitiesSettings() {
   const queryClient = useQueryClient()
+  const { types: pictureTypes, isLoading: pictureTypesLoading, error: pictureTypesError } = useProfilePictureTypes()
   const [identityDialog, setIdentityDialog] = useState({ open: false, identity: null })
   const [deleteTarget, setDeleteTarget] = useState(null)
   const { data, isLoading, error, refetch } = useQuery({
@@ -232,7 +243,7 @@ export default function IdentitiesSettings() {
             </div>
           ) : identities.length ? (
             <ul className="space-y-3">
-              {identities.map(identity => <IdentityRow key={identity.id || identity.identityId} identity={identity}
+              {identities.map(identity => <IdentityRow key={identity.id || identity.identityId} identity={identity} pictureTypes={pictureTypes}
                 onEdit={selected => setIdentityDialog({ open: true, identity: selected })} onDelete={setDeleteTarget} />)}
             </ul>
           ) : (
@@ -253,7 +264,8 @@ export default function IdentitiesSettings() {
       <IdentityDialog key={identityDialog.open ? (identityDialog.identity?.id ?? 'new') : 'closed'}
         open={identityDialog.open} identity={identityDialog.identity}
         onOpenChange={open => setIdentityDialog({ open, identity: open ? identityDialog.identity : null })}
-        onSave={saveIdentity} isPending={createIdentity.isPending || updateIdentity.isPending} />
+        onSave={saveIdentity} isPending={createIdentity.isPending || updateIdentity.isPending}
+        pictureTypes={pictureTypes} pictureTypesLoading={pictureTypesLoading} pictureTypesError={pictureTypesError} />
 
       <AlertDialog open={Boolean(deleteTarget)} onOpenChange={open => { if (!open && !deleteIdentity.isPending) setDeleteTarget(null) }}>
         <AlertDialogContent style={SETTINGS_THEME}>

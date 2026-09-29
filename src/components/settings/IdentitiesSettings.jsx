@@ -1,4 +1,5 @@
 import { SETTINGS_THEME } from './settingsTheme'
+import IdentityNamePoolDialog from './IdentityNamePoolDialog'
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiDelete, apiGet, apiPost, apiPut } from '@/lib/api'
@@ -34,7 +35,7 @@ function initials(name) {
   return words.slice(0, 2).map(word => word[0].toUpperCase()).join('') || '?'
 }
 
-function IdentityRow({ identity, pictureTypes, onEdit, onDelete }) {
+function IdentityRow({ identity, pictureTypes, onEdit, onDelete, onNames }) {
   const name = identityName(identity)
   const folder = identity.driveFolderId || identity.driveFolder
   const pictureType = getProfilePictureType(identity)
@@ -61,7 +62,8 @@ function IdentityRow({ identity, pictureTypes, onEdit, onDelete }) {
           </div>
         </div>
       </div>
-      <div className="flex shrink-0 gap-2 pl-13 sm:pl-0">
+      <div className="flex shrink-0 flex-wrap gap-2 pl-13 sm:pl-0">
+        <Button type="button" variant="outline" size="sm" onClick={() => onNames(identity)} aria-label={`Pseudos de ${name}`}>Pseudos</Button>
         <Button type="button" variant="outline" size="sm" onClick={() => onEdit(identity)} aria-label={`Modifier ${name}`} title={`Modifier ${name}`}>
           <Pencil data-icon="inline-start" aria-hidden="true" />Modifier
         </Button>
@@ -177,6 +179,7 @@ export default function IdentitiesSettings() {
   const { types: pictureTypes, isLoading: pictureTypesLoading, error: pictureTypesError } = useProfilePictureTypes()
   const [identityDialog, setIdentityDialog] = useState({ open: false, identity: null })
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [namePoolIdentity, setNamePoolIdentity] = useState(null)
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['identities'],
     queryFn: () => apiGet('/api/identities'),
@@ -221,6 +224,7 @@ export default function IdentitiesSettings() {
 
   return (
     <>
+      {namePoolIdentity && <IdentityNamePoolDialog identityId={namePoolIdentity.identityId} onClose={() => setNamePoolIdentity(null)} />}
       <Card className="min-w-0 gap-5 py-6 ring-border">
         <CardHeader className="px-5 sm:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -244,7 +248,7 @@ export default function IdentitiesSettings() {
           ) : identities.length ? (
             <ul className="space-y-3">
               {identities.map(identity => <IdentityRow key={identity.id || identity.identityId} identity={identity} pictureTypes={pictureTypes}
-                onEdit={selected => setIdentityDialog({ open: true, identity: selected })} onDelete={setDeleteTarget} />)}
+                onEdit={selected => setIdentityDialog({ open: true, identity: selected })} onDelete={setDeleteTarget} onNames={setNamePoolIdentity} />)}
             </ul>
           ) : (
             <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-border p-6">

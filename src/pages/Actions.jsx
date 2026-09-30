@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost } from '@/lib/api'
+import { useIdentityMap } from '@/hooks/useIdentityMap'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -337,9 +339,11 @@ function DeviceGroup({ device, deviceAccounts, selectedUsernames, onToggle, onTo
 export default function Actions() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { identityNames, usernameToIdentity, isLoading: identitiesLoading } = useIdentityMap()
 
   // ── Posting run state ──
   const [postingDevice, setPostingDevice] = useState('all')
+  const [postingIdentity, setPostingIdentity] = useState('all')
   const [selectedUsernames, setSelectedUsernames] = useState(new Set())
   const [usernameSearch, setUsernameSearch] = useState('')
 
@@ -399,6 +403,11 @@ export default function Actions() {
     return Array.isArray(raw) ? raw : []
   }, [identitiesData])
 
+  const postingIdentityItems = useMemo(() => [
+    { value: 'all', label: 'All identities' },
+    ...identityNames.map(name => ({ value: name, label: name })),
+  ], [identityNames])
+
   const actionsList = useMemo(() => {
     const a = actionsData?.data?.actions || actionsData?.actions || actionsData?.data || actionsData || []
     return Array.isArray(a) ? a : []
@@ -430,7 +439,7 @@ export default function Actions() {
   // Si le device sélectionné vient d'être désactivé, on retombe sur "All devices"
   const effectivePostingDevice = disabledDeviceUdids.has(postingDevice) ? 'all' : postingDevice
 
-  // ── Posting run: only ACTIVE accounts created more than 6h ago, filter by device ──
+  // ── Posting run: only ACTIVE accounts created more than 6h ago ──
   const activeAccounts = useMemo(() => {
     const sixHours = 6 * 60 * 60 * 1000
     return accounts.filter(a => {
@@ -441,14 +450,20 @@ export default function Actions() {
     })
   }, [accounts, disabledDeviceUdids])
 
-  // Sélection réellement envoyée : exclut les comptes dont le device a été désactivé entre-temps
+  const identityPostingAccounts = useMemo(() => (
+    postingIdentity === 'all'
+      ? activeAccounts
+      : activeAccounts.filter(a => usernameToIdentity[a.username] === postingIdentity)
+  ), [activeAccounts, postingIdentity, usernameToIdentity])
+
+  // Exclut les comptes devenus inéligibles ou sortis de l'identité sélectionnée.
   const postingSelection = useMemo(() => {
-    const postable = new Set(activeAccounts.map(a => a.username))
+    const postable = new Set(identityPostingAccounts.map(a => a.username))
     return [...selectedUsernames].filter(u => postable.has(u))
-  }, [activeAccounts, selectedUsernames])
+  }, [identityPostingAccounts, selectedUsernames])
 
   const filteredPostingAccounts = useMemo(() => {
-    let list = activeAccounts
+    let list = identityPostingAccounts
     if (effectivePostingDevice !== 'all') {
       list = list.filter(a => a.deviceUdid === effectivePostingDevice)
     }
@@ -457,7 +472,7 @@ export default function Actions() {
       list = list.filter(a => (a.username || '').toLowerCase().includes(q))
     }
     return list
-  }, [activeAccounts, effectivePostingDevice, usernameSearch])
+  }, [identityPostingAccounts, effectivePostingDevice, usernameSearch])
 
   const stalePostingAccounts = useMemo(() => {
     const sixHours = 6 * 60 * 60 * 1000
@@ -634,7 +649,7 @@ export default function Actions() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {/* Toolbar: device filter + search */}
+            {/* Toolbar: device and identity filters + search */}
             <div className="flex flex-wrap items-center gap-2">
               <Select value={effectivePostingDevice} onValueChange={v => { setPostingDevice(v); setSelectedUsernames(new Set()) }}>
                 <SelectTrigger className="w-[200px] text-xs bg-[#0A0A0A] border-[#1a1a1a] text-[#FAFAFA] h-8">
@@ -648,6 +663,26 @@ export default function Actions() {
                       {d.name}
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                items={postingIdentityItems}
+                value={postingIdentity}
+                onValueChange={value => { setPostingIdentity(value); setSelectedUsernames(new Set()) }}
+                disabled={identitiesLoading}
+              >
+                <SelectTrigger aria-label="Filter by identity" className="w-[180px] text-xs bg-[#0A0A0A] border-[#1a1a1a] text-[#FAFAFA] h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#111111] border-[#1a1a1a]">
+                  <SelectGroup>
+                    {postingIdentityItems.map(item => (
+                      <SelectItem key={item.value} value={item.value} className="text-xs text-[#FAFAFA]">
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 </SelectContent>
               </Select>
 

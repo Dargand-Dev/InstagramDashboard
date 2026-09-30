@@ -419,27 +419,45 @@ export default function Actions() {
     }
   }, [identities])
 
+  // ── Posting run: disabled devices and their accounts are hidden ──
+  const postingDevices = useMemo(() => devices.filter(d => d.enabled !== false), [devices])
+
+  const disabledDeviceUdids = useMemo(
+    () => new Set(devices.filter(d => d.enabled === false).map(d => d.udid)),
+    [devices],
+  )
+
+  // Si le device sélectionné vient d'être désactivé, on retombe sur "All devices"
+  const effectivePostingDevice = disabledDeviceUdids.has(postingDevice) ? 'all' : postingDevice
+
   // ── Posting run: only ACTIVE accounts created more than 6h ago, filter by device ──
   const activeAccounts = useMemo(() => {
     const sixHours = 6 * 60 * 60 * 1000
     return accounts.filter(a => {
       if (a.status !== 'ACTIVE') return false
+      if (a.deviceUdid && disabledDeviceUdids.has(a.deviceUdid)) return false
       if (a.createdAt && Date.now() - new Date(a.createdAt).getTime() < sixHours) return false
       return true
     })
-  }, [accounts])
+  }, [accounts, disabledDeviceUdids])
+
+  // Sélection réellement envoyée : exclut les comptes dont le device a été désactivé entre-temps
+  const postingSelection = useMemo(() => {
+    const postable = new Set(activeAccounts.map(a => a.username))
+    return [...selectedUsernames].filter(u => postable.has(u))
+  }, [activeAccounts, selectedUsernames])
 
   const filteredPostingAccounts = useMemo(() => {
     let list = activeAccounts
-    if (postingDevice !== 'all') {
-      list = list.filter(a => a.deviceUdid === postingDevice)
+    if (effectivePostingDevice !== 'all') {
+      list = list.filter(a => a.deviceUdid === effectivePostingDevice)
     }
     if (usernameSearch) {
       const q = usernameSearch.toLowerCase()
       list = list.filter(a => (a.username || '').toLowerCase().includes(q))
     }
     return list
-  }, [activeAccounts, postingDevice, usernameSearch])
+  }, [activeAccounts, effectivePostingDevice, usernameSearch])
 
   const stalePostingAccounts = useMemo(() => {
     const sixHours = 6 * 60 * 60 * 1000
@@ -452,7 +470,7 @@ export default function Actions() {
   // Group accounts by device for the device view
   const deviceGroups = useMemo(() => {
     const grouped = {}
-    for (const d of devices) {
+    for (const d of postingDevices) {
       grouped[d.udid] = { device: d, accounts: [] }
     }
     const unknown = []
@@ -468,15 +486,16 @@ export default function Actions() {
       groups.push({ device: { udid: '__unknown', name: 'Unknown Device' }, accounts: unknown })
     }
     return groups
-  }, [devices, filteredPostingAccounts])
+  }, [postingDevices, filteredPostingAccounts])
 
   // ── Mutations ──
   const triggerRun = useMutation({
     mutationFn: (body) => apiPost('/api/automation/trigger', body),
-    onSuccess: () => {
+    onSuccess: (_, body) => {
+      const count = body?.usernames?.length || 0
       toast.success(
-        selectedUsernames.size > 0
-          ? `Run triggered for ${selectedUsernames.size} account(s)`
+        count > 0
+          ? `Run triggered for ${count} account(s)`
           : 'Run triggered (all accounts)'
       )
       setSelectedUsernames(new Set())
@@ -617,14 +636,14 @@ export default function Actions() {
           <div className="space-y-4">
             {/* Toolbar: device filter + search */}
             <div className="flex flex-wrap items-center gap-2">
-              <Select value={postingDevice} onValueChange={v => { setPostingDevice(v); setSelectedUsernames(new Set()) }}>
+              <Select value={effectivePostingDevice} onValueChange={v => { setPostingDevice(v); setSelectedUsernames(new Set()) }}>
                 <SelectTrigger className="w-[200px] text-xs bg-[#0A0A0A] border-[#1a1a1a] text-[#FAFAFA] h-8">
                   <Smartphone className="w-3 h-3 text-[#52525B] mr-1.5" />
                   <SelectValue placeholder="All devices" />
                 </SelectTrigger>
                 <SelectContent className="bg-[#111111] border-[#1a1a1a]">
                   <SelectItem value="all" className="text-xs text-[#A1A1AA]">All devices</SelectItem>
-                  {devices.map(d => (
+                  {postingDevices.map(d => (
                     <SelectItem key={d.udid} value={d.udid} className="text-xs text-[#FAFAFA]">
                       {d.name}
                     </SelectItem>
@@ -644,7 +663,7 @@ export default function Actions() {
 
               <div className="flex items-center gap-2 ml-auto">
                 <span className="text-[10px] text-[#3f3f46] font-mono tabular-nums">
-                  {selectedUsernames.size}/{filteredPostingAccounts.length}
+                  {postingSelection.length}/{filteredPostingAccounts.length}
                 </span>
                 {stalePostingAccounts.length > 0 && (
                   <button
@@ -691,8 +710,8 @@ export default function Actions() {
             <div className="flex items-center gap-2 pt-2 border-t border-[#1a1a1a]">
               <Button
                 className="flex-1 bg-[#3B82F6] hover:bg-[#2563EB] text-white"
-                disabled={triggerRun.isPending || selectedUsernames.size === 0}
-                onClick={() => triggerRun.mutate({ usernames: [...selectedUsernames] })}
+                disabled={triggerRun.isPending || postingSelection.length === 0}
+                onClick={() => triggerRun.mutate({ usernames: postingSelection })}
               >
                 {triggerRun.isPending ? (
                   <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
@@ -701,7 +720,7 @@ export default function Actions() {
                 )}
                 {triggerRun.isPending
                   ? 'Triggering...'
-                  : `Trigger Run (${selectedUsernames.size})`}
+                  : `Trigger Run (${postingSelection.length})`}
               </Button>
               {isLocked && (
                 <Button

@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/authStore'
 import { useNotificationStore } from '@/stores/notificationStore'
-import { contentIssueKey } from '@/stores/notificationState'
 import ContentIssueDialog from './ContentIssueDialog'
 
 export default function NotificationHost({ subscribe, isConnected }) {
@@ -19,7 +18,7 @@ export default function NotificationHost({ subscribe, isConnected }) {
     if (!token) return
     return subscribe('/topic/notifications', (notification) => {
       const isNew = addNotification(notification)
-      if (isNew && !contentIssueKey(notification)) {
+      if (isNew) {
         toast(notification.title || 'Nouvelle notification', { description: notification.message })
       }
     })

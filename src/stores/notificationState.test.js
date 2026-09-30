@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createStore } from 'zustand/vanilla'
-import { blockingContentIssues, createNotificationState } from './notificationState.js'
+import { createNotificationState } from './notificationState.js'
 
 const notification = (id, overrides = {}) => ({
   id, title: 'Vidéo invalide', read: false, timestamp: '2026-09-27T12:00:00Z',
@@ -10,44 +10,35 @@ const notification = (id, overrides = {}) => ({
 })
 const makeStore = (fetchList = async () => []) => createStore(createNotificationState(fetchList))
 
-test('blocking banner survives reading and dismissing the popup', () => {
-  const store = makeStore()
-  store.getState().addNotification(notification('n1'))
-  const key = store.getState().contentAlertQueue[0]
-  store.getState().dismissContentIssue(key)
-  store.getState().markAllRead()
-  const issues = blockingContentIssues(store.getState().notifications)
-  assert.deepEqual(issues.map((n) => n.id), ['n1'])
+for (const trashed of [false, true]) {
+  test(`missing-template event remains unread without opening a modal (trashed=${trashed})`, () => {
+    const store = makeStore()
+    const incoming = notification('n1')
+    incoming.contentIssue.trashed = trashed
+    assert.equal(store.getState().addNotification(incoming), true)
+    assert.equal(store.getState().notifications.length, 1)
+    assert.equal(store.getState().unreadCount, 1)
+    assert.deepEqual(store.getState().contentAlertQueue, [])
+  })
+}
+
+test('historical missing-template notifications do not open a modal on fetch or reconnect', async () => {
+  const store = makeStore(async () => [notification('legacy')])
+  await store.getState().fetchNotifications()
+  await store.getState().fetchNotifications()
+  assert.deepEqual(store.getState().notifications.map((n) => n.id), ['legacy'])
+  assert.equal(store.getState().unreadCount, 1)
+  assert.deepEqual(store.getState().contentAlertQueue, [])
 })
 
-test('blocking banner groups the same video across runs but keeps distinct files', () => {
-  const first = notification('n1')
-  const nextRun = notification('n2')
-  nextRun.contentIssue.runId = 'run-2'
-  const anotherFile = notification('n3')
-  anotherFile.contentIssue.driveFileId = 'drive-2'
-  assert.deepEqual(blockingContentIssues([nextRun, first, anotherFile])
-    .map((n) => n.id), ['n2', 'n3'])
-})
-
-test('blocking banner removes a trashed file and ignores ordinary notifications', () => {
-  const store = makeStore()
-  store.getState().addNotification(notification('n1'))
-  store.getState().addNotification(notification('normal', { contentIssue: null }))
-  const trashed = notification('n1')
-  trashed.contentIssue.trashed = true
-  store.getState().addNotification(trashed)
-  assert.deepEqual(blockingContentIssues(store.getState().notifications), [])
-})
-
-test('replayed events and duplicate run/file events produce one alert and one unread item', () => {
+test('replayed events and duplicate run/file events produce one unread item without a modal', () => {
   const store = makeStore()
   store.getState().addNotification(notification('n1'))
   store.getState().addNotification(notification('n1'))
   store.getState().addNotification(notification('n2'))
   assert.equal(store.getState().notifications.length, 1)
   assert.equal(store.getState().unreadCount, 1)
-  assert.equal(store.getState().contentAlertQueue.length, 1)
+  assert.deepEqual(store.getState().contentAlertQueue, [])
 })
 
 test('late initial fetch retains a live event and its local read state', async () => {
@@ -66,7 +57,9 @@ test('late initial fetch retains a live event and its local read state', async (
 test('dismissal survives repeated events and fetches, with explicit reopening allowed', async () => {
   const store = makeStore(async () => [notification('n1')])
   await store.getState().fetchNotifications()
+  store.getState().openContentIssue('n1')
   const key = store.getState().contentAlertQueue[0]
+  assert.equal(key, '["MISSING_TEMPLATE","run-1","drive-1"]')
   store.getState().dismissContentIssue(key)
   store.getState().addNotification(notification('n1'))
   await store.getState().fetchNotifications()
@@ -90,6 +83,8 @@ test('trash success updates every run for a file and suppresses queued repeats',
   second.contentIssue.runId = 'run-2'
   store.getState().addNotification(notification('n1'))
   store.getState().addNotification(second)
+  store.getState().openContentIssue('n2')
+  store.getState().openContentIssue('n1')
   const activeKey = store.getState().contentAlertQueue[0]
   store.getState().markDriveFileTrashed('drive-1')
   assert.ok(store.getState().notifications.every((n) => n.contentIssue.trashed))
@@ -115,6 +110,8 @@ test('a remote trash event updates the open alert and removes queued alerts for 
   const anotherRun = notification('n2')
   anotherRun.contentIssue.runId = 'run-2'
   store.getState().addNotification(anotherRun)
+  store.getState().openContentIssue('n2')
+  store.getState().openContentIssue('n1')
   const activeKey = store.getState().contentAlertQueue[0]
   const trashed = notification('n1')
   trashed.contentIssue.trashed = true

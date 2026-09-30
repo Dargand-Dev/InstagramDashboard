@@ -80,8 +80,8 @@ function ContentIssueDetails({ notification, queuedCount }) {
     <Dialog open onOpenChange={(open) => { if (!open) dismiss() }}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl" showCloseButton={!pending}>
         <DialogHeader className="pr-8">
-          <DialogTitle>Vidéo Drive à corriger</DialogTitle>
-          <DialogDescription>La publication a été bloquée par une vidéo sans template reconnu.</DialogDescription>
+          <DialogTitle>Détail de la vidéo Drive</DialogTitle>
+          <DialogDescription>Les vidéos sans template reconnu sont écartées de la sélection automatique.</DialogDescription>
         </DialogHeader>
 
         <dl className="grid gap-3 text-sm">
@@ -99,7 +99,7 @@ function ContentIssueDetails({ notification, queuedCount }) {
           <Alert>
             <CheckCircle />
             <AlertTitle>Vidéo mise à la corbeille</AlertTitle>
-            <AlertDescription>Ce fichier ne sera plus sélectionné dans Drive. La publication bloquée n’a pas été relancée.</AlertDescription>
+            <AlertDescription>Ce fichier ne sera plus sélectionné dans Drive.</AlertDescription>
           </Alert>
         ) : (
           <Alert variant="destructive">
@@ -139,7 +139,7 @@ function ContentIssueDetails({ notification, queuedCount }) {
         <p className="text-xs text-muted-foreground">Vous pouvez retrouver cette alerte dans Notifications.{queuedCount > 1 && ` ${queuedCount - 1} autre(s) alerte(s) en attente.`}</p>
 
         <DialogFooter>
-          <Button variant="outline" onClick={dismiss} disabled={pending}>{issue.trashed ? 'Fermer' : 'Fermer pour le moment'}</Button>
+          <Button variant="outline" onClick={dismiss} disabled={pending}>Fermer</Button>
         </DialogFooter>
 
         <AlertDialog open={confirmTrash} onOpenChange={(open) => { if (!pending) setConfirmTrash(open) }}>
@@ -147,7 +147,7 @@ function ContentIssueDetails({ notification, queuedCount }) {
             <AlertDialogHeader>
               <AlertDialogTitle>Mettre la vidéo à la corbeille ?</AlertDialogTitle>
               <AlertDialogDescription>
-                <span className="break-all font-medium">{issue.filename || 'Cette vidéo'}</span> sera déplacée dans la corbeille Google Drive et ne sera plus disponible pour les publications de tous les comptes qui utilisent ce fichier. Cette action ne relance pas la publication.
+                <span className="break-all font-medium">{issue.filename || 'Cette vidéo'}</span> sera déplacée dans la corbeille Google Drive et ne sera plus disponible pour les publications de tous les comptes qui utilisent ce fichier.
               </AlertDialogDescription>
             </AlertDialogHeader>
             {errorAlert}

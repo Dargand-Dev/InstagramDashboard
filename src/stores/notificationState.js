@@ -4,31 +4,13 @@ export function contentIssueKey(notification) {
   return JSON.stringify([issue.code, issue.runId || notification.id, issue.driveFileId])
 }
 
-// Lire ou fermer le pop-up ne résout pas le fichier qui a bloqué la publication.
-export function blockingContentIssues(notifications) {
-  const seenFiles = new Set()
-  return notifications.filter((notification) => {
-    if (!contentIssueKey(notification) || notification.contentIssue.trashed) return false
-    const fileId = notification.contentIssue.driveFileId
-    if (seenFiles.has(fileId)) return false
-    seenFiles.add(fileId)
-    return true
-  })
-}
-
 function withNotifications(state, notifications) {
   const byIssueKey = new Map(notifications.map((notification) => [contentIssueKey(notification), notification]))
+  // Le détail s'ouvre uniquement à la demande depuis Notifications.
   const contentAlertQueue = state.contentAlertQueue.filter((key, index) => {
     const notification = byIssueKey.get(key)
     return notification && (index === 0 || (!notification.read && !notification.contentIssue.trashed))
   })
-  for (const notification of notifications) {
-    const key = contentIssueKey(notification)
-    if (key && !notification.read && !notification.contentIssue.trashed
-      && !state.dismissedIssueKeys.includes(key) && !contentAlertQueue.includes(key)) {
-      contentAlertQueue.push(key)
-    }
-  }
   return { notifications, unreadCount: notifications.filter((n) => !n.read).length, contentAlertQueue }
 }
 
@@ -56,7 +38,7 @@ function mergeNotifications(state, incoming, preferExisting = false) {
 }
 
 const initialState = () => ({
-  notifications: [], unreadCount: 0, contentAlertQueue: [], dismissedIssueKeys: [], deletedIds: [],
+  notifications: [], unreadCount: 0, contentAlertQueue: [], deletedIds: [],
 })
 
 export function createNotificationState(fetchList) {
@@ -84,7 +66,6 @@ export function createNotificationState(fetchList) {
 
     dismissContentIssue: (key) => set((state) => ({
       contentAlertQueue: state.contentAlertQueue.filter((item) => item !== key),
-      dismissedIssueKeys: [...new Set([...state.dismissedIssueKeys, key])],
     })),
 
     openContentIssue: (id) => set((state) => {
@@ -100,7 +81,6 @@ export function createNotificationState(fetchList) {
         notifications,
         // La modale active reste ouverte pour afficher le résultat de l'action.
         contentAlertQueue: state.contentAlertQueue.filter((key, index) => index === 0 || !affectedKeys.includes(key)),
-        dismissedIssueKeys: [...new Set([...state.dismissedIssueKeys, ...affectedKeys])],
       }
     }),
 

@@ -49,7 +49,6 @@ import ManualControlOverlay from '@/components/manual-control/ManualControlOverl
 import ManualControlBootstrapper from '@/components/manual-control/ManualControlBootstrapper'
 import WallBanner from '@/components/wall/WallBanner'
 import NotificationHost from '@/components/notifications/NotificationHost'
-import ContentIssueBanner from '@/components/notifications/ContentIssueBanner'
 
 const NAV_SECTIONS = [
   {
@@ -338,8 +337,6 @@ export default function AppLayout() {
             </Link>
           </div>
         </header>
-
-        <ContentIssueBanner />
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">

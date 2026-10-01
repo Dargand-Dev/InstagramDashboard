@@ -1,13 +1,15 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   useStartScan, useScanStatus, useMissingReels, useRecheckOne, useDismissOne,
+  useResumeUploads, useStartResumeUploads,
 } from '@/hooks/useReelVerification'
 import { apiGet, apiPost } from '@/lib/api'
 import DataTable from '@/components/shared/DataTable'
 import EmptyState from '@/components/shared/EmptyState'
 import TimeAgo from '@/components/shared/TimeAgo'
+import ResumeUploadsCard from '@/components/reel-verification/ResumeUploadsCard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -16,7 +18,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import {
-  ShieldCheck, RefreshCw, CheckCircle2, AlertCircle, Clock, EyeOff, Smartphone, Container,
+  ShieldCheck, RefreshCw, CheckCircle2, AlertCircle, Clock, EyeOff, Smartphone, Container, Loader2, Upload,
 } from 'lucide-react'
 
 const ALL_DEVICES = '__all__'
@@ -40,6 +42,25 @@ export default function ReelVerification() {
   const missing = useMissingReels(hours)
   const recheck = useRecheckOne()
   const dismiss = useDismissOne()
+  const resumeUploads = useResumeUploads()
+  const startResumeUploads = useStartResumeUploads()
+  const notifiedResumeRun = useRef(null)
+  const resumeRunning = resumeUploads.data?.status === 'RUNNING'
+  const resumeBusy = resumeRunning || startResumeUploads.isPending
+  const resumeControlsLocked = resumeBusy || resumeUploads.isPending || resumeUploads.isError
+
+  useEffect(() => {
+    const run = resumeUploads.data
+    if (!run || run.status === 'RUNNING' || notifiedResumeRun.current === run.runId) return
+    notifiedResumeRun.current = run.runId
+    qc.invalidateQueries({ queryKey: ['reel-verification', 'missing'] })
+    qc.invalidateQueries({ queryKey: ['posting-history'] })
+    if (run.status === 'FAILED') {
+      toast.error(`Reprise interrompue — ${run.error || 'consultez les résultats par compte'}`)
+    } else {
+      toast.info(`Reprise terminée — ${run.processed ?? 0}/${run.total ?? 0} comptes traités`)
+    }
+  }, [resumeUploads.data, qc])
 
   // Comptes + devices pour résoudre containerId / containerName / rotatingUrl
   // afin de permettre l'ouverture du conteneur directement depuis la ligne.
@@ -250,6 +271,24 @@ export default function ReelVerification() {
     [records],
   )
 
+  const handleResumeUploads = async () => {
+    if (resumeControlsLocked || records.length === 0) return
+    try {
+      const run = await startResumeUploads.mutateAsync([...new Set(records.map(r => r.entryId))])
+      if (run?.locked) {
+        toast.error('Système verrouillé, réessayer plus tard')
+        return
+      }
+      if (!run?.runId) {
+        toast.error('Impossible de démarrer la reprise des publications')
+      }
+    } catch (e) {
+      toast.error(`Reprise impossible — ${e.message}`)
+      // Le serveur peut avoir démarré le traitement avant une rupture réseau.
+      resumeUploads.refetch()
+    }
+  }
+
   // Taux de fail par device sur la fenêtre courante :
   //   fail% = manquants_device / total_posté_device (sur `hours`).
   // On utilise allRecords (pas records) pour ne pas dépendre du filtre device.
@@ -351,7 +390,7 @@ export default function ReelVerification() {
             <Button
               size="sm"
               variant="outline"
-              disabled={!canOpenContainer}
+              disabled={!canOpenContainer || resumeControlsLocked}
               onClick={() => handleOpenContainer(row.original)}
               title={canOpenContainer ? 'Rotate proxy & ouvrir le conteneur' : 'Aucun conteneur assigné à ce compte'}
             >
@@ -361,7 +400,7 @@ export default function ReelVerification() {
             <Button
               size="sm"
               variant="ghost"
-              disabled={dismiss.isPending}
+              disabled={dismiss.isPending || resumeControlsLocked}
               onClick={() => handleDismiss(row.original.entryId)}
             >
               <EyeOff className="h-3 w-3 mr-1" />
@@ -370,7 +409,7 @@ export default function ReelVerification() {
             <Button
               size="sm"
               variant="outline"
-              disabled={recheck.isPending}
+              disabled={recheck.isPending || resumeControlsLocked}
               onClick={() => handleRecheck(row.original.entryId)}
             >
               <RefreshCw className="h-3 w-3 mr-1" />
@@ -380,7 +419,7 @@ export default function ReelVerification() {
         )
       },
     },
-  ], [recheck.isPending, dismiss.isPending, handleRecheck, handleDismiss, handleOpenContainer, accountByUsername])
+  ], [recheck.isPending, dismiss.isPending, handleRecheck, handleDismiss, handleOpenContainer, accountByUsername, resumeControlsLocked])
 
   return (
     <div className="p-6 space-y-6">
@@ -408,7 +447,7 @@ export default function ReelVerification() {
                   size="sm"
                   variant={hours === w.value ? 'default' : 'outline'}
                   onClick={() => setHours(w.value)}
-                  disabled={scanRunning}
+                  disabled={scanRunning || resumeControlsLocked}
                 >
                   {w.label}
                 </Button>
@@ -419,7 +458,7 @@ export default function ReelVerification() {
           <div className="flex items-center gap-2">
             <Smartphone className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm text-muted-foreground">Téléphone :</span>
-            <Select value={deviceFilter} onValueChange={setDeviceFilter}>
+            <Select value={deviceFilter} onValueChange={setDeviceFilter} disabled={resumeControlsLocked}>
               <SelectTrigger className="h-8 w-[200px]">
                 <SelectValue placeholder="Tous" />
               </SelectTrigger>
@@ -435,13 +474,37 @@ export default function ReelVerification() {
             </Select>
           </div>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={handleResumeUploads}
+              disabled={
+                resumeControlsLocked
+                || scanRunning
+                || startScan.isPending
+                || !!bulkRecheck
+                || recheck.isPending
+                || dismiss.isPending
+                || missing.isFetching
+                || uniqueUsers === 0
+              }
+              title="Ouvre une fois chaque compte affiché, attend la fin de l’envoi pendant 40 s maximum, puis ferme Instagram"
+            >
+              {resumeBusy
+                ? <Loader2 data-icon="inline-start" className="animate-spin" />
+                : <Upload data-icon="inline-start" />}
+              {resumeBusy
+                ? `Reprise… (${resumeUploads.data?.processed ?? 0}/${resumeUploads.data?.total ?? uniqueUsers})`
+                : `Reprendre les publications${uniqueUsers > 0 ? ` (${uniqueUsers} ${uniqueUsers === 1 ? 'compte' : 'comptes'})` : ''}`}
+            </Button>
             <Button
               variant="outline"
               onClick={() => handleRecheckAll(records.map(r => r.entryId))}
               disabled={
                 !!bulkRecheck
                 || scanRunning
+                || startScan.isPending
+                || resumeControlsLocked
                 || records.length === 0
               }
               title="Re-vérifie toutes les entries actuellement listées"
@@ -453,7 +516,7 @@ export default function ReelVerification() {
             </Button>
             <Button
               onClick={handleScan}
-              disabled={scanRunning || startScan.isPending || !!bulkRecheck}
+              disabled={scanRunning || startScan.isPending || !!bulkRecheck || resumeControlsLocked}
             >
               {scanRunning
                 ? `Scan en cours… (${scanStatus.data?.done ?? 0}/${scanStatus.data?.total ?? 0})`
@@ -462,6 +525,13 @@ export default function ReelVerification() {
           </div>
         </CardContent>
       </Card>
+
+      <ResumeUploadsCard
+        run={resumeUploads.data}
+        isError={resumeUploads.isError}
+        isFetching={resumeUploads.isFetching}
+        onRefresh={() => resumeUploads.refetch()}
+      />
 
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

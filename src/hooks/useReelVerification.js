@@ -30,6 +30,8 @@ export function useResumeUploads() {
     },
     staleTime: 0,
     refetchOnMount: 'always',
+    // Garder le bilan à jour même lorsque Safari laisse cet onglet en arrière-plan.
+    refetchIntervalInBackground: true,
     refetchInterval: (query) => {
       if (query.state.status === 'error') return false
       return query.state.data?.status === 'RUNNING' ? 2000 : false

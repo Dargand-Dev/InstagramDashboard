@@ -10,6 +10,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, '')
   return {
+    optimizeDeps: {
+      // Regénère les URLs des dépendances à chaque démarrage pour éviter
+      // que Safari réutilise des modules en cache pointant vers d'anciens chunks.
+      force: true,
+    },
     plugins: [
       react(),
       tailwindcss(),

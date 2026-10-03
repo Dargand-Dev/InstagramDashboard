@@ -15,6 +15,7 @@ import EmptyState from '@/components/shared/EmptyState'
 import HealthScoreBadge from '@/components/shared/HealthScoreBadge'
 import CountUp from '@/components/shared/CountUp'
 import ContentStockList from '@/components/dashboard/ContentStockList'
+import { countStoryLinkRestricted } from '@/utils/storyLinkRestriction'
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid,
@@ -37,6 +38,7 @@ import {
   Gauge,
   ChevronDown,
   RefreshCw,
+  Link2Off,
 } from 'lucide-react'
 
 const CREATION_TYPES = ['CreateAccount', 'CreateAccountFromExistingContainer', 'CreateAccountNoReel']
@@ -444,6 +446,7 @@ export default function Dashboard() {
     })
     return counts
   }, [allAccounts])
+  const storyLinkRestricted = useMemo(() => countStoryLinkRestricted(allAccounts), [allAccounts])
 
   // Alert conditions
   const lowStockIdentities = countableIdentities.filter(
@@ -738,6 +741,22 @@ export default function Dashboard() {
                     <span className="text-sm font-medium text-[#FAFAFA] tabular-nums">{count}</span>
                   </div>
                 ))}
+                {/* Recoupe les statuts : un compte restreint reste ACTIVE et poste ses Reels */}
+                <div
+                  className="flex items-center justify-between border-t border-[#1a1a1a] pt-3"
+                  title="Instagram refuse le sticker Link à ces comptes (bannis exclus)"
+                >
+                  <div className="flex items-center gap-2">
+                    <Link2Off className="w-3 h-3 text-[#EF4444]" />
+                    <span className="text-sm text-[#A1A1AA]">Liens restreints</span>
+                  </div>
+                  <span className="text-sm font-medium text-[#FAFAFA] tabular-nums">
+                    {storyLinkRestricted.total}
+                    {storyLinkRestricted.lastWeek > 0 && (
+                      <span className="ml-1 text-xs text-[#EF4444]/70">+{storyLinkRestricted.lastWeek} / 7 j</span>
+                    )}
+                  </span>
+                </div>
               </div>
             </CardContent>
           </Card>

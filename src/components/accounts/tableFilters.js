@@ -1,6 +1,8 @@
 // Pure filter logic for the Accounts table view.
 // No React dependencies — just data definitions and evaluation functions.
 
+import { isStoryLinkRestricted } from '@/utils/storyLinkRestriction'
+
 export function nextFilterId() {
   return crypto.randomUUID()
 }
@@ -107,6 +109,12 @@ export const FILTER_FIELDS = [
     operators: [{ value: 'eq', label: 'is' }],
   },
   {
+    key: 'storyLinkRestricted',
+    label: 'Liens restreints',
+    type: 'boolean',
+    operators: [{ value: 'eq', label: 'is' }],
+  },
+  {
     key: 'username',
     label: 'Username',
     type: 'text',
@@ -181,6 +189,11 @@ export const FILTER_PRESETS = [
     icon: 'Link',
     filters: [{ field: 'hasLink', operator: 'eq', value: true }],
   },
+  {
+    label: 'Liens restreints',
+    icon: 'Link2Off',
+    filters: [{ field: 'storyLinkRestricted', operator: 'eq', value: true }],
+  },
 ]
 
 // ── Field Value Resolution ─────────────────────────────────────────
@@ -195,6 +208,8 @@ function getFieldValue(account, fieldKey, enrichment) {
       return enrichment.accountDeviceMap[account.id] || ''
     case 'hasLink':
       return !!account.storyLinkUrl
+    case 'storyLinkRestricted':
+      return isStoryLinkRestricted(account)
     case 'viewsLast30Days': {
       const snap = enrichment.scraperByUsername?.[account.username]
       return snap?.viewsLast30Days ?? account.viewsLast30Days ?? 0

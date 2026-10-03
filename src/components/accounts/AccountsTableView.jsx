@@ -2,11 +2,12 @@ import { useState, useMemo } from 'react'
 import {
   SlidersHorizontal, X, Plus, Clock, Calendar, TrendingDown, TrendingUp,
   Ban, Link, ChevronDown, ChevronUp, Table2, Smartphone, CalendarOff, ExternalLink,
-  Target, CalendarClock, CheckCircle2, CalendarRange, AlertTriangle,
+  Target, CalendarClock, CheckCircle2, CalendarRange, AlertTriangle, Link2Off,
 } from 'lucide-react'
 import DataTable from '@/components/shared/DataTable'
 import StatusBadge from '@/components/shared/StatusBadge'
 import AccountWarnings from './AccountWarnings'
+import { isStoryLinkRestricted } from '@/utils/storyLinkRestriction'
 import { Blur } from '@/contexts/IncognitoContext'
 import {
   FILTER_FIELDS, FILTER_PRESETS, applyFilters, formatFilterLabel, nextFilterId,
@@ -16,7 +17,7 @@ import {
 
 const PRESET_ICONS = {
   Clock, Calendar, TrendingDown, TrendingUp, Ban, Link, SmartphoneOff: Smartphone, CalendarOff,
-  Target, CalendarClock, CheckCircle2, CalendarRange,
+  Target, CalendarClock, CheckCircle2, CalendarRange, Link2Off,
 }
 
 // ── Relative time formatter ────────────────────────────────────────
@@ -402,6 +403,16 @@ export default function AccountsTableView({
       cell: ({ row }) => {
         const link = row.original.storyLinkUrl
         if (!link) return <span className="text-[#333]">---</span>
+        if (isStoryLinkRestricted(row.original)) {
+          return (
+            <span
+              title={row.original.storyLinkRestrictionReason || 'Instagram refuse le sticker Link'}
+              className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-md border bg-red-500/10 text-red-400 border-red-500/20"
+            >
+              Restreint
+            </span>
+          )
+        }
         const status = row.original.highlightStatus
         const colors = status === 'HIGHLIGHT_ACTIVE'
           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Trash2, Search, Users, Link, Pencil, X, ExternalLink, Smartphone, Check, Calendar, LayoutList, LayoutGrid, ChevronRight, ChevronDown, Container, BarChart3, AlertOctagon, AlertTriangle } from 'lucide-react'
+import { Trash2, Search, Users, Link, Pencil, X, ExternalLink, Smartphone, Check, Calendar, LayoutList, LayoutGrid, ChevronRight, ChevronDown, Container, BarChart3, AlertOctagon, AlertTriangle, Link2Off } from 'lucide-react'
 import { toast } from 'sonner'
 import StatusBadge from '../components/StatusBadge'
 import { useApi, apiPost, apiPut, apiDelete } from '../hooks/useApi'
@@ -12,6 +12,7 @@ import AccountsTableView from '../components/accounts/AccountsTableView'
 import AccountHistory from '../components/accounts/AccountHistory'
 import ReelStatsView from '../components/accounts/stats/ReelStatsView'
 import { latestSnapshotPerUsername } from '../utils/analyticsScoring'
+import { isStoryLinkRestricted, countStoryLinkRestricted } from '../utils/storyLinkRestriction'
 
 const STATUSES = ['ALL', 'ACTIVE', 'SUSPENDED', 'AUTO_SUSPENDED', 'BANNED', 'ERROR']
 
@@ -121,6 +122,7 @@ export default function Accounts() {
 
   const [identityFilter, setIdentityFilter] = useState('ALL')
   const [deviceFilter, setDeviceFilter] = useState('ALL')
+  const [restrictedOnly, setRestrictedOnly] = useState(false)
 
   // Build post count per username from posting history
   const postCounts = useMemo(() => {
@@ -147,6 +149,8 @@ export default function Accounts() {
     () => (accounts || []).filter(a => a.setupProfessionalFailed || a.twoFaFailed).length,
     [accounts],
   )
+
+  const restrictedCounts = useMemo(() => countStoryLinkRestricted(accounts), [accounts])
 
   const identityCounts = useMemo(() => {
     if (!accounts) return {}
@@ -241,6 +245,7 @@ export default function Accounts() {
           if (deviceFilter === 'No Device') return !a.deviceUdid
           return accountDeviceMap[a.id] === deviceFilter
         })
+        .filter(a => !restrictedOnly || isStoryLinkRestricted(a))
         .filter(a => a.username?.toLowerCase().includes(search.toLowerCase()))
     : []
 
@@ -414,6 +419,22 @@ export default function Accounts() {
                 <AlertTriangle size={11} />
                 {warningsCount} avec warnings
               </span>
+            )}
+            {(restrictedCounts.total > 0 || restrictedOnly) && (
+              <button
+                type="button"
+                onClick={() => { setRestrictedOnly(v => !v); setSelectedId(null) }}
+                title={restrictedOnly
+                  ? 'Afficher tous les comptes'
+                  : 'Instagram refuse le sticker Link à ces comptes (bannis exclus). Cliquer pour les lister.'}
+                className={`inline-flex items-center gap-1 rounded px-1 transition-colors ${
+                  restrictedOnly ? 'bg-red-500/10 text-red-300' : 'text-red-400 hover:text-red-300'
+                }`}
+              >
+                <Link2Off size={11} />
+                {restrictedCounts.total} liens restreints
+                {restrictedCounts.lastWeek > 0 && <span className="text-red-400/60">(+{restrictedCounts.lastWeek} sur 7 j)</span>}
+              </button>
             )}
           </p>
         </div>
@@ -669,6 +690,9 @@ export default function Accounts() {
                   <div className="flex items-center gap-2.5">
                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDotColor(account.status)}`} />
                     <span className="text-sm font-semibold text-white truncate"><Blur>{account.username}</Blur></span>
+                    {isStoryLinkRestricted(account) && (
+                      <Link2Off size={12} className="text-red-400 flex-shrink-0" aria-label="Liens Story restreints" />
+                    )}
                   </div>
                   <p className="text-xs text-[#444] mt-0.5 ml-[18px] truncate">
                     {usernameToIdentity[account.username] && <span className="text-[#555] font-medium"><Blur>{usernameToIdentity[account.username]}</Blur> · </span>}
@@ -810,6 +834,37 @@ export default function Accounts() {
                         <span className="text-[#555] min-w-[110px] shrink-0">Grâce jusqu'au</span>
                         <span className={`${new Date(selectedAccount.autoSuspendGraceUntil).getTime() > Date.now() ? 'text-emerald-400' : 'text-[#555]'}`}>
                           {new Date(selectedAccount.autoSuspendGraceUntil).toLocaleString()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Liens Story restreints — Instagram refuse le sticker Link à ce compte */}
+              {isStoryLinkRestricted(selectedAccount) && (
+                <div className="px-8 py-5 border-b border-[#1a1a1a] bg-red-500/[0.03]">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Link2Off size={14} className="text-red-400" />
+                    <span className="label-upper !mb-0 text-red-400">Liens Story restreints</span>
+                  </div>
+                  <div className="space-y-2">
+                    {selectedAccount.storyLinkRestrictionReason && (
+                      <div className="flex items-start gap-3 text-sm">
+                        <span className="text-[#555] min-w-[110px] shrink-0">Motif Instagram</span>
+                        <span className="text-white">{selectedAccount.storyLinkRestrictionReason}</span>
+                      </div>
+                    )}
+                    <div className="flex items-start gap-3 text-sm">
+                      <span className="text-[#555] min-w-[110px] shrink-0">Constaté le</span>
+                      <span className="text-white">{new Date(selectedAccount.storyLinkRestrictedAt).toLocaleString()}</span>
+                    </div>
+                    {selectedAccount.storyLinkRecheckAt && (
+                      <div className="flex items-start gap-3 text-sm">
+                        <span className="text-[#555] min-w-[110px] shrink-0">Re-test le</span>
+                        <span className="text-white">
+                          {new Date(selectedAccount.storyLinkRecheckAt).toLocaleString()}
+                          <span className="text-[#555]"> · Story sautée d'ici là, les Reels continuent</span>
                         </span>
                       </div>
                     )}

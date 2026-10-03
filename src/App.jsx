@@ -27,6 +27,7 @@ const RunLogs = lazy(() => import('@/pages/RunLogs'))
 const Analytics = lazy(() => import('@/pages/Analytics'))
 const Operations = lazy(() => import('@/pages/Operations'))
 const BackendComparison = lazy(() => import('@/pages/BackendComparison'))
+const LinkAbTest = lazy(() => import('@/pages/LinkAbTest'))
 const PostingHistory = lazy(() => import('@/pages/PostingHistory'))
 const ReelVerification = lazy(() => import('@/pages/ReelVerification'))
 const Schedule = lazy(() => import('@/pages/Schedule'))
@@ -70,6 +71,7 @@ export default function App() {
                 <Route path="/analytics" element={<LazyPage><Analytics /></LazyPage>} />
                 <Route path="/operations" element={<LazyPage><Operations /></LazyPage>} />
                 <Route path="/backend-comparison" element={<LazyPage><BackendComparison /></LazyPage>} />
+                <Route path="/link-ab-test" element={<LazyPage><LinkAbTest /></LazyPage>} />
                 <Route path="/posting-history" element={<LazyPage><PostingHistory /></LazyPage>} />
                 <Route path="/reel-verification" element={<LazyPage><ReelVerification /></LazyPage>} />
                 <Route path="/schedule" element={<LazyPage><Schedule /></LazyPage>} />

@@ -892,6 +892,16 @@ export default function Accounts() {
               <div className="px-8 py-5 border-b border-[#1a1a1a]">
                 <div className="flex items-center justify-between mb-3">
                   <span className="label-upper !mb-0">Story Link</span>
+                  {selectedAccount.linkPlacementVariant && (
+                    <span
+                      className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-md border bg-[#111] border-[#1a1a1a] text-[#888]"
+                      title="Groupe de l'A/B test lien : emplacement du lien au seuil highlight"
+                    >
+                      A/B : {selectedAccount.linkPlacementVariant === 'PROFILE'
+                        ? `lien profil${selectedAccount.necessaryLink === 'LINK_ACTIVE' ? ' (posé)' : selectedAccount.necessaryLink === 'LINK_REQUIRED' ? ' (à poser)' : ''}`
+                        : 'highlight'}
+                    </span>
+                  )}
                 </div>
                 {editingLink ? (
                   <div className="flex items-center gap-2">

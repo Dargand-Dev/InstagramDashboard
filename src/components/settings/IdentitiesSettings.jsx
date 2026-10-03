@@ -57,6 +57,7 @@ function IdentityRow({ identity, pictureTypes, onEdit, onDelete, onNames }) {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {pictureType && <Badge variant="secondary">Photo : {profilePictureTypeLabel(pictureType, pictureTypes)}</Badge>}
+            {identity.allowFeminineBios === false && <Badge variant="secondary">Bios neutres uniquement</Badge>}
             {identity.contentLoop && <Badge variant="secondary">Contenu en boucle</Badge>}
             {identity.gmsSourceLinkId && <Badge variant="outline" title={identity.gmsSourceLinkId}>Modèle GetMySocial lié</Badge>}
           </div>
@@ -82,6 +83,7 @@ function IdentityDialog({ open, onOpenChange, identity, onSave, isPending, pictu
   const [pictureType, setPictureType] = useState(() => getProfilePictureType(identity))
   const [gmsSourceLinkId, setGmsSourceLinkId] = useState(identity?.gmsSourceLinkId || '')
   const [contentLoop, setContentLoop] = useState(Boolean(identity?.contentLoop))
+  const [allowFeminineBios, setAllowFeminineBios] = useState(identity?.allowFeminineBios !== false)
   const isEdit = Boolean(identity?.id)
   const pictureOptions = [{ value: 'NONE', label: 'Non définie' },
     ...pictureTypes.map(type => ({ value: type.id, label: type.label }))]
@@ -102,6 +104,7 @@ function IdentityDialog({ open, onOpenChange, identity, onSave, isPending, pictu
       ...profilePictureSelection(pictureType),
       gmsSourceLinkId: gmsSourceLinkId.trim() || null,
       contentLoop,
+      allowFeminineBios,
     })
   }
 
@@ -152,6 +155,14 @@ function IdentityDialog({ open, onOpenChange, identity, onSave, isPending, pictu
                   ? 'Types de photos indisponibles. Réessayez depuis la section Photos de profil.'
                   : 'Choisissez un type de photos. Ajoutez vos types et leurs dossiers Drive dans la section Photos de profil ci-dessous.'}
               </p>
+            </div>
+            <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="identity-settings-feminine-bios">Autoriser les bios féminines</Label>
+                <p id="identity-settings-feminine-bios-help" className="text-xs leading-relaxed text-muted-foreground">Désactivez pour utiliser uniquement des bios neutres lors de la création de compte.</p>
+              </div>
+              <Switch id="identity-settings-feminine-bios" checked={allowFeminineBios} onCheckedChange={setAllowFeminineBios}
+                disabled={isPending} aria-describedby="identity-settings-feminine-bios-help" />
             </div>
             <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
               <div className="space-y-1">
